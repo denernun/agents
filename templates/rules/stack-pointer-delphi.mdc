@@ -1,0 +1,10 @@
+---
+description: Delphi ERPClass — load shared skill instead of duplicating the full guide
+globs:
+  - "**/*.{pas,dpr,dfm,dpk,dproj,inc}"
+alwaysApply: false
+---
+
+Follow the shared skill `delphi-erpclass` from `D:\IA\agents` (linked under `.cursor/skills`).
+Keep AGENTS.md project-specific only. Encoding: never convert ANSI ↔ UTF-8; do not blind-edit accented `.pas`/`.dfm` lines.
+Domain docs: `../erpclass-docs/source/`.

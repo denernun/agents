@@ -1,0 +1,11 @@
+---
+description: Angular family — load shared skills instead of duplicating the full guide
+globs:
+  - src/**/*.ts
+  - src/**/*.html
+  - src/**/*.scss
+alwaysApply: false
+---
+
+Follow shared skills `angular-coreui` and `coreui-styling` from `D:\IA\agents` (linked under `.cursor/skills`).
+Keep AGENTS.md project-specific only.

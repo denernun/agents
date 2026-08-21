@@ -1,0 +1,26 @@
+---
+description: Class property decorators must always sit on their own line above the property — never inline.
+globs: **/*.ts
+alwaysApply: true
+---
+
+# Decorator placement
+
+Prettier does **not** rewrite decorator layout. Always generate class property decorators on their own line above the property.
+
+```typescript
+// ❌ BAD — never inline
+@Expose() id!: string;
+@Column({ name: 'email' }) email!: string;
+
+// ✅ GOOD — decorator above property
+@Expose()
+id!: string;
+
+@Column({ name: 'email', type: 'varchar', length: 120 })
+email!: string;
+```
+
+Applies to all property decorators: `@Expose`, `@Column`, `@IsString`, `@IsOptional`, `@Transform`, `@Type`, `@Index`, `@ManyToOne`, `@OneToMany`, `@JoinColumn`, `@WebSocketServer`, etc.
+
+When editing existing code, convert any inline decorator to the two-line form.

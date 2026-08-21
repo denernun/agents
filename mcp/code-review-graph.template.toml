@@ -1,0 +1,4 @@
+[mcp_servers.code-review-graph]
+command = "{{PYTHON}}"
+args = ["-m", "code_review_graph", "serve"]
+cwd = "{{REPO}}"

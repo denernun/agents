@@ -1,0 +1,10 @@
+---
+description: NestJS family — load shared skill instead of duplicating the full guide
+globs:
+  - src/**/*.ts
+  - src/**/*.js
+alwaysApply: false
+---
+
+Follow the shared skill `nestjs-clean-architecture` from `D:\IA\agents` (linked under `.cursor/skills`).
+Keep AGENTS.md project-specific only. Decorators on their own line above properties.

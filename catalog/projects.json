@@ -1,0 +1,44 @@
+{
+  "roots": ["ERPCLASS", "NFECLASS", "MOBICLASS", "SHOPCLASS"],
+  "families": {
+    "nestjs": {
+      "match": ["*-api", "*-auth", "*-sync", "*-hook", "*-cob-api"],
+      "skills": ["nestjs-clean-architecture", "code-review-graph", "debug-issue", "explore-codebase", "refactor-safely", "review-changes"],
+      "agentsTemplate": "nestjs.md",
+      "cursorRule": "stack-pointer-nestjs.mdc",
+      "extraRules": ["decorator-placement.mdc"]
+    },
+    "angular": {
+      "match": ["*-admin", "*-dash", "*-app", "*-cob"],
+      "skills": ["angular-coreui", "coreui-styling", "code-review-graph", "debug-issue", "explore-codebase", "refactor-safely", "review-changes"],
+      "agentsTemplate": "angular.md",
+      "cursorRule": "stack-pointer-angular.mdc",
+      "extraRules": []
+    },
+    "delphi": {
+      "match": ["*-erp"],
+      "skills": ["delphi-erpclass", "debug-issue", "explore-codebase", "refactor-safely", "review-changes"],
+      "agentsTemplate": "delphi.md",
+      "cursorRule": "stack-pointer-delphi.mdc",
+      "extraRules": []
+    },
+    "minimal": {
+      "match": ["*"],
+      "skills": ["code-review-graph", "debug-issue", "explore-codebase", "refactor-safely", "review-changes"],
+      "agentsTemplate": "minimal.md",
+      "cursorRule": null,
+      "extraRules": []
+    }
+  },
+  "commonSkills": [
+    "using-agent-skills",
+    "git-workflow-and-versioning",
+    "code-review-and-quality",
+    "security-and-hardening",
+    "observability-and-instrumentation"
+  ],
+  "ides": ["Cursor", "VSCode", "Kiro", "OpenCode", "Antigravity", "Claude", "Codex", "Devin"],
+  "excludeProjectNames": ["node_modules", "dist", "trash"],
+  "unusedIdeFolders": [".qoder", ".codebuddy"],
+  "qoderOptIn": false
+}

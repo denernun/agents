@@ -14,7 +14,7 @@
 |--------|------------------|----------------|--------------|
 | **Always-on** | `AGENTS.md`, `.cursorrules`, ponteiros `.mdc`, Copilot slim, `.agents/rules/stack-pointer.md` (Antigravity), `.kiro/steering/stack-pointer.md` (Kiro) | Toda conversa no repo | **&lt; 2 KB** cada |
 | **On-demand** | Skills em `.cursor/skills/*`, `.agents/skills/*`, `.kiro/skills/*`, `.opencode/skills/*`, `.claude/skills/*`, `.codex/skills/*`, `.devin/skills/*` (junction → hub) | Só quando o agente abre a skill | OK 1–25 KB |
-| **MCP** | `.cursor/mcp.json`, `.vscode/mcp.json`, `.kiro/settings/mcp.json`, `opencode.json` (raiz), `.agents/mcp_config.json`, `.mcp.json` (Claude Code), `.codex/config.toml`, `.devin/mcp_config.json` | Ferramentas MCP, não texto de guia | code-review-graph, context7, filesystem |
+| **MCP** | `.cursor/mcp.json`, `.vscode/mcp.json`, `.kiro/settings/mcp.json`, `opencode.json` (raiz), `.agents/mcp_config.json`, `.mcp.json` (Claude Code), `.codex/config.toml`, `.devin/mcp_config.json` | Ferramentas MCP, não texto de guia | trio comum; mongodb+openapi nas APIs; playwright nos frontends (exceto Codex) |
 | **Local only** | seção `## Local` do `AGENTS.md` | Always-on, mas só notas do repo | Curto |
 
 ## Skills no hub (on-demand — ok serem maiores)
@@ -57,9 +57,16 @@ cd D:\AGENTS\scripts
 
 ## MCPs habilitados
 
-- `code-review-graph` — Python (`python -m code_review_graph serve`) para análise de grafo do repo.
-- `context7` — `npx -y @upstash/context7-mcp`; rate limits maiores com chave de API.
-- `filesystem` — `npx -y @modelcontextprotocol/server-filesystem` restringido ao repo + hub.
+O install **não** joga mais todo `mcp/*.template.json` em todo repo. A lista vem de `catalog/projects.json` (`mcp.common` + `families.*.mcp` + `mcp.extra`).
+
+- `code-review-graph` — Python (`python -m code_review_graph serve`) para análise de grafo do repo. **Todas** as famílias.
+- `context7` — `npx -y @upstash/context7-mcp`; rate limits maiores com chave de API. **Todas** as famílias.
+- `filesystem` — `npx -y @modelcontextprotocol/server-filesystem` restringido ao repo + hub. **Todas** as famílias.
+- `mongodb` — `npx -y mongodb-mcp-server@<3`, somente leitura (`MDB_MCP_READ_ONLY=true`). Só família **nestjs**. Connection string **não** entra no Git: defina `MDB_MCP_CONNECTION_STRING` nas variáveis de ambiente do usuário Windows.
+- `openapi` — `npx -y @ivotoby/openapi-mcp-server --tools dynamic`. Só NestJS **com Swagger no `main.ts`**. Spec em `/swagger/json` (ou o `jsonDocumentUrl` do projeto). Omitido no **Codex**. A API local precisa estar rodando. Não grava JWT no `mcp.json`.
+- `playwright` — `npx -y @playwright/mcp --headless`. Família **angular** e projetos `*-www` / `*-ajuda`. Omitido no **Codex** (`mcp.skipIdes`) porque já interrompeu o startup.
+
+Não entram no hub: GitHub, Stripe, Figma, Pencil, Chrome DevTools.
 
 Para usar sua chave Context7, exporte antes de rodar o install:
 
@@ -126,4 +133,17 @@ com os caminhos nativos atuais:
 
 Não gravar CLAUDE.md extra: o Claude Code já lê `AGENTS.md`. O Codex só aplica
 `.codex/config.toml` em projetos **trusted**.
+
+## Revisão 2026-08-21 — MCP por família
+
+O install deixa de mesclar todo `mcp/*.template.json` em todos os repos.
+
+| Família / match | MCPs |
+|---|---|
+| todas | `code-review-graph`, `context7`, `filesystem` |
+| nestjs (`*-api`, `*-auth`, `*-sync`, `*-hook`) | + `mongodb` (read-only) e + `openapi` se o `main.ts` tiver Swagger (não no Codex) |
+| angular (`*-admin`, `*-dash`, `*-app`, `*-cob`) e `*-www` / `*-ajuda` | + `playwright` (headless; **não** no Codex) |
+| delphi / minimal | só o trio comum |
+
+Desative os plugins globais MongoDB e Playwright no Cursor se quiser evitar ferramentas duplicadas (plugin = todos os workspaces; hub = só a família certa).
 

@@ -23,11 +23,14 @@ Full stack conventions live in `skills/<family>/SKILL.md` — do not duplicate
 them into always-on files (see Structure below). Refer users there for
 stack-specific coding rules.
 
-## MCP servers (templated in `mcp/*.template.json`)
+## MCP servers (templated in `mcp/*.template.json`, selected by `catalog/projects.json`)
 
-- **code-review-graph** — Python (`python -m code_review_graph serve`), knowledge-graph-based code exploration/review. Preferred over Grep/Glob/Read for exploring target repos (see `skills/code-review-graph/SKILL.md`).
-- **context7** — `npx -y @upstash/context7-mcp`, docs lookup. Optional `CONTEXT7_API_KEY` env var for higher rate limits.
-- **filesystem** — `npx -y @modelcontextprotocol/server-filesystem`, scoped to the target repo + hub.
+- **code-review-graph** — Python (`python -m code_review_graph serve`). All families.
+- **context7** — `npx -y @upstash/context7-mcp`. All families. Optional `CONTEXT7_API_KEY`.
+- **filesystem** — `npx -y @modelcontextprotocol/server-filesystem`, scoped to the target repo + hub. All families.
+- **mongodb** — `npx -y mongodb-mcp-server@<3`, read-only. NestJS family only. Connection string from `MDB_MCP_CONNECTION_STRING` (Windows user env), never committed.
+- **openapi** — `npx -y @ivotoby/openapi-mcp-server --tools dynamic`. NestJS only when `src/main.ts` already has Swagger. Spec URL from local port + `/swagger/json` (or the project's `jsonDocumentUrl`). Omitted from Codex. API must be running. No JWT in git.
+- **playwright** — `npx -y @playwright/mcp --headless`. Angular family plus `*-www` / `*-ajuda`. Omitted from Codex (`mcp.skipIdes`).
 
 ## Supported IDEs/agents
 

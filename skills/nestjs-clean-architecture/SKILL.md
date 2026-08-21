@@ -1,6 +1,6 @@
 ---
 name: nestjs-clean-architecture
-description: NestJS Clean Architecture + DDD conventions for ERPCLASS/NFECLASS/MOBICLASS APIs. Use when editing NestJS/TypeScript backend code in *-api, *-auth, *-sync, *-hook.
+description: NestJS Clean Architecture + DDD conventions for ERPCLASS/NFECLASS/MOBICLASS APIs. Use when editing NestJS/TypeScript backend code in *-api, *-auth, *-sync, *-hook, or when adding controllers, endpoints, DTOs, or Swagger/OpenAPI.
 ---
 Você é um(a) programador(a) sênior em TypeScript com experiência em NestJS, Clean Architecture e Domain-Driven Design (DDD), atuando em APIs NestJS desta família (ERPCLASS / NFECLASS / MOBICLASS).
 
@@ -124,6 +124,7 @@ Arquivos por feature: `<feature>.controller.ts`, `<feature>.request.ts`, `<featu
 - **DEVE** transformar a resposta com `plainToInstance(FeatureResponse, data, { excludeExtraneousValues: true })`.
 - Prefixo de rota padrão: `api/v1/<feature>`.
 - Cada método público tem JSDoc no formato: `<VERB> /rota — <descrição de negócio>. <Rota pública ou administrativa (requer TokenGuard)>`.
+- **DEVE** sair com Swagger (ver §2.9): `@ApiTags`, `@ApiOperation`, `@ApiResponse`, e `@ApiBearerAuth` se a rota usa JWT/`TokenGuard`. Sem documentação OpenAPI a rota não está pronta.
 
 **DTOs de request** (`*.request.ts`): classes com `class-validator` (`@IsString`, `@IsNumber`, `@IsOptional`, `@IsBoolean`) e `class-transformer` (`@Transform(({ value }) => toDate(value))` para coerção). Um arquivo pode conter várias `Request` classes relacionadas.
 
@@ -196,6 +197,58 @@ Arquivos por agregado (singular): `src/domain/repositories/<name>/<name>.reposit
 
 `AppModule` importa `ConfigModule`, `AuthModule`, `ApplicationModule`, `ServicesModule`, `ControllersModule`, `PipesModule`, `DomainModule`, `GatewayModule`, `MetricsModule`. Filtros/interceptors/guards globais são registrados via `APP_FILTER`, `APP_INTERCEPTOR`, `APP_GUARD`.
 
+### 2.9 Swagger / OpenAPI
+
+Toda API NestJS desta família expõe OpenAPI. **Rota nova já nasce documentada.** Não altere lógica de negócio nem DTOs só para documentar. Summaries e tags do Swagger em **português** (como no `erpclass-auth`); identificadores e JSDoc continuam em inglês.
+
+O MCP `openapi` (`@ivotoby/openapi-mcp-server`, modo `dynamic`) lê a spec em `/swagger/json` (ou o path do projeto) para validar requisitos e gerar testes. A API precisa estar no ar. Use `list-api-endpoints`, `get-api-endpoint-schema` e `invoke-api-endpoint` — não chame a API de produção.
+
+**Se o projeto já tem Swagger** (ex: `erpclass-auth` em `/docs`): siga o path, o nome do Bearer e o idioma das tags que já existem. Não migre path.
+
+**Se ainda não tem**, instale `@nestjs/swagger` (e `swagger-ui-express` se o Nest do repo ainda pedir) e configure no `main.ts` **antes** de `listen`:
+
+- Título `{Produto} {App} API` (ex: `ERPClass Cob API`); versão lida de `package.json`.
+- UI em `/swagger`; spec JSON em `/swagger/json` (`jsonDocumentUrl: 'swagger/json'`).
+- `.addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')` quando a API usa JWT/`TokenGuard`.
+- Plugin do CLI em `nest-cli.json` para inferir tipos dos DTOs — **não** decore campo a campo com `@ApiProperty`:
+
+```json
+"compilerOptions": {
+  "plugins": [{ "name": "@nestjs/swagger", "options": { "classValidatorShim": true, "introspectComments": true } }]
+}
+```
+
+- Se Helmet CSP bloquear a UI, libere scripts do Swagger; não desligue o Helmet inteiro.
+
+**Em todo controller** (feature = pasta/domínio, ex: `titulos`, `cobrancas`, `evolution`):
+
+```ts
+@ApiTags('titulos')
+@ApiBearerAuth('JWT')
+@UseGuards(TokenGuard)
+@Controller('api/v1/titulos')
+export class TitulosController {
+  @Get()
+  @ApiOperation({ summary: 'Lista títulos com filtros e paginação' })
+  @ApiResponse({ status: 200, description: 'Lista paginada' })
+  @ApiResponse({ status: 400, description: 'Validação' })
+  @ApiResponse({ status: 401, description: 'JWT ausente ou inválido' })
+  listTitulos(): Promise<TitulosResponse> { /* ... */ }
+}
+```
+
+| Obrigatório | Quando |
+|---|---|
+| `@ApiTags('<feature>')` | classe do controller |
+| `@ApiOperation({ summary })` | cada rota; summary curto em português |
+| `@ApiResponse` 200 ou 201 | sucesso (`type:` do Response DTO se já existir) |
+| `@ApiResponse` 400 | body/query validado |
+| `@ApiResponse` 401 e/ou 403 | rota com `TokenGuard` / roles |
+| `@ApiBearerAuth('JWT')` | classe ou método com JWT (o nome `'JWT'` tem de bater com o `addBearerAuth`) |
+| rotas públicas | omitir Bearer; não inventar 401 |
+
+Ao pedir para “adicionar Swagger” num repo: só setup + decorators + plugin CLI. Ao criar endpoint: os decorators vão no mesmo PR da rota. Confirme UI em `/swagger` (ou o path do projeto) e JSON válido no endpoint da spec.
+
 ---
 
 ## 3. Fluxo para Criar uma Nova Feature
@@ -234,7 +287,7 @@ Ordem **de dentro para fora** (domínio → infraestrutura → aplicação → a
 5. **Controller** (`src/controllers/<feature>/`)
    - `<feature>.request.ts` — DTOs de entrada com `class-validator`.
    - `<feature>.response.ts` — DTOs de saída com `@Expose()`.
-   - `<feature>.controller.ts` — rotas HTTP chamando a Application.
+   - `<feature>.controller.ts` — rotas HTTP chamando a Application, **já com** `@ApiTags` / `@ApiOperation` / `@ApiResponse` / `@ApiBearerAuth` (§2.9).
    - `index.ts`.
    - Registre em `src/controllers/controllers.module.ts`.
 
@@ -296,6 +349,7 @@ Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CON
 - [ ] Cache invalidado explicitamente após writes.
 - [ ] Exceções de negócio como classes derivadas de `BaseException`, mensagens em português.
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).
+- [ ] Swagger: `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer se JWT. Plugin CLI ligado. Sem `@ApiProperty` nos DTOs.
 - [ ] `npm run lint` e `npm run build` sem erros.
 
 <!-- code-review-graph MCP tools -->

@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "openapi": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@ivotoby/openapi-mcp-server", "--tools", "dynamic"],
+      "env": {
+        "API_BASE_URL": "{{API_BASE_URL}}",
+        "OPENAPI_SPEC_PATH": "{{OPENAPI_SPEC_PATH}}",
+        "TOOLS_MODE": "dynamic",
+        "TRANSPORT_TYPE": "stdio",
+        "REJECT_UNAUTHORIZED": "false",
+        "VERBOSE": "false"
+      },
+      "type": "stdio"
+    }
+  }
+}

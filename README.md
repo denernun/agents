@@ -47,7 +47,12 @@ Opções úteis:
 
 Agentes habilitados vivem em `catalog/projects.json` (`ides`). Hoje: **Cursor**, **VS Code**, **Kiro**, **OpenCode**, **Antigravity**, **Claude Code**, **Codex** e **Devin**. **Qoder** continua opt-in.
 
-MCPs instalados por projeto: `code-review-graph`, `context7` e `filesystem`.
+MCPs por projeto (definidos em `catalog/projects.json`):
+
+- **Todos**: `code-review-graph`, `context7`, `filesystem`
+- **APIs NestJS** (`*-api`, `*-auth`, `*-sync`, `*-hook`): também `mongodb` (somente leitura; connection string via `MDB_MCP_CONNECTION_STRING` no ambiente do Windows — não vai no Git) e `openapi` (`@ivotoby/openapi-mcp-server`, modo `dynamic`) **só se o `main.ts` já tiver Swagger**. **Não** é gravado no Codex.
+- **Frontends Angular** (`*-admin`, `*-dash`, `*-app`, `*-cob`) e sites `*-www` / `*-ajuda`: também `playwright` (headless). **Não** é gravado no Codex — já quebrou o startup de MCP
+- Delphi e o restante: só o trio comum
 
 Se alguma IDE não aparecer na detecção automática:
 
@@ -62,7 +67,7 @@ D:\AGENTS/
   skills/           # nestjs, angular, delphi, code-review-graph, processo
   templates/agents/ # AGENTS.md enxutos por família
   templates/rules/  # ponteiros curtos p/ Cursor
-  mcp/              # templates code-review-graph, context7, filesystem
+  mcp/              # templates: trio comum + mongodb/openapi (APIs) + playwright (frontends)
   catalog/          # families + match patterns + ides
   scripts/          # Install / Uninstall / Inventory / Fix-CursorHooks
   docs/             # CONTEXT-HYGIENE, superpowers, CODEX-STATUS
@@ -103,11 +108,11 @@ O Codex lê MCP **por projeto** em `.codex/config.toml` (só se o projeto estive
 
 1. Verifique se `Install-AgentHub.ps1` detectou o Codex (deve aparecer na lista de IDEs)
 2. Rode `.\Install-AgentHub.ps1 -Ides Codex -WriteAgents` para forçar
-3. Verifique `<repo>\.codex\config.toml` — deve ter `[mcp_servers.code-review-graph]`, `[mcp_servers.context7]` e `[mcp_servers.filesystem]`
+3. Verifique `<repo>\.codex\config.toml` — trio comum (`code-review-graph`, `context7`, `filesystem`); em APIs também `mongodb`. Playwright e OpenAPI **não** entram no Codex.
 4. Skills ficam em `<repo>\.codex\skills\` (junctions para o hub)
 5. Reinicie o Codex após mudanças no config
 
-**Plugins opcionais do Codex** (github, stripe, playwright) requerem configuração adicional — não gerenciados por este hub.
+**Plugins opcionais do Codex** (github, stripe, playwright) não são gerenciados por este hub. Desabilite o plugin Playwright do Codex se ele ainda aparecer em `~/.codex/config.toml` — o install do AgentHub também omite `playwright` do `.codex/config.toml` por projeto.
 
 ### Claude Code / Devin
 

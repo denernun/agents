@@ -6,7 +6,11 @@
   - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin)
   - Creates junctions from hub skills into each project
   - Writes slim AGENTS.md (preserves ## Local section)
-  - Generates MCP configs only for detected IDEs
+  - Generates MCP configs only for detected IDEs (common trio everywhere;
+    mongodb + openapi on NestJS APIs that already have Swagger;
+    playwright on Angular/www/ajuda frontends;
+    playwright and openapi are omitted from Codex because extra npx
+    servers already broke MCP startup)
   - Optionally removes unused IDE folders (.qoder, .codebuddy)
   - Runs "code-review-graph build --repo <path>" for projects using that
     skill that don't have a ".code-review-graph" folder yet (skip with
@@ -279,8 +283,8 @@ function Ensure-CodeReviewGraphBuilt {
   # code-review-graph skill and don't have a graph yet. Deliberately does NOT
   # call "code-review-graph install" here: that CLI command overwrites
   # .cursor\mcp.json / .vscode\mcp.json / .kiro\settings\mcp.json /
-  # .qoder\mcp.json with a single-server config, wiping out the merged
-  # context7 + filesystem servers that Write-McpConfigs already wrote, and it
+  # .qoder\mcp.json with a single-server config, wiping out the family-scoped
+  # MCP set that Write-McpConfigs already wrote, and it
   # duplicates AGENTS.md / .cursorrules content this hub already manages.
   param(
     [string]$RepoPath,
@@ -375,39 +379,173 @@ function Expand-McpTemplate {
   return $Content
 }
 
+function Get-JsonProperty {
+  param([object]$Object, [string]$Name)
+  if (-not $Object) { return $null }
+  $prop = $Object.PSObject.Properties[$Name]
+  if (-not $prop) { return $null }
+  return $prop.Value
+}
+
+function Get-NestSwaggerMcpVars {
+  # Only when src/main.ts actually sets up Swagger. Live spec URL is used;
+  # the MCP needs the API running. toolsMode=dynamic keeps 3 meta-tools.
+  param([string]$RepoPath)
+  $main = Join-Path $RepoPath 'src\main.ts'
+  if (-not (Test-Path $main)) { return $null }
+  $text = Get-Content $main -Raw -Encoding UTF8
+  if ($text -notmatch 'SwaggerModule') { return $null }
+
+  $port = $null
+  $cfgPath = Join-Path $RepoPath 'src\config\.development.json'
+  if (Test-Path $cfgPath) {
+    try {
+      $cfg = Get-Content $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json
+      $auth = Get-JsonProperty -Object $cfg -Name 'auth'
+      $api = Get-JsonProperty -Object $cfg -Name 'api'
+      $authPort = Get-JsonProperty -Object $auth -Name 'port'
+      $apiPort = Get-JsonProperty -Object $api -Name 'port'
+      $rootPort = Get-JsonProperty -Object $cfg -Name 'port'
+      if ($RepoPath -match '[\\/][^-\\/]+-auth$' -and $authPort) { $port = [int]$authPort }
+      elseif ($apiPort) { $port = [int]$apiPort }
+      elseif ($authPort) { $port = [int]$authPort }
+      elseif ($rootPort) { $port = [int]$rootPort }
+    } catch {
+      Write-Warning "Could not parse $cfgPath for OpenAPI MCP port: $_"
+    }
+  }
+  if (-not $port) { $port = 3000 }
+
+  $scheme = 'http'
+  if ($text -match 'httpsOptions') { $scheme = 'https' }
+  $base = "${scheme}://localhost:$port"
+
+  $specRel = 'swagger/json'
+  if ($text -match "jsonDocumentUrl:\s*'([^']+)'") {
+    $specRel = $Matches[1].TrimStart('/')
+  } elseif ($text -match "SwaggerModule\.setup\(\s*'([^']+)'") {
+    $specRel = "$($Matches[1])-json"
+  }
+
+  return @{
+    API_BASE_URL = $base
+    OPENAPI_SPEC_PATH = "$base/$specRel"
+  }
+}
+
+function Get-CatalogMcpCommon {
+  param([object]$Catalog)
+  if ($Catalog.mcp -and $Catalog.mcp.common) {
+    return @($Catalog.mcp.common)
+  }
+  return @('code-review-graph', 'context7', 'filesystem')
+}
+
+function Get-ManagedMcpServerNames {
+  param([object]$Catalog, [hashtable]$Families)
+  $names = [System.Collections.Generic.List[string]]::new()
+  foreach ($s in (Get-CatalogMcpCommon -Catalog $Catalog)) { [void]$names.Add($s) }
+  foreach ($family in $Families.Values) {
+    foreach ($s in @($family.mcp)) {
+      if ($s -and $names -notcontains $s) { [void]$names.Add($s) }
+    }
+  }
+  if ($Catalog.mcp -and $Catalog.mcp.extra) {
+    foreach ($extra in @($Catalog.mcp.extra)) {
+      foreach ($s in @($extra.servers)) {
+        if ($s -and $names -notcontains $s) { [void]$names.Add($s) }
+      }
+    }
+  }
+  return @($names)
+}
+
+function Get-ProjectMcpServerNames {
+  param(
+    [string]$ProjectName,
+    [object]$FamilyCfg,
+    [object]$Catalog
+  )
+  $names = [System.Collections.Generic.List[string]]::new()
+  foreach ($s in (Get-CatalogMcpCommon -Catalog $Catalog)) { [void]$names.Add($s) }
+  foreach ($s in @($FamilyCfg.mcp)) {
+    if ($s -and $names -notcontains $s) { [void]$names.Add($s) }
+  }
+  if ($Catalog.mcp -and $Catalog.mcp.extra) {
+    foreach ($extra in @($Catalog.mcp.extra)) {
+      $matched = $false
+      foreach ($pattern in @($extra.match)) {
+        if ($ProjectName -like $pattern) { $matched = $true; break }
+      }
+      if (-not $matched) { continue }
+      foreach ($s in @($extra.servers)) {
+        if ($s -and $names -notcontains $s) { [void]$names.Add($s) }
+      }
+    }
+  }
+  return @($names)
+}
+
+function Select-McpServersForIde {
+  param($Servers, [string]$Ide, [object]$SkipIdes)
+  $out = [ordered]@{}
+  foreach ($name in @($Servers.Keys)) {
+    $skipFor = @()
+    if ($SkipIdes -and $SkipIdes.PSObject.Properties.Name -contains $name) {
+      $skipFor = @($SkipIdes.$name)
+    }
+    if ($skipFor -contains $Ide) { continue }
+    $out[$name] = $Servers[$name]
+  }
+  return $out
+}
+
 function Merge-McpJsonTemplates {
-  param([string]$HubPath, [hashtable]$Vars)
-  $merged = @{}
-  Get-ChildItem (Join-Path $HubPath 'mcp') -Filter '*.template.json' | Sort-Object Name | ForEach-Object {
-    $file = $_
-    $raw = Get-Content $file.FullName -Raw -Encoding UTF8
+  param([string]$HubPath, [hashtable]$Vars, [string[]]$ServerNames)
+  $merged = [ordered]@{}
+  foreach ($name in $ServerNames) {
+    $path = Join-Path $HubPath "mcp\$name.template.json"
+    if (-not (Test-Path $path)) {
+      Write-Warning "Missing MCP template: $path"
+      continue
+    }
+    $raw = Get-Content $path -Raw -Encoding UTF8
     $expanded = Expand-McpTemplate -Content $raw -Vars $Vars -JsonEscape
     try {
       $obj = $expanded | ConvertFrom-Json
     } catch {
-      throw "Failed to parse MCP template $($file.Name): $_`n$expanded"
+      throw "Failed to parse MCP template $name.template.json: $_`n$expanded"
     }
     foreach ($prop in $obj.mcpServers.PSObject.Properties) {
       $merged[$prop.Name] = $prop.Value
     }
   }
-  return @{ mcpServers = $merged }
+  return $merged
 }
 
 function ConvertTo-TomlMcp {
-  param([hashtable]$Servers, [string[]]$SkipProperties = @())
+  param([System.Collections.IDictionary]$Servers, [string[]]$SkipProperties = @())
+  $skip = @($SkipProperties) + @('env')
   $lines = [System.Collections.Generic.List[string]]::new()
   foreach ($name in $Servers.Keys | Sort-Object) {
     [void]$lines.Add("[mcp_servers.$name]")
     $server = $Servers[$name]
     foreach ($prop in $server.PSObject.Properties | Sort-Object Name) {
-      if ($SkipProperties -contains $prop.Name) { continue }
+      if ($skip -contains $prop.Name) { continue }
       $val = $prop.Value
       if ($val -is [array] -or ($val -is [System.Collections.IEnumerable] -and $val -isnot [string])) {
         $parts = @($val | ForEach-Object { "`"$(ConvertTo-TomlBasicString $_)`"" })
         [void]$lines.Add("$($prop.Name) = [$($parts -join ', ')]")
       } else {
         [void]$lines.Add("$($prop.Name) = `"$(ConvertTo-TomlBasicString $val)`"")
+      }
+    }
+    $envProp = $server.PSObject.Properties['env']
+    if ($envProp -and $envProp.Value) {
+      [void]$lines.Add('')
+      [void]$lines.Add("[mcp_servers.$name.env]")
+      foreach ($e in $envProp.Value.PSObject.Properties | Sort-Object Name) {
+        [void]$lines.Add("$($e.Name) = `"$(ConvertTo-TomlBasicString ([string]$e.Value))`"")
       }
     }
     [void]$lines.Add('')
@@ -418,7 +556,7 @@ function ConvertTo-TomlMcp {
 function ConvertTo-OpenCodeMcpServers {
   # OpenCode's schema (https://opencode.ai/docs/mcp-servers) puts servers
   # directly under the top-level "mcp" key (no nested "servers" wrapper).
-  param([hashtable]$Servers)
+  param([System.Collections.IDictionary]$Servers)
   $ocServers = [ordered]@{}
   foreach ($name in $Servers.Keys | Sort-Object) {
     $server = $Servers[$name]
@@ -435,10 +573,10 @@ function ConvertTo-OpenCodeMcpServers {
     $cwdProp = $server.PSObject.Properties['cwd']
     if ($cwdProp -and $cwdProp.Value) { $cfg.cwd = $cwdProp.Value }
     $envProp = $server.PSObject.Properties['env']
-    if ($envProp -and $envProp.Value -and $envProp.Value.PSObject.Properties.Count -gt 0) {
+    if ($envProp -and $envProp.Value) {
       $envMap = [ordered]@{}
       foreach ($prop in $envProp.Value.PSObject.Properties) { $envMap[$prop.Name] = $prop.Value }
-      $cfg.environment = $envMap
+      if ($envMap.Count -gt 0) { $cfg.environment = $envMap }
     }
     $ocServers[$name] = $cfg
   }
@@ -497,9 +635,12 @@ function Write-CodexProjectConfig {
   # only; developers.openai.com/codex/mcp). Merge AgentHub servers into any
   # existing file so hand-edited keys survive. Do NOT write ~/.codex/config.toml:
   # a global code-review-graph cwd cannot be correct for every repo.
-  param([string]$RepoPath, [string]$Toml, [switch]$DryRun)
+  # $ManagedServers is the full hub catalog (common + every family extra) so a
+  # re-run strips servers that no longer belong to this repo (e.g. playwright
+  # left on an API, mongodb left on Delphi).
+  param([string]$RepoPath, [string]$Toml, [string[]]$ManagedServers, [switch]$DryRun)
   $path = Join-Path $RepoPath '.codex\config.toml'
-  $prefixes = @('mcp_servers.code-review-graph', 'mcp_servers.context7', 'mcp_servers.filesystem')
+  $prefixes = @($ManagedServers | ForEach-Object { "mcp_servers.$_" })
   $existing = ''
   if (Test-Path $path) {
     $existing = Remove-TomlTablesByPrefix -Content (Get-Content $path -Raw -Encoding UTF8) -Prefixes $prefixes
@@ -514,11 +655,14 @@ function Write-McpConfigs {
     [string]$RepoPath,
     [string[]]$Ides,
     [hashtable]$Vars,
+    [string[]]$ServerNames,
+    [string[]]$ManagedServers,
+    [object]$SkipIdes,
     [switch]$DryRun
   )
-  $merged = Merge-McpJsonTemplates -HubPath $Vars['HUB'] -Vars $Vars
+  $allServers = Merge-McpJsonTemplates -HubPath $Vars['HUB'] -Vars $Vars -ServerNames $ServerNames
   if ([string]::IsNullOrWhiteSpace($Vars['CONTEXT7_API_KEY'])) {
-    $ctx = $merged.mcpServers['context7']
+    $ctx = $allServers['context7']
     if ($ctx) {
       $ctxArgs = @($ctx.args)
       $idx = [array]::IndexOf($ctxArgs, '--api-key')
@@ -531,10 +675,15 @@ function Write-McpConfigs {
       }
     }
   }
-  $json = $merged | ConvertTo-Json -Depth 10
-  $vscode = @{ servers = $merged.mcpServers } | ConvertTo-Json -Depth 10
 
   foreach ($ide in $Ides) {
+    $ideServers = Select-McpServersForIde -Servers $allServers -Ide $ide -SkipIdes $SkipIdes
+    # ConvertTo-Json on OrderedDictionary is an array of {Key,Value} in Windows
+    # PowerShell 5.1. Flatten to a plain hashtable before serializing.
+    $plain = @{}
+    foreach ($k in $ideServers.Keys) { $plain[$k] = $ideServers[$k] }
+    $json = @{ mcpServers = $plain } | ConvertTo-Json -Depth 10
+    $vscode = @{ servers = $plain } | ConvertTo-Json -Depth 10
     switch ($ide) {
       'Cursor' {
         $path = Join-Path $RepoPath '.cursor\mcp.json'
@@ -555,7 +704,7 @@ function Write-McpConfigs {
       'OpenCode' {
         # Project config lives at <repo>\opencode.json (opencode.ai/docs/config),
         # and "mcp" is a flat map of servers (opencode.ai/docs/mcp-servers).
-        $ocServers = ConvertTo-OpenCodeMcpServers -Servers $merged.mcpServers
+        $ocServers = ConvertTo-OpenCodeMcpServers -Servers $plain
         Write-OpenCodeConfig -RepoPath $RepoPath -McpServers $ocServers -DryRun:$DryRun
       }
       'Antigravity' {
@@ -573,8 +722,9 @@ function Write-McpConfigs {
       'Codex' {
         # Per-project .codex\config.toml so cwd of code-review-graph is this repo.
         # Omit "type": Codex McpServerConfig does not use that JSON field.
-        $codexToml = ConvertTo-TomlMcp -Servers $merged.mcpServers -SkipProperties @('type')
-        Write-CodexProjectConfig -RepoPath $RepoPath -Toml $codexToml -DryRun:$DryRun
+        # Playwright is skipped for Codex (see catalog mcp.skipIdes).
+        $codexToml = ConvertTo-TomlMcp -Servers $plain -SkipProperties @('type')
+        Write-CodexProjectConfig -RepoPath $RepoPath -Toml $codexToml -ManagedServers $ManagedServers -DryRun:$DryRun
       }
       'Devin' {
         # Devin CLI (v3000.3+) reads .devin\mcp_config.json (docs.devin.ai
@@ -892,6 +1042,9 @@ $mcpBaseVars = @{
   HUB = $HubPath
   CONTEXT7_API_KEY = $context7ApiKey
 }
+$managedMcpServers = Get-ManagedMcpServerNames -Catalog $catalog -Families $families
+$mcpSkipIdes = $null
+if ($catalog.mcp) { $mcpSkipIdes = $catalog.mcp.skipIdes }
 
 Write-Host "Hub: $HubPath"
 Write-Host "IDEs: $($detected -join ', ')"
@@ -926,7 +1079,19 @@ foreach ($root in $Roots) {
     }
     $mcpVars = $mcpBaseVars.Clone()
     $mcpVars['REPO'] = $proj.FullName
-    Write-McpConfigs -RepoPath $proj.FullName -Ides $detected -Vars $mcpVars -DryRun:$DryRun
+    $mcpServers = Get-ProjectMcpServerNames -ProjectName $proj.Name -FamilyCfg $cfg -Catalog $catalog
+    if ($mcpServers -contains 'openapi') {
+      $oa = Get-NestSwaggerMcpVars -RepoPath $proj.FullName
+      if ($oa) {
+        $mcpVars['API_BASE_URL'] = $oa.API_BASE_URL
+        $mcpVars['OPENAPI_SPEC_PATH'] = $oa.OPENAPI_SPEC_PATH
+        Write-Host "  OpenAPI spec: $($oa.OPENAPI_SPEC_PATH)"
+      } else {
+        $mcpServers = @($mcpServers | Where-Object { $_ -ne 'openapi' })
+      }
+    }
+    Write-Host "  MCP: $($mcpServers -join ', ')"
+    Write-McpConfigs -RepoPath $proj.FullName -Ides $detected -Vars $mcpVars -ServerNames $mcpServers -ManagedServers $managedMcpServers -SkipIdes $mcpSkipIdes -DryRun:$DryRun
     Write-PointerRules -RepoPath $proj.FullName -HubPath $HubPath -FamilyCfg $cfg -Ides $detected -DryRun:$DryRun
     Write-CopilotPointer -RepoPath $proj.FullName -HubPath $HubPath -Family $family -DryRun:$DryRun
     Write-AntigravityPointer -RepoPath $proj.FullName -HubPath $HubPath -Ides $detected -DryRun:$DryRun

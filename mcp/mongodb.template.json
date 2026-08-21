@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mongodb": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "mongodb-mcp-server@<3"],
+      "env": {
+        "MDB_MCP_READ_ONLY": "true"
+      },
+      "type": "stdio"
+    }
+  }
+}

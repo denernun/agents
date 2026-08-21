@@ -41,7 +41,9 @@ D:\IA\agents/
   short (~1-2 KB) and end with a shared "Token Efficiency Rules" section.
 - **Family definitions** (`catalog/projects.json`): each family has `match`
   (glob patterns against project folder name), `skills` (list to link),
-  `agentsTemplate`, `cursorRule`, `extraRules`. Family resolution order in
+  `mcp` (extra MCP servers on top of `mcp.common`), `agentsTemplate`,
+  `cursorRule`, `extraRules`. Top-level `mcp.common` / `mcp.skipIdes` /
+  `mcp.extra` select servers per repo and per IDE. Family resolution order in
   `Install-AgentHub.ps1` is nestjs → angular → delphi → minimal (first match wins).
 - **Templates use placeholders**: `{{PROJECT}}`, `{{PYTHON}}`, `{{REPO}}`,
   `{{HUB}}`, `{{CONTEXT7_API_KEY}}` — substituted by `Install-AgentHub.ps1`

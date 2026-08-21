@@ -1,0 +1,7 @@
+[mcp_servers.mongodb]
+command = "cmd"
+args = ["/c", "npx", "-y", "mongodb-mcp-server@<3"]
+type = "stdio"
+
+[mcp_servers.mongodb.env]
+MDB_MCP_READ_ONLY = "true"

@@ -45,3 +45,12 @@ Slimmed always-on duplicates:
 - Fat `.cursorrules.mdc` removed by `Install-AgentHub.ps1`
 
 See `docs/CONTEXT-HYGIENE.md`.
+
+## Follow-up (MCP by family — 2026-08-21)
+
+Install no longer merges every `mcp/*.template.json` into every repo.
+
+- Common: `code-review-graph`, `context7`, `filesystem`
+- NestJS APIs: + `mongodb` (read-only) and + `openapi` when Swagger exists in `main.ts` (skipped on Codex)
+- Angular + `*-www` / `*-ajuda`: + `playwright` (skipped on Codex)
+- Catalog fields: `mcp.common`, `mcp.skipIdes`, `mcp.extra`, `families.*.mcp`

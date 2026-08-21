@@ -35,8 +35,13 @@ command = "cmd"
 args = ["/c", "npx", "-y", "@modelcontextprotocol/server-filesystem", "D:/SISTEMAS/ERPCLASS/erpclass-auth", "D:/AGENTS"]
 ```
 
+Em APIs NestJS o bloco gerenciado também inclui `[mcp_servers.mongodb]`
+(read-only). Playwright e OpenAPI **não** são gravados no Codex — npx extra
+já quebrou o startup (`mcp.skipIdes` no catálogo).
+
 Plugins do Codex (github, playwright, …) continuam só no `~/.codex/config.toml`
-do usuário — o hub não os gerencia.
+do usuário — o hub não os gerencia. Mantenha o plugin Playwright desabilitado
+lá, senão ele volta a competir com o trio estável.
 
 ## Comandos
 

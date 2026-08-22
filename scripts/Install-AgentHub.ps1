@@ -1014,8 +1014,9 @@ function Remove-LegacyAgentPaths {
   # Cleans up artifacts written by older versions of this script or by
   # non-integrated IDEs (Gemini CLI, Windsurf). Opt-in via -MigrateLegacyPaths
   # because it deletes files (reversible: this script regenerates the
-  # integrated-IDE equivalents). Adds .gemini/skills, .windsurfrules and
-  # CLAUDE.md because the hub now uses .agents/skills, AGENTS.md and .mcp.json.
+  # integrated-IDE equivalents). Adds .gemini/skills, .gemini/hooks,
+  # .windsurfrules and CLAUDE.md because the hub now uses .agents/skills,
+  # AGENTS.md, MCP and Cursor/PowerShell hooks managed by Fix-CursorHooks.ps1.
   param([string]$RepoPath, [switch]$DryRun)
   $legacy = @(
     (Join-Path $RepoPath '.antigravity\mcp.json'),
@@ -1025,6 +1026,7 @@ function Remove-LegacyAgentPaths {
     (Join-Path $RepoPath '.devin\mcp.json'),
     (Join-Path $RepoPath '.gemini\GEMINI.md'),
     (Join-Path $RepoPath '.gemini\skills'),
+    (Join-Path $RepoPath '.gemini\hooks'),
     (Join-Path $RepoPath '.codex\claude'),
     (Join-Path $RepoPath '.windsurfrules'),
     (Join-Path $RepoPath 'CLAUDE.md')

@@ -1,43 +1,114 @@
 {
-  "roots": ["ERPCLASS", "NFECLASS", "MOBICLASS", "SHOPCLASS"],
+  "roots": [
+    "ERPCLASS",
+    "NFECLASS",
+    "MOBICLASS",
+    "SHOPCLASS"
+  ],
   "mcp": {
-    "common": ["code-review-graph", "context7", "filesystem"],
+    "common": [
+      "code-review-graph",
+      "context7",
+      "filesystem",
+      "memorix"
+    ],
     "skipIdes": {
-      "playwright": ["Codex"],
-      "openapi": ["Codex"]
+      "playwright": [
+        "Codex"
+      ],
+      "openapi": [
+        "Codex"
+      ]
     },
     "extra": [
-      { "match": ["*-www", "*-ajuda"], "servers": ["playwright"] }
+      {
+        "match": [
+          "*-www",
+          "*-ajuda"
+        ],
+        "servers": [
+          "playwright"
+        ]
+      }
     ]
   },
   "families": {
     "nestjs": {
-      "match": ["*-api", "*-auth", "*-sync", "*-hook", "*-cob-api"],
-      "skills": ["nestjs-clean-architecture", "code-review-graph", "debug-issue", "explore-codebase", "refactor-safely", "review-changes"],
-      "mcp": ["mongodb", "openapi"],
+      "match": [
+        "*-api",
+        "*-auth",
+        "*-sync",
+        "*-hook",
+        "*-cob-api"
+      ],
+      "skills": [
+        "nestjs-clean-architecture",
+        "code-review-graph",
+        "debug-issue",
+        "explore-codebase",
+        "refactor-safely",
+        "review-changes"
+      ],
+      "mcp": [
+        "mongodb",
+        "openapi"
+      ],
       "agentsTemplate": "nestjs.md",
       "cursorRule": "stack-pointer-nestjs.mdc",
-      "extraRules": ["decorator-placement.mdc"]
+      "extraRules": [
+        "decorator-placement.mdc"
+      ]
     },
     "angular": {
-      "match": ["*-admin", "*-dash", "*-app", "*-cob"],
-      "skills": ["angular-coreui", "coreui-styling", "code-review-graph", "debug-issue", "explore-codebase", "refactor-safely", "review-changes"],
-      "mcp": ["playwright"],
+      "match": [
+        "*-admin",
+        "*-dash",
+        "*-app",
+        "*-cob"
+      ],
+      "skills": [
+        "angular-coreui",
+        "coreui-styling",
+        "code-review-graph",
+        "debug-issue",
+        "explore-codebase",
+        "refactor-safely",
+        "review-changes"
+      ],
+      "mcp": [
+        "playwright"
+      ],
       "agentsTemplate": "angular.md",
       "cursorRule": "stack-pointer-angular.mdc",
       "extraRules": []
     },
     "delphi": {
-      "match": ["*-erp"],
-      "skills": ["delphi-erpclass", "debug-issue", "explore-codebase", "refactor-safely", "review-changes"],
+      "match": [
+        "*-erp"
+      ],
+      "skills": [
+        "delphi-erpclass",
+        "debug-issue",
+        "explore-codebase",
+        "refactor-safely",
+        "review-changes"
+      ],
       "mcp": [],
       "agentsTemplate": "delphi.md",
       "cursorRule": "stack-pointer-delphi.mdc",
       "extraRules": []
     },
     "minimal": {
-      "match": ["*"],
-      "skills": ["code-review-graph", "debug-issue", "explore-codebase", "refactor-safely", "review-changes"],
+      "match": [
+        "*"
+      ],
+      "skills": [
+        "code-review-graph",
+        "debug-issue",
+        "explore-codebase",
+        "refactor-safely",
+        "review-changes"
+      ],
       "mcp": [],
       "agentsTemplate": "minimal.md",
       "cursorRule": null,
@@ -51,8 +122,29 @@
     "security-and-hardening",
     "observability-and-instrumentation"
   ],
-  "ides": ["Cursor", "VSCode", "Kiro", "OpenCode", "Antigravity", "Claude", "Codex", "Devin"],
-  "excludeProjectNames": ["node_modules", "dist", "trash"],
-  "unusedIdeFolders": [".qoder", ".codebuddy"],
+  "ides": [
+    "Cursor",
+    "VSCode",
+    "Kiro",
+    "OpenCode",
+    "Antigravity",
+    "Claude",
+    "Codex",
+    "Devin"
+  ],
+  "excludeProjectNames": [
+    "node_modules",
+    "dist",
+    "trash",
+    "erpclass-erp",
+    "erpclass-misc",
+    "mobiclass-apk",
+    "mobiclass-leitor",
+    "mobiclass-comanda"
+  ],
+  "unusedIdeFolders": [
+    ".qoder",
+    ".codebuddy"
+  ],
   "qoderOptIn": false
 }

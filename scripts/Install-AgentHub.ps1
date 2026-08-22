@@ -245,10 +245,31 @@ function Get-ProjectFamily {
   return 'minimal'
 }
 
+function Test-SkillTargetHasContent {
+  # Guards against silently linking an empty/corrupted skill directory into
+  # every project. A skill target is a directory that should contain at
+  # least one non-empty file (normally SKILL.md); "references" is a plain
+  # folder of checklists, not a single skill, so any non-empty file counts.
+  # A directory containing only a ".gitkeep" placeholder (e.g. an
+  # intentionally-empty skill stub like delphi-erpclass) is treated as valid.
+  param([string]$TargetPath)
+  if (-not (Test-Path $TargetPath -PathType Container)) { return $true } # not a dir mirror case, let caller handle
+  $files = @(Get-ChildItem -Path $TargetPath -Recurse -File -Force -ErrorAction SilentlyContinue)
+  if ($files.Count -eq 0) { return $false }
+  $realFiles = @($files | Where-Object { $_.Name -ne '.gitkeep' })
+  if ($realFiles.Count -eq 0) { return $true } # placeholder-only stub, intentional
+  $totalBytes = ($realFiles | Measure-Object -Property Length -Sum).Sum
+  return ($totalBytes -gt 0)
+}
+
 function New-JunctionOrCopy {
   param([string]$LinkPath, [string]$TargetPath, [switch]$DryRun)
   if (-not (Test-Path $TargetPath)) {
     Write-Warning "Missing skill target: $TargetPath"
+    return
+  }
+  if ((Test-Path $TargetPath -PathType Container) -and -not (Test-SkillTargetHasContent -TargetPath $TargetPath)) {
+    Write-Warning "Skill target is empty (0 bytes of content): $TargetPath -- refusing to link $LinkPath. Fix the source (e.g. 'git checkout -- <path>' in the hub or vendor submodule) and re-run."
     return
   }
   $parent = Split-Path -Parent $LinkPath
@@ -1021,6 +1042,31 @@ $commonSkills = @()
 if ($catalog.PSObject.Properties.Name -contains 'commonSkills') {
   $commonSkills = @($catalog.commonSkills)
 }
+
+# Guard: verify every native hub skill (skills/<name>/SKILL.md, not the
+# vendor-mirrored ones) has real content before linking anything into
+# projects. Junctions faithfully propagate an empty source directory to all
+# 24+ repos with no error, so a corrupted/emptied skill here would silently
+# strip that skill's instructions everywhere it's used.
+$hubSkillsRoot = Join-Path $HubPath 'skills'
+$allSkillNamesInUse = [System.Collections.Generic.HashSet[string]]::new()
+foreach ($s in $commonSkills) { [void]$allSkillNamesInUse.Add($s) }
+foreach ($prop in $catalog.families.PSObject.Properties) {
+  foreach ($s in @($prop.Value.skills)) { [void]$allSkillNamesInUse.Add($s) }
+}
+$emptySkills = @()
+foreach ($name in $allSkillNamesInUse) {
+  $skillDir = Join-Path $hubSkillsRoot $name
+  if (-not (Test-Path $skillDir)) { continue } # vendor-mirrored skills not yet linked; Ensure-VendorSkillMirrors handles those
+  $item = Get-Item $skillDir -Force
+  $isReparse = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
+  if ($isReparse) { continue } # vendor mirror; validated by Test-SkillTargetHasContent when re-linked below
+  if (-not (Test-SkillTargetHasContent -TargetPath $skillDir)) { $emptySkills += $name }
+}
+if ($emptySkills.Count -gt 0) {
+  throw "Native hub skill folder(s) are empty (0 bytes of content): $($emptySkills -join ', '). Refusing to link empty skills into every project. Restore content first, e.g.: git -C `"$HubPath`" checkout -- $(($emptySkills | ForEach-Object { "skills/$_" }) -join ' ')"
+}
+
 Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $commonSkills -DryRun:$DryRun
 $allowedIdes = @($catalog.ides)
 $qoderOptIn = [bool]$catalog.qoderOptIn

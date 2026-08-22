@@ -28,7 +28,7 @@ stack-specific coding rules.
 - **code-review-graph** — Python (`python -m code_review_graph serve`). All families.
 - **context7** — `npx -y @upstash/context7-mcp`. All families. Optional `CONTEXT7_API_KEY`.
 - **filesystem** — `npx -y @modelcontextprotocol/server-filesystem`, scoped to the target repo + hub. All families.
-- **mongodb** — `npx -y mongodb-mcp-server@<3`, read-only. NestJS family only. Connection string from `MDB_MCP_CONNECTION_STRING` (Windows user env), never committed.
+- **mongodb** — `npx -y mongodb-mcp-server@2`, read-only. NestJS family only. Default URI `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin`. Override with `$env:MDB_MCP_CONNECTION_STRING` at install.
 - **openapi** — `npx -y @ivotoby/openapi-mcp-server --tools dynamic`. NestJS only when `src/main.ts` already has Swagger. Spec URL from local port + `/swagger/json` (or the project's `jsonDocumentUrl`). Omitted from Codex. API must be running. No JWT in git.
 - **playwright** — `npx -y @playwright/mcp --headless`. Angular family plus `*-www` / `*-ajuda`. Omitted from Codex (`mcp.skipIdes`).
 

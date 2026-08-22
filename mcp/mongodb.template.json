@@ -2,8 +2,9 @@
   "mcpServers": {
     "mongodb": {
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "mongodb-mcp-server@<3"],
+      "args": ["/c", "npx", "-y", "mongodb-mcp-server@2"],
       "env": {
+        "MDB_MCP_CONNECTION_STRING": "mongodb://root:password@localhost:27017",
         "MDB_MCP_READ_ONLY": "true"
       },
       "type": "stdio"

@@ -16,107 +16,323 @@ Fonte única de skills, templates e scripts para agentes de IA nos produtos **ER
 - `AGENTS.md` / rules always-on estavam duplicando o mesmo guia NestJS/Angular (~5–20 KB) em dezenas de repos e IDEs.
 - Skills carregam **sob demanda**; AGENTS deve ficar **curto** (nome, stack, comandos, ponteiros).
 
-## Setup (cada máquina / cada dev)
+---
+
+## Setup rápido (máquina nova)
+
+### Pré-requisitos
+
+| Requisito | Por quê | Instalação |
+|-----------|---------|------------|
+| **Git** | Clone do hub + submodules | `winget install Git.Git` |
+| **PowerShell 7+** | Scripts usam sintaxe PS7 | `winget install Microsoft.PowerShell` |
+| **Node.js 18+** | MCPs rodam via `npx` (download automático) | `winget install OpenJS.NodeJS.LTS` |
+| **Python 3.10+** | code-review-graph MCP | `winget install Python.Python.3.13` |
+| **Docker** _(opcional)_ | MongoDB local | Já instalado se usa containers |
+
+> **Sobre pacotes npm**: todos os MCPs baseados em npm (`context7`, `filesystem`, `openapi`, `mongodb`, `playwright`) usam `npx -y` que **baixa automaticamente** na primeira execução. Não precisa instalar nenhum pacote global.
+>
+> **Sobre Python**: o script detecta automaticamente o Python disponível. Ele cria um venv em `.venv-code-review-graph/` e instala o pacote `code-review-graph` via pip. Se o venv já existir, reutiliza.
+
+### Clone e instalação
 
 ```powershell
+# 1. Clone com submodules
 git clone --recurse-submodules git@github.com:denernun/agents.git D:\AGENTS
-# se o clone já existia sem submodule:
+
+# Se o clone já existia sem submodule:
 git -C D:\AGENTS submodule update --init --recursive
 
+# 2. Opcional: chave para rate limits maiores no context7
+setx CONTEXT7_API_KEY "sua-chave"
+
+# 3. Reinicie o terminal (setx só aplica em novos processos)
+
+# 4. Rode o instalador
 cd D:\AGENTS\scripts
-# Opcional: exporte sua chave para rate limits maiores no context7
-$env:CONTEXT7_API_KEY='sua-chave'
 .\Install-AgentHub.ps1 -WriteAgents -RemoveUnusedIdeFolders
 ```
 
-O venv do `code-review-graph` e as junctions das skills do Addy **não** vão no Git. O install recria os dois.
+O instalador faz tudo automaticamente:
+- Detecta IDEs instaladas na máquina
+- Cria venv Python + instala `code-review-graph`
+- Baixa vendor skills (submodule `addyosmani/agent-skills`)
+- Cria junctions de skills em cada projeto
+- Gera configs MCP por projeto e por IDE
+- Escreve `AGENTS.md` enxuto (preserva seção `## Local`)
+- Remove regras gordas duplicadas
 
-Skills do pack [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) ficam em `vendor/addyosmani-agent-skills` (submodule). Atualizar: `git -C D:\AGENTS\vendor\addyosmani-agent-skills pull`.
+---
 
-Opções úteis:
+## Migrar para outra máquina
 
-| Flag | Efeito |
-|------|--------|
-| `-DryRun` | Só mostra o que faria |
-| `-Ides Cursor,VSCode,Kiro` | Força lista de IDEs (senão detecta por `~\.<ide>` / comando) |
-| `-WriteAgents` | Reescreve `AGENTS.md` enxuto (preserva seção `## Local`) |
-| `-RemoveUnusedIdeFolders` | Remove `.qoder`, `.codebuddy` e rules gordas duplicadas |
-| `-HubPath` | Caminho do hub se o script não achar `skills/` ao lado |
-| `-IncludeQoder` | Habilita Qoder (fora da lista padrão; veja `catalog/projects.json`) |
-| `-MigrateLegacyPaths` | Remove artefatos de versões antigas (`.antigravity\mcp.json`, `.opencode\opencode.json`, `.devin\mcp.json`, `.codex\claude`, `.gemini\GEMINI.md`) antes de regravar nos caminhos corretos |
-
-Agentes habilitados vivem em `catalog/projects.json` (`ides`). Hoje: **Cursor**, **VS Code**, **Kiro**, **OpenCode**, **Antigravity**, **Claude Code**, **Codex** e **Devin**. **Qoder** continua opt-in.
-
-MCPs por projeto (definidos em `catalog/projects.json`):
-
-- **Todos**: `code-review-graph`, `context7`, `filesystem`
-- **APIs NestJS** (`*-api`, `*-auth`, `*-sync`, `*-hook`): também `mongodb` (somente leitura; connection string via `MDB_MCP_CONNECTION_STRING` no ambiente do Windows — não vai no Git) e `openapi` (`@ivotoby/openapi-mcp-server`, modo `dynamic`) **só se o `main.ts` já tiver Swagger**. **Não** é gravado no Codex.
-- **Frontends Angular** (`*-admin`, `*-dash`, `*-app`, `*-cob`) e sites `*-www` / `*-ajuda`: também `playwright` (headless). **Não** é gravado no Codex — já quebrou o startup de MCP
-- Delphi e o restante: só o trio comum
-
-Se alguma IDE não aparecer na detecção automática:
+O hub é **portátil** — basta clonar o repositório e rodar o install:
 
 ```powershell
-.\Install-AgentHub.ps1 -Ides Cursor,VSCode,Kiro,OpenCode,Antigravity,Claude,Codex,Devin -WriteAgents
+# Na máquina nova:
+git clone --recurse-submodules git@github.com:denernun/agents.git D:\AGENTS
+cd D:\AGENTS\scripts
+.\Install-AgentHub.ps1 -WriteAgents -RemoveUnusedIdeFolders
 ```
 
-## Estrutura
+**O que NÃO precisa copiar manualmente:**
+- `.venv-code-review-graph/` — recriado automaticamente pelo install
+- Junctions em repos (`skills/`, `references`) — recriadas pelo install
+- Configs MCP dos projetos — regeneradas pelo install
+- Vendor skills — baixadas via git submodule
 
+**O que precisa configurar na máquina nova:**
+- Opcionalmente `CONTEXT7_API_KEY` (rate limits). Mongo local já vai no template (`root` / `password`).
+- Ter os repos de produto em `D:\SISTEMAS\<ROOT>\` (o install detecta o que existir)
+- IDEs instaladas (o install detecta automaticamente quais estão presentes)
+
+---
+
+## IDEs suportadas
+
+O install detecta automaticamente quais IDEs estão instaladas verificando pastas no `$HOME`:
+
+| IDE | Detecção | Skills em | MCP config em |
+|-----|----------|-----------|---------------|
+| **Cursor** | `~\.cursor` | `.cursor\skills\` | `.cursor\mcp.json` |
+| **VS Code** | `~\.vscode` | — | `.vscode\mcp.json` |
+| **Kiro** | `~\.kiro` | `.kiro\skills\` | `.kiro\settings\mcp.json` |
+| **OpenCode** | `opencode` no PATH | `.opencode\skills\` | `opencode.json` |
+| **Antigravity** | `~\.gemini` | `.agents\skills\` | `.agents\mcp_config.json` |
+| **Claude Code** | `claude` no PATH | `.claude\skills\` | `.mcp.json` |
+| **Codex** | `codex` no PATH | `.codex\skills\` | `.codex\config.toml` |
+| **Devin** | `devin` no PATH | `.devin\skills\` | `.devin\mcp_config.json` |
+
+### Forçar lista de IDEs
+
+```powershell
+# Ignorar detecção automática:
+.\Install-AgentHub.ps1 -Ides Cursor,VSCode,Kiro -WriteAgents
 ```
-D:\AGENTS/
-  skills/           # nestjs, angular, delphi, code-review-graph, processo
-  templates/agents/ # AGENTS.md enxutos por família
-  templates/rules/  # ponteiros curtos p/ Cursor
-  mcp/              # templates: trio comum + mongodb/openapi (APIs) + playwright (frontends)
-  catalog/          # families + match patterns + ides
-  scripts/          # Install / Uninstall / Inventory / Fix-CursorHooks
-  docs/             # CONTEXT-HYGIENE, superpowers, CODEX-STATUS
+
+### Remover IDEs que não uso
+
+```powershell
+# 1. Rode o install apenas com as IDEs desejadas:
+.\Install-AgentHub.ps1 -Ides Cursor,Kiro -WriteAgents
+
+# 2. Remova as pastas das IDEs não utilizadas:
+.\Install-AgentHub.ps1 -RemoveUnusedIdeFolders
 ```
 
-## Manutenção
+O `-RemoveUnusedIdeFolders` remove pastas configuradas em `catalog/projects.json` → `unusedIdeFolders` (hoje: `.qoder`, `.codebuddy`).
 
-1. Edite a skill **no hub** (`skills/.../SKILL.md`).
-2. Rode `Install-AgentHub.ps1` nas máquinas (junctions locais não vão no Git).
-3. Commit do hub + `AGENTS.md` enxutos em cada repo.
+Para remoção completa de tudo que o hub gerou:
 
-## Inventário
+```powershell
+# Apenas junctions (seguro, reversível):
+.\Uninstall-AgentHub.ps1
+
+# Tudo: junctions + MCPs + rules + pointers (cirúrgico: preserva MCPs manuais):
+.\Uninstall-AgentHub.ps1 -Full
+
+# Preview sem remover:
+.\Uninstall-AgentHub.ps1 -Full -DryRun
+```
+
+---
+
+## MCPs por família
+
+Definidos em `catalog/projects.json`:
+
+| Família | Projetos | MCPs |
+|---------|----------|------|
+| **Todos** | `*` | `code-review-graph`, `context7`, `filesystem`, `memorix` |
+| **NestJS** | `*-api`, `*-auth`, `*-sync`, `*-hook`, `*-cob-api` | + `mongodb` (read-only), `openapi` (se Swagger detectado) |
+| **Angular** | `*-admin`, `*-dash`, `*-app`, `*-cob` | + `playwright` |
+| **Sites** | `*-www`, `*-ajuda` | + `playwright` |
+| **Delphi** | `*-erp` | só os comuns |
+
+### OpenAPI
+
+- Detectado automaticamente se `src/main.ts` contém `SwaggerModule`
+- A porta é lida de `src/config/.development.json` (campo `api.port`, `auth.port` ou `port`)
+- **Requer a API rodando** para o MCP conectar (ele busca o spec em runtime)
+- URL padrão: `https://localhost:<porta>/docs-json`
+
+### MongoDB
+
+- Padrão local (igual ao `.development.json` das APIs): `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin`
+- Override no install: `$env:MDB_MCP_CONNECTION_STRING`
+- Modo read-only por padrão
+
+---
+
+## Testando os MCPs
+
+Após instalar e conectar, use estes prompts para validar:
+
+### Teste MongoDB
+
+> "Liste os databases disponíveis no MongoDB e mostre as collections do database principal"
+
+ou
+
+> "Consulte a collection `users` e mostre os 3 primeiros documentos"
+
+### Teste OpenAPI
+
+> "Liste todos os endpoints disponíveis na API usando o openapi MCP"
+
+ou
+
+> "Mostre os detalhes do endpoint POST /auth/login — quais parâmetros ele aceita?"
+
+### Teste code-review-graph
+
+> "Use detect_changes_tool para analisar as mudanças do último commit"
+
+### Teste context7
+
+> "Busque a documentação do NestJS sobre Guards usando o context7"
+
+---
+
+## Verificação e diagnóstico
+
+### Inventário (verifica tamanho dos always-on)
 
 ```powershell
 .\Inventory-AgentFiles.ps1
 ```
 
+Qualquer arquivo always-on > 2 KB é uma regressão.
+
+### Preview sem alterar nada
+
+```powershell
+.\Install-AgentHub.ps1 -DryRun
+```
+
+### Verificar configs MCP geradas
+
+```powershell
+# Ver o MCP de um projeto específico:
+Get-Content "D:\SISTEMAS\ERPCLASS\erpclass-api\.kiro\settings\mcp.json" | ConvertFrom-Json | ConvertTo-Json -Depth 5
+```
+
+### Diagnosticar MCP com falha
+
+1. **Verificar se o serviço base está rodando** (API para openapi, Docker para mongodb)
+2. **Verificar variáveis de ambiente**: `$env:MDB_MCP_CONNECTION_STRING`
+3. **Testar o server diretamente**:
+
+```powershell
+# MongoDB:
+cmd /c "npx -y mongodb-mcp-server@2 --help"
+
+# OpenAPI:
+cmd /c "npx -y @ivotoby/openapi-mcp-server --help"
+
+# code-review-graph:
+& "D:\AGENTS\.venv-code-review-graph\Scripts\python.exe" -m code_review_graph --version
+```
+
+4. **Reiniciar a IDE** após mudanças em variáveis de ambiente (setx)
+5. **Re-rodar o install** se templates foram atualizados:
+
+```powershell
+.\Install-AgentHub.ps1 -WriteAgents
+```
+
+---
+
+## Opções do Install
+
+| Flag | Efeito |
+|------|--------|
+| `-DryRun` | Só mostra o que faria, não altera nada |
+| `-Ides Cursor,VSCode,Kiro` | Força lista de IDEs (senão detecta automaticamente) |
+| `-WriteAgents` | Reescreve `AGENTS.md` enxuto (preserva seção `## Local`) |
+| `-RemoveUnusedIdeFolders` | Remove `.qoder`, `.codebuddy` e rules gordas duplicadas |
+| `-HubPath` | Caminho do hub se o script não achar `skills/` ao lado |
+| `-IncludeQoder` | Habilita Qoder (fora da lista padrão) |
+| `-MigrateLegacyPaths` | Remove artefatos de versões antigas antes de regravar nos caminhos corretos |
+
+---
+
+## Estrutura do hub
+
+```
+D:\AGENTS/
+  catalog/projects.json   # families, match patterns, MCPs, IDEs
+  docs/                   # CONTEXT-HYGIENE, superpowers
+  mcp/                    # templates MCP (*.template.json / *.template.toml)
+  scripts/
+    Install-AgentHub.ps1    # instala tudo
+    Uninstall-AgentHub.ps1  # remove tudo (ou só junctions)
+    Inventory-AgentFiles.ps1 # audita tamanhos
+    Fix-CursorHooks.ps1    # converte hooks sh→ps1
+  skills/                 # guias on-demand por stack/processo
+  templates/
+    agents/               # AGENTS.md enxutos por família
+    rules/                # ponteiros curtos p/ Cursor (.mdc)
+    copilot/              # instruções GitHub Copilot por família
+    antigravity/          # pointer Antigravity
+  vendor/                 # submodule addyosmani/agent-skills (gitignored content)
+```
+
+---
+
+## Manutenção do dia-a-dia
+
+1. Edite a skill **no hub** (`skills/.../SKILL.md`)
+2. Rode `Install-AgentHub.ps1` nas máquinas (junctions locais não vão no Git)
+3. Commit do hub + `AGENTS.md` enxutos em cada repo
+
+### Atualizar vendor skills
+
+```powershell
+git -C D:\AGENTS submodule update --remote
+```
+
+### Atualizar code-review-graph
+
+```powershell
+& "D:\AGENTS\.venv-code-review-graph\Scripts\pip.exe" install --upgrade code-review-graph
+```
+
+---
+
 ## Troubleshooting
+
+### MCP "Connection Failed" no Kiro/Cursor
+
+| MCP | Causa comum | Solução |
+|-----|-------------|---------|
+| **openapi** | API não está rodando | Inicie a API (`npm run start:dev`) e clique Retry |
+| **mongodb** | Variável não definida ou Docker parado | `setx MDB_MCP_CONNECTION_STRING "mongodb://localhost:27017"` + reiniciar IDE |
+| **code-review-graph** | Python errado ou venv ausente | Re-rode `Install-AgentHub.ps1` (recria o venv) |
+| **context7** | Rede instável ou rate limit | Defina `CONTEXT7_API_KEY` para mais requests |
 
 ### Múltiplas janelas de terminal no Cursor (Windows)
 
-Se ao usar o Cursor muitas janelas do Git Bash aparecerem executando `crg-update.sh`, é porque o code-review-graph criou hooks em shell script que não funcionam bem no Windows.
-
-**Solução**: converter os hooks para PowerShell:
+Se ao usar o Cursor muitas janelas do Git Bash aparecerem executando `crg-update.sh`:
 
 ```powershell
 cd D:\AGENTS\scripts
 .\Fix-CursorHooks.ps1
 ```
 
-Depois, reinicie o Cursor. Os hooks agora executam silenciosamente em PowerShell.
+> **Nota**: `Install-AgentHub.ps1` já faz essa conversão automaticamente.
 
-> **Nota**: `Install-AgentHub.ps1` agora faz essa conversão automaticamente, mas se você já tinha os hooks `.sh` antes, rode `Fix-CursorHooks.ps1` uma vez.
+### Codex não inicializa MCPs
 
-### Codex não inicializa MCPs (code-review-graph, context7)
+O Codex lê MCP **por projeto** em `.codex/config.toml` (só se o projeto estiver trusted).
 
-O Codex lê MCP **por projeto** em `.codex/config.toml` (só se o projeto estiver trusted). Não usamos `~/.codex/config.toml` para o grafo — o `cwd` precisa ser o repo aberto.
+1. Verifique se o Install detectou o Codex na lista de IDEs
+2. Force: `.\Install-AgentHub.ps1 -Ides Codex -WriteAgents`
+3. Playwright e OpenAPI **não** entram no Codex (causa crashes)
 
-1. Verifique se `Install-AgentHub.ps1` detectou o Codex (deve aparecer na lista de IDEs)
-2. Rode `.\Install-AgentHub.ps1 -Ides Codex -WriteAgents` para forçar
-3. Verifique `<repo>\.codex\config.toml` — trio comum (`code-review-graph`, `context7`, `filesystem`); em APIs também `mongodb`. Playwright e OpenAPI **não** entram no Codex.
-4. Skills ficam em `<repo>\.codex\skills\` (junctions para o hub)
-5. Reinicie o Codex após mudanças no config
+### MCP global vs projeto
 
-**Plugins opcionais do Codex** (github, stripe, playwright) não são gerenciados por este hub. Desabilite o plugin Playwright do Codex se ele ainda aparecer em `~/.codex/config.toml` — o install do AgentHub também omite `playwright` do `.codex/config.toml` por projeto.
+MCPs **universais** (como `memorix`) ficam na config global do usuário (`~\.kiro\settings\mcp.json`).
+MCPs **per-project** (como `code-review-graph`, `openapi`, `mongodb`) ficam na config do projeto e são gerados pelo install.
 
-### Claude Code / Devin
-
-| Ferramenta | Skills | MCP |
-|------------|--------|-----|
-| Claude Code | `.claude/skills/` | `.mcp.json` na raiz |
-| Devin | `.devin/skills/` | `.devin/mcp_config.json` |
+Se um MCP aparecer com erro na config global mas funcionar por projeto, **remova-o da config global** — a de projeto tem prioridade.

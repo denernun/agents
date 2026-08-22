@@ -462,7 +462,7 @@ function Get-NestSwaggerMcpVars {
   if ($text -match 'httpsOptions') { $scheme = 'https' }
   $base = "${scheme}://localhost:$port"
 
-  $specRel = 'swagger/json'
+  $specRel = 'docs-json'
   if ($text -match "jsonDocumentUrl:\s*'([^']+)'") {
     $specRel = $Matches[1].TrimStart('/')
   } elseif ($text -match "SwaggerModule\.setup\(\s*'([^']+)'") {
@@ -1185,6 +1185,7 @@ $mcpBaseVars = @{
   PYTHON = $crgPython
   HUB = $HubPath
   CONTEXT7_API_KEY = $context7ApiKey
+  MDB_MCP_CONNECTION_STRING = if ($env:MDB_MCP_CONNECTION_STRING) { $env:MDB_MCP_CONNECTION_STRING } else { 'mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin' }
 }
 $managedMcpServers = Get-ManagedMcpServerNames -Catalog $catalog -Families $families
 $mcpSkipIdes = $null

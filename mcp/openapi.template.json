@@ -8,7 +8,7 @@
         "OPENAPI_SPEC_PATH": "{{OPENAPI_SPEC_PATH}}",
         "TOOLS_MODE": "dynamic",
         "TRANSPORT_TYPE": "stdio",
-        "REJECT_UNAUTHORIZED": "false",
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0",
         "VERBOSE": "false"
       },
       "type": "stdio"

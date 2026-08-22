@@ -62,7 +62,7 @@ O install **não** joga mais todo `mcp/*.template.json` em todo repo. A lista ve
 - `code-review-graph` — Python (`python -m code_review_graph serve`) para análise de grafo do repo. **Todas** as famílias.
 - `context7` — `npx -y @upstash/context7-mcp`; rate limits maiores com chave de API. **Todas** as famílias.
 - `filesystem` — `npx -y @modelcontextprotocol/server-filesystem` restringido ao repo + hub. **Todas** as famílias.
-- `mongodb` — `npx -y mongodb-mcp-server@<3`, somente leitura (`MDB_MCP_READ_ONLY=true`). Só família **nestjs**. Connection string **não** entra no Git: defina `MDB_MCP_CONNECTION_STRING` nas variáveis de ambiente do usuário Windows.
+- `mongodb` — `npx -y mongodb-mcp-server@2`, somente leitura. Só família **nestjs**. URI local padrão: `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin` (igual ao Docker/dev). Override: `$env:MDB_MCP_CONNECTION_STRING` no install.
 - `openapi` — `npx -y @ivotoby/openapi-mcp-server --tools dynamic`. Só NestJS **com Swagger no `main.ts`**. Spec em `/swagger/json` (ou o `jsonDocumentUrl` do projeto). Omitido no **Codex**. A API local precisa estar rodando. Não grava JWT no `mcp.json`.
 - `playwright` — `npx -y @playwright/mcp --headless`. Família **angular** e projetos `*-www` / `*-ajuda`. Omitido no **Codex** (`mcp.skipIdes`) porque já interrompeu o startup.
 

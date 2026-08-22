@@ -15,6 +15,7 @@
   - Runs "code-review-graph build --repo <path>" for projects using that
     skill that don't have a ".code-review-graph" folder yet (skip with
     -SkipCodeReviewGraph, force a rebuild with -ForceCodeReviewGraphBuild).
+    MCP configs always use the venv Python even when graph builds are skipped.
     Uses a dedicated venv (.venv-code-review-graph, created on first run)
     instead of the system Python: the Microsoft Store Python's user-site
     packages are invisible to code-review-graph's "python -I" tree-sitter
@@ -1172,10 +1173,9 @@ $detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -IncludeQoder
 if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides to force or update catalog ides list.' }
 
 $python = Find-PythonExe
-$crgPython = $python
-if (-not $SkipCodeReviewGraph) {
-  $crgPython = Get-CodeReviewGraphPython -HubPath $HubPath -SystemPython $python -DryRun:$DryRun
-}
+# Always resolve the dedicated venv for MCP configs. -SkipCodeReviewGraph only
+# skips per-repo graph *builds*, not the Python path written into mcp.json.
+$crgPython = Get-CodeReviewGraphPython -HubPath $HubPath -SystemPython $python -DryRun:$DryRun
 $context7ApiKey = $env:CONTEXT7_API_KEY
 if ([string]::IsNullOrWhiteSpace($context7ApiKey)) {
   Write-Warning 'CONTEXT7_API_KEY not set; context7 MCP will run with public rate limits (get a key at context7.com/dashboard).'

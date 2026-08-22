@@ -4,5 +4,5 @@ args = ["/c", "npx", "-y", "mongodb-mcp-server@2"]
 type = "stdio"
 
 [mcp_servers.mongodb.env]
-MDB_MCP_CONNECTION_STRING = "mongodb://root:password@localhost:27017"
+MDB_MCP_CONNECTION_STRING = "mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin"
 MDB_MCP_READ_ONLY = "true"

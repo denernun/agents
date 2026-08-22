@@ -220,7 +220,7 @@ Get-Content "D:\SISTEMAS\ERPCLASS\erpclass-api\.kiro\settings\mcp.json" | Conver
 ### Diagnosticar MCP com falha
 
 1. **Verificar se o serviço base está rodando** (API para openapi, Docker para mongodb)
-2. **Verificar variáveis de ambiente**: `$env:MDB_MCP_CONNECTION_STRING`
+2. **MongoDB**: Docker no ar, user `root` / senha `password` (`authSource=admin`)
 3. **Testar o server diretamente**:
 
 ```powershell
@@ -307,7 +307,7 @@ git -C D:\AGENTS submodule update --remote
 | MCP | Causa comum | Solução |
 |-----|-------------|---------|
 | **openapi** | API não está rodando | Inicie a API (`npm run start:dev`) e clique Retry |
-| **mongodb** | Variável não definida ou Docker parado | `setx MDB_MCP_CONNECTION_STRING "mongodb://localhost:27017"` + reiniciar IDE |
+| **mongodb** | Docker parado ou user/senha errados | Suba o Mongo local (`root` / `password`) e clique Retry |
 | **code-review-graph** | Python errado ou venv ausente | Re-rode `Install-AgentHub.ps1` (recria o venv) |
 | **context7** | Rede instável ou rate limit | Defina `CONTEXT7_API_KEY` para mais requests |
 

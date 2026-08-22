@@ -1011,9 +1011,11 @@ function Remove-FatAlwaysOnRules {
 }
 
 function Remove-LegacyAgentPaths {
-  # Cleans up artifacts written by older versions of this script that used
-  # incorrect paths for Antigravity/OpenCode. Opt-in via -MigrateLegacyPaths
-  # because it deletes files (reversible: this script regenerates them).
+  # Cleans up artifacts written by older versions of this script or by
+  # non-integrated IDEs (Gemini CLI, Windsurf). Opt-in via -MigrateLegacyPaths
+  # because it deletes files (reversible: this script regenerates the
+  # integrated-IDE equivalents). Adds .gemini/skills, .windsurfrules and
+  # CLAUDE.md because the hub now uses .agents/skills, AGENTS.md and .mcp.json.
   param([string]$RepoPath, [switch]$DryRun)
   $legacy = @(
     (Join-Path $RepoPath '.antigravity\mcp.json'),
@@ -1022,7 +1024,10 @@ function Remove-LegacyAgentPaths {
     (Join-Path $RepoPath '.opencode\opencode.json'),
     (Join-Path $RepoPath '.devin\mcp.json'),
     (Join-Path $RepoPath '.gemini\GEMINI.md'),
-    (Join-Path $RepoPath '.codex\claude')
+    (Join-Path $RepoPath '.gemini\skills'),
+    (Join-Path $RepoPath '.codex\claude'),
+    (Join-Path $RepoPath '.windsurfrules'),
+    (Join-Path $RepoPath 'CLAUDE.md')
   )
   foreach ($p in $legacy) {
     if (-not (Test-Path $p)) { continue }

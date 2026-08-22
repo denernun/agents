@@ -26,9 +26,9 @@ foreach ($root in $Roots) {
         $rows += [pscustomobject]@{ Project = $name; File = "rule:$($_.Name)"; KB = [math]::Round($_.Length / 1KB, 1) }
       }
     }
-    # MCP configs: project-root opencode.json / .mcp.json / .codex\config.toml
+    # MCP configs: project-root opencode.json / .mcp.json
     # plus mcp.json / mcp_config.json under any IDE folder
-    foreach ($rel in @('opencode.json', '.mcp.json', '.codex\config.toml')) {
+    foreach ($rel in @('opencode.json', '.mcp.json')) {
       $fp = Join-Path $p $rel
       if (Test-Path $fp) {
         $rows += [pscustomobject]@{ Project = $name; File = "mcp:$rel"; KB = [math]::Round((Get-Item $fp).Length / 1KB, 1) }

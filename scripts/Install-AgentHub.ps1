@@ -3,14 +3,12 @@
   Links D:\AGENTS skills into ERPCLASS / NFECLASS / MOBICLASS / SHOPCLASS repos (D:\SISTEMAS).
 
 .DESCRIPTION
-  - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin)
+  - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Devin)
   - Creates junctions from hub skills into each project
   - Writes slim AGENTS.md (preserves ## Local section)
   - Generates MCP configs only for detected IDEs (common trio everywhere;
     mongodb + openapi on NestJS APIs that already have Swagger;
-    playwright on Angular/www/ajuda frontends;
-    playwright and openapi are omitted from Codex because extra npx
-    servers already broke MCP startup)
+    playwright on Angular/www/ajuda frontends)
   - Optionally removes unused IDE folders (.qoder, .codebuddy)
   - Runs "code-review-graph build --repo <path>" for projects using that
     skill that don't have a ".code-review-graph" folder yet (skip with
@@ -33,7 +31,7 @@
 
 .EXAMPLE
   # One-time cleanup of paths written by older script versions
-  # (.antigravity\mcp.json, .opencode\opencode.json, .gemini\GEMINI.md, .codex\claude)
+  # (.antigravity\mcp.json, .opencode\opencode.json, .gemini\GEMINI.md)
   .\Install-AgentHub.ps1 -MigrateLegacyPaths -WriteAgents
 #>
 [CmdletBinding()]
@@ -92,10 +90,6 @@ function Get-DetectedIdes {
   if ((Test-Path (Join-Path $userHome '.claude')) -or
       (Get-Command claude -ErrorAction SilentlyContinue)) {
     [void]$found.Add('Claude')
-  }
-  if ((Test-Path (Join-Path $userHome '.codex')) -or
-      (Get-Command codex -ErrorAction SilentlyContinue)) {
-    [void]$found.Add('Codex')
   }
   if ((Test-Path (Join-Path $userHome '.devin')) -or
       (Test-Path (Join-Path $env:APPDATA 'devin')) -or
@@ -650,49 +644,6 @@ function Write-OpenCodeConfig {
   Write-Host "  wrote $path"
 }
 
-function Remove-TomlTablesByPrefix {
-  # Drops TOML tables whose header is exactly one of $Prefixes or a nested
-  # table under them (e.g. mcp_servers.context7.env).
-  param([string]$Content, [string[]]$Prefixes)
-  if ([string]::IsNullOrWhiteSpace($Content)) { return '' }
-  $lines = $Content -split "`r?`n"
-  $out = [System.Collections.Generic.List[string]]::new()
-  $skip = $false
-  foreach ($line in $lines) {
-    if ($line -match '^\[([^\]]+)\]') {
-      $table = $Matches[1]
-      $skip = $false
-      foreach ($p in $Prefixes) {
-        if ($table -eq $p -or $table.StartsWith("$p.")) { $skip = $true; break }
-      }
-    }
-    if ($skip) { continue }
-    if ($line -match '^\s*# AgentHub-managed') { continue }
-    [void]$out.Add($line)
-  }
-  return (($out -join "`r`n").TrimEnd())
-}
-
-function Write-CodexProjectConfig {
-  # Codex reads project MCP from <repo>\.codex\config.toml (trusted projects
-  # only; developers.openai.com/codex/mcp). Merge AgentHub servers into any
-  # existing file so hand-edited keys survive. Do NOT write ~/.codex/config.toml:
-  # a global code-review-graph cwd cannot be correct for every repo.
-  # $ManagedServers is the full hub catalog (common + every family extra) so a
-  # re-run strips servers that no longer belong to this repo (e.g. playwright
-  # left on an API, mongodb left on Delphi).
-  param([string]$RepoPath, [string]$Toml, [string[]]$ManagedServers, [switch]$DryRun)
-  $path = Join-Path $RepoPath '.codex\config.toml'
-  $prefixes = @($ManagedServers | ForEach-Object { "mcp_servers.$_" })
-  $existing = ''
-  if (Test-Path $path) {
-    $existing = Remove-TomlTablesByPrefix -Content (Get-Content $path -Raw -Encoding UTF8) -Prefixes $prefixes
-  }
-  $block = "# AgentHub-managed MCP servers (rewritten by Install-AgentHub.ps1).`r`n$Toml"
-  $content = if ($existing) { $existing.TrimEnd() + "`r`n`r`n" + $block } else { $block }
-  Write-TextFile -Path $path -Content $content -DryRun:$DryRun
-}
-
 function Write-McpConfigs {
   param(
     [string]$RepoPath,
@@ -759,13 +710,6 @@ function Write-McpConfigs {
         # Claude Code project MCP is <repo>\.mcp.json (code.claude.com/docs/en/mcp).
         $path = Join-Path $RepoPath '.mcp.json'
         Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-      }
-      'Codex' {
-        # Per-project .codex\config.toml so cwd of code-review-graph is this repo.
-        # Omit "type": Codex McpServerConfig does not use that JSON field.
-        # Playwright is skipped for Codex (see catalog mcp.skipIdes).
-        $codexToml = ConvertTo-TomlMcp -Servers $plain -SkipProperties @('type')
-        Write-CodexProjectConfig -RepoPath $RepoPath -Toml $codexToml -ManagedServers $ManagedServers -DryRun:$DryRun
       }
       'Devin' {
         # Devin CLI (v3000.3+) reads .devin\mcp_config.json (docs.devin.ai
@@ -1028,7 +972,6 @@ function Remove-LegacyAgentPaths {
     (Join-Path $RepoPath '.gemini\GEMINI.md'),
     (Join-Path $RepoPath '.gemini\skills'),
     (Join-Path $RepoPath '.gemini\hooks'),
-    (Join-Path $RepoPath '.codex\claude'),
     (Join-Path $RepoPath '.windsurfrules'),
     (Join-Path $RepoPath 'CLAUDE.md')
   )
@@ -1085,10 +1028,6 @@ function Link-ProjectSkills {
   if ($Ides -contains 'Claude') {
     # Claude Code discovers project skills at .claude\skills\<name>\SKILL.md
     [void]$skillRoots.Add((Join-Path $RepoPath '.claude\skills'))
-  }
-  if ($Ides -contains 'Codex') {
-    # Codex project layer maps .codex\ to .codex\skills (also reads .agents\skills).
-    [void]$skillRoots.Add((Join-Path $RepoPath '.codex\skills'))
   }
   if ($Ides -contains 'Devin') {
     # Devin discovers SKILL.md under .devin\skills (docs.devin.ai/product-guides/skills).

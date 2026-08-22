@@ -100,7 +100,6 @@ O install detecta automaticamente quais IDEs estão instaladas verificando pasta
 | **OpenCode** | `opencode` no PATH | `.opencode\skills\` | `opencode.json` |
 | **Antigravity** | `~\.gemini` | `.agents\skills\` | `.agents\mcp_config.json` |
 | **Claude Code** | `claude` no PATH | `.claude\skills\` | `.mcp.json` |
-| **Codex** | `codex` no PATH | `.codex\skills\` | `.codex\config.toml` |
 | **Devin** | `devin` no PATH | `.devin\skills\` | `.devin\mcp_config.json` |
 
 ### Forçar lista de IDEs
@@ -321,14 +320,6 @@ cd D:\AGENTS\scripts
 ```
 
 > **Nota**: `Install-AgentHub.ps1` já faz essa conversão automaticamente.
-
-### Codex não inicializa MCPs
-
-O Codex lê MCP **por projeto** em `.codex/config.toml` (só se o projeto estiver trusted).
-
-1. Verifique se o Install detectou o Codex na lista de IDEs
-2. Force: `.\Install-AgentHub.ps1 -Ides Codex -WriteAgents`
-3. Playwright e OpenAPI **não** entram no Codex (causa crashes)
 
 ### MCP global vs projeto
 

@@ -12,14 +12,7 @@
       "filesystem",
       "memorix"
     ],
-    "skipIdes": {
-      "playwright": [
-        "Codex"
-      ],
-      "openapi": [
-        "Codex"
-      ]
-    },
+    "skipIdes": {},
     "extra": [
       {
         "match": [
@@ -129,7 +122,6 @@
     "OpenCode",
     "Antigravity",
     "Claude",
-    "Codex",
     "Devin"
   ],
   "excludeProjectNames": [

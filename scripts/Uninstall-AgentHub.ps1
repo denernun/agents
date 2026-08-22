@@ -153,7 +153,6 @@ $skillDirs = @(
   '.kiro\skills',
   '.opencode\skills',
   '.claude\skills',
-  '.codex\skills',
   '.devin\skills'
 )
 foreach ($root in $Roots) {
@@ -217,6 +216,6 @@ foreach ($root in $Roots) {
 }
 
 if ($Full) {
-  Write-Host "`nNote: AGENTS.md, opencode.json and .codex\config.toml were left in place (they may contain project-specific / hand-edited content)."
+  Write-Host "`nNote: AGENTS.md and opencode.json were left in place (they may contain project-specific / hand-edited content)."
   Write-Host "Remove them manually per repo if you no longer want AgentHub-managed files there."
 }

@@ -7,5 +7,5 @@ globs:
 alwaysApply: false
 ---
 
-Follow shared skills `angular-coreui` and `coreui-styling` from `D:\IA\agents` (linked under `.cursor/skills`).
+Follow shared skills `angular-coreui` and `coreui-styling` from `D:\AGENTS` (linked under `.cursor/skills`).
 Keep AGENTS.md project-specific only.

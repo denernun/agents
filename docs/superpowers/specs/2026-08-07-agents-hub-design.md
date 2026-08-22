@@ -7,7 +7,7 @@
 ## Goals
 
 1. Stop shipping duplicate NestJS/Angular/Delphi guides in every `AGENTS.md` / Cursor rule / IDE folder.
-2. One editable source (`D:\IA\agents`) with per-machine junctions.
+2. One editable source (`D:\agents`) with per-machine junctions.
 3. MCP only for IDEs the developer actually uses; remove unknown/unused IDE clutter (`.qoder`).
 4. Keep always-on context tiny; load stack guides via skills on demand.
 

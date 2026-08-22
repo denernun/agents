@@ -1,6 +1,6 @@
 # Agent Hub Implementation Plan
 
-> **For agentic workers:** execute sequentially; hub path `D:\IA\agents`.
+> **For agentic workers:** execute sequentially; hub path `D:\agents`.
 
 **Goal:** Hub + install script + slim AGENTS across ERP/NFE/MOBI.
 

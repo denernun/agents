@@ -210,11 +210,18 @@ O MCP `openapi` (`@ivotoby/openapi-mcp-server`, modo `dynamic`) lê a spec em `/
 - Título `{Produto} {App} API` (ex: `ERPClass Cob API`); versão lida de `package.json`.
 - UI em `/swagger`; spec JSON em `/swagger/json` (`jsonDocumentUrl: 'swagger/json'`).
 - `.addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')` quando a API usa JWT/`TokenGuard`.
-- Plugin do CLI em `nest-cli.json` para inferir tipos dos DTOs — **não** decore campo a campo com `@ApiProperty`:
+- Plugin do CLI em `nest-cli.json` para inferir tipos dos DTOs — **não** decore campo a campo com `@ApiProperty`. Configure `dtoFileNameSuffix` com **todos** os sufixos usados pelo projeto (`*.request.ts`, `*.response.ts`, `*.dto.ts`, `*.entity.ts`); sem isso, as classes de request/response saem com **schema vazio** no Swagger:
 
 ```json
 "compilerOptions": {
-  "plugins": [{ "name": "@nestjs/swagger", "options": { "classValidatorShim": true, "introspectComments": true } }]
+  "plugins": [{
+    "name": "@nestjs/swagger",
+    "options": {
+      "classValidatorShim": true,
+      "introspectComments": true,
+      "dtoFileNameSuffix": [".dto.ts", ".entity.ts", ".request.ts", ".response.ts"]
+    }
+  }]
 }
 ```
 
@@ -349,7 +356,7 @@ Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CON
 - [ ] Cache invalidado explicitamente após writes.
 - [ ] Exceções de negócio como classes derivadas de `BaseException`, mensagens em português.
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).
-- [ ] Swagger: `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer se JWT. Plugin CLI ligado. Sem `@ApiProperty` nos DTOs.
+- [ ] Swagger: `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer se JWT. Plugin CLI ligado com `dtoFileNameSuffix` cobrindo `.dto.ts`, `.entity.ts`, `.request.ts`, `.response.ts`. Sem `@ApiProperty` nos DTOs.
 - [ ] `npm run lint` e `npm run build` sem erros.
 
 <!-- code-review-graph MCP tools -->

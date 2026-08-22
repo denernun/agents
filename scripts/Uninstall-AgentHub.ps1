@@ -31,6 +31,67 @@ function Remove-PathIfExists {
   Write-Host "removed $Path"
 }
 
+function Remove-HubServersFromMcpJson {
+  # Surgically removes only hub-managed servers from an MCP JSON config file,
+  # preserving user-added servers and all other top-level properties.
+  # Deletes the file only if no servers remain and no other properties exist.
+  param(
+    [string]$Path,
+    [string]$ServersProperty,  # 'mcpServers' or 'servers'
+    [string[]]$HubServerNames,
+    [switch]$DryRun
+  )
+  if (-not (Test-Path $Path)) { return }
+  $content = Get-Content $Path -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+  if (-not $content) { return }
+
+  try {
+    $obj = $content | ConvertFrom-Json
+  } catch {
+    Write-Warning "Cannot parse $Path as JSON — skipping (remove manually if unneeded)."
+    return
+  }
+
+  $servers = $obj.$ServersProperty
+  if (-not $servers) {
+    # File has no servers property — nothing hub-managed here
+    return
+  }
+
+  $remaining = [ordered]@{}
+  $removedAny = $false
+  foreach ($prop in $servers.PSObject.Properties) {
+    if ($HubServerNames -contains $prop.Name) {
+      $removedAny = $true
+    } else {
+      $remaining[$prop.Name] = $prop.Value
+    }
+  }
+
+  if (-not $removedAny) { return }
+
+  # Check if anything meaningful remains
+  $otherProps = @($obj.PSObject.Properties | Where-Object { $_.Name -ne $ServersProperty })
+  $hasUserServers = ($remaining.Count -gt 0)
+  $hasOtherContent = ($otherProps.Count -gt 0)
+
+  if (-not $hasUserServers -and -not $hasOtherContent) {
+    # Nothing left — remove the file entirely
+    if ($DryRun) { Write-Host "[dry] remove $Path (no user content remains)"; return }
+    Remove-Item $Path -Force
+    Write-Host "removed $Path (no user content remains)"
+  } else {
+    # Rewrite with only user servers + preserved properties
+    if ($DryRun) { Write-Host "[dry] strip hub servers from $Path"; return }
+    $output = [ordered]@{}
+    foreach ($p in $otherProps) { $output[$p.Name] = $p.Value }
+    if ($hasUserServers) { $output[$ServersProperty] = $remaining }
+    $json = $output | ConvertTo-Json -Depth 10
+    Set-Content -Path $Path -Value $json -Encoding UTF8
+    Write-Host "stripped hub servers from $Path (user servers preserved)"
+  }
+}
+
 if (-not $HubPath) {
   $scriptParent = Split-Path -Parent $PSScriptRoot
   if (Test-Path (Join-Path $scriptParent 'catalog\projects.json')) {
@@ -38,7 +99,7 @@ if (-not $HubPath) {
   } elseif (Test-Path 'D:\AGENTS\catalog\projects.json') {
     $HubPath = 'D:\AGENTS'
   } else {
-    $HubPath = 'D:\IA\agents'
+    $HubPath = 'D:\AGENTS'
   }
 }
 
@@ -57,6 +118,31 @@ if ($Roots.Count -eq 0) {
       (Join-Path $defaultSistemas 'NFECLASS'),
       (Join-Path $defaultSistemas 'MOBICLASS')
     ) | Where-Object { Test-Path $_ }
+  }
+}
+
+# Build the list of hub-managed MCP server names from catalog (for surgical MCP removal)
+$hubMcpServerNames = @()
+if ($Full) {
+  $catalogPath2 = Join-Path $HubPath 'catalog\projects.json'
+  if (Test-Path $catalogPath2) {
+    $cat = Get-Content $catalogPath2 -Raw -Encoding UTF8 | ConvertFrom-Json
+    $names = [System.Collections.Generic.List[string]]::new()
+    if ($cat.mcp -and $cat.mcp.common) { foreach ($s in @($cat.mcp.common)) { if ($s) { [void]$names.Add($s) } } }
+    if ($cat.families) {
+      foreach ($prop in $cat.families.PSObject.Properties) {
+        $fam = $prop.Value
+        if ($fam.mcp) { foreach ($s in @($fam.mcp)) { if ($s -and $names -notcontains $s) { [void]$names.Add($s) } } }
+      }
+    }
+    if ($cat.mcp -and $cat.mcp.extra) {
+      foreach ($extra in @($cat.mcp.extra)) { foreach ($s in @($extra.servers)) { if ($s -and $names -notcontains $s) { [void]$names.Add($s) } } }
+    }
+    $hubMcpServerNames = @($names)
+  }
+  if ($hubMcpServerNames.Count -eq 0) {
+    # Hardcoded fallback covering known hub servers
+    $hubMcpServerNames = @('code-review-graph', 'context7', 'filesystem', 'memorix', 'mongodb', 'openapi', 'playwright')
   }
 }
 
@@ -104,14 +190,14 @@ foreach ($root in $Roots) {
     }
 
     if ($Full) {
-      # MCP configs (matches Write-McpConfigs targets in Install-AgentHub.ps1)
-      Remove-PathIfExists -Path (Join-Path $projPath '.cursor\mcp.json') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.vscode\mcp.json') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.kiro\settings\mcp.json') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.qoder\mcp.json') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.agents\mcp_config.json') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.mcp.json') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.devin\mcp_config.json') -DryRun:$DryRun
+      # MCP configs — surgically remove only hub-managed servers, preserving user additions
+      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.cursor\mcp.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
+      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.vscode\mcp.json') -ServersProperty 'servers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
+      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.kiro\settings\mcp.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
+      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.qoder\mcp.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
+      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.agents\mcp_config.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
+      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.mcp.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
+      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.devin\mcp_config.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
 
       # Rules / pointers / stubs - only remove files this hub is known to
       # write, never the whole .cursor\rules directory (it may contain

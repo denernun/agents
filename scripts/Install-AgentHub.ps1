@@ -58,7 +58,7 @@ function Resolve-HubPath {
   if ($Path) { return (Resolve-Path $Path).Path }
   $scriptDir = Split-Path -Parent $PSScriptRoot
   if (Test-Path (Join-Path $scriptDir 'skills')) { return $scriptDir }
-  $default = 'D:\IA\agents'
+  $default = 'D:\AGENTS'
   if (Test-Path $default) { return $default }
   throw "Hub not found. Pass -HubPath."
 }
@@ -211,6 +211,11 @@ function Ensure-VendorAgentSkills {
     Write-Host "Cloning $url -> $vendor"
     git clone --depth 1 $url $vendor
   }
+  # Validate that the vendor skills are actually available after all attempts
+  if (-not (Test-Path (Join-Path $vendor 'skills'))) {
+    Write-Warning "Vendor skills unavailable: git submodule/clone failed for $url. Vendor-based skills will be skipped."
+    return $null
+  }
   return $vendor
 }
 
@@ -220,6 +225,7 @@ function Ensure-VendorSkillMirrors {
   param([string]$HubPath, [string[]]$SkillNames, [switch]$DryRun)
   if (-not $SkillNames -or $SkillNames.Count -eq 0) { return }
   $vendor = Ensure-VendorAgentSkills -HubPath $HubPath -DryRun:$DryRun
+  if (-not $vendor) { return }
   foreach ($name in $SkillNames) {
     $target = Join-Path $vendor "skills\$name"
     if (-not (Test-Path $target)) {
@@ -280,8 +286,21 @@ function New-JunctionOrCopy {
     $item = Get-Item $LinkPath -Force
     $isReparse = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
     if ($isReparse) {
-      if (-not $DryRun) { cmd /c "rmdir `"$LinkPath`"" | Out-Null }
+      if (-not $DryRun) {
+        cmd /c "rmdir `"$LinkPath`"" | Out-Null
+        if (Test-Path $LinkPath) {
+          Write-Warning "Failed to remove existing junction at $LinkPath - skipping."
+          return
+        }
+      }
     } else {
+      # Real directory (not a junction). Only remove if it contains the
+      # .agenthub-managed marker written by a previous Copy fallback.
+      $markerPath = Join-Path $LinkPath '.agenthub-managed'
+      if (-not (Test-Path $markerPath)) {
+        Write-Warning "Existing directory at $LinkPath is not hub-managed (no .agenthub-managed marker). Skipping to avoid data loss. Remove manually if unneeded."
+        return
+      }
       if (-not $DryRun) { Remove-Item $LinkPath -Recurse -Force }
     }
   }
@@ -294,6 +313,8 @@ function New-JunctionOrCopy {
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "Junction failed for $LinkPath - copying instead."
     Copy-Item $TargetPath $LinkPath -Recurse -Force
+    # Write marker so future runs know this copy belongs to the hub
+    Set-Content -Path (Join-Path $LinkPath '.agenthub-managed') -Value "Created by Install-AgentHub.ps1 on $(Get-Date -Format 'yyyy-MM-dd HH:mm'). Safe to delete this folder." -Encoding UTF8
     $ok = $false
   }
   if ($ok) { Write-Host "  linked $LinkPath" }
@@ -703,24 +724,22 @@ function Write-McpConfigs {
     # PowerShell 5.1. Flatten to a plain hashtable before serializing.
     $plain = @{}
     foreach ($k in $ideServers.Keys) { $plain[$k] = $ideServers[$k] }
-    $json = @{ mcpServers = $plain } | ConvertTo-Json -Depth 10
-    $vscode = @{ servers = $plain } | ConvertTo-Json -Depth 10
     switch ($ide) {
       'Cursor' {
         $path = Join-Path $RepoPath '.cursor\mcp.json'
-        Write-TextFile -Path $path -Content $json -DryRun:$DryRun
+        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
       }
       'VSCode' {
         $path = Join-Path $RepoPath '.vscode\mcp.json'
-        Write-TextFile -Path $path -Content $vscode -DryRun:$DryRun
+        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'servers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
       }
       'Kiro' {
         $path = Join-Path $RepoPath '.kiro\settings\mcp.json'
-        Write-TextFile -Path $path -Content $json -DryRun:$DryRun
+        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
       }
       'Qoder' {
         $path = Join-Path $RepoPath '.qoder\mcp.json'
-        Write-TextFile -Path $path -Content $json -DryRun:$DryRun
+        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
       }
       'OpenCode' {
         # Project config lives at <repo>\opencode.json (opencode.ai/docs/config),
@@ -733,12 +752,12 @@ function Write-McpConfigs {
         # (global fallback is ~/.gemini/config/mcp_config.json). It does NOT use
         # a project-level ".antigravity" folder for MCP.
         $path = Join-Path $RepoPath '.agents\mcp_config.json'
-        Write-TextFile -Path $path -Content $json -DryRun:$DryRun
+        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
       }
       'Claude' {
         # Claude Code project MCP is <repo>\.mcp.json (code.claude.com/docs/en/mcp).
         $path = Join-Path $RepoPath '.mcp.json'
-        Write-TextFile -Path $path -Content $json -DryRun:$DryRun
+        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
       }
       'Codex' {
         # Per-project .codex\config.toml so cwd of code-review-graph is this repo.
@@ -751,7 +770,7 @@ function Write-McpConfigs {
         # Devin CLI (v3000.3+) reads .devin\mcp_config.json (docs.devin.ai
         # cli/extensibility/mcp/configuration). Older .devin\mcp.json is leftover.
         $path = Join-Path $RepoPath '.devin\mcp_config.json'
-        Write-TextFile -Path $path -Content $json -DryRun:$DryRun
+        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
       }
     }
   }
@@ -767,6 +786,66 @@ function Write-TextFile {
   if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
   Set-Content -Path $Path -Value $Content -Encoding UTF8
   Write-Host "  wrote $Path"
+}
+
+function Write-McpJsonMerged {
+  # Merges hub-managed MCP servers into an existing JSON config file.
+  # - Preserves ALL top-level properties (inputs, globalSettings, etc.)
+  # - Preserves user-added servers not managed by the hub
+  # - Removes stale hub servers no longer assigned to this project
+  # $ManagedServerNames is the full hub catalog so we can prune leftovers.
+  param(
+    [string]$Path,
+    [hashtable]$HubServers,
+    [string]$ServersProperty,  # 'mcpServers' or 'servers'
+    [string[]]$ManagedServerNames,
+    [switch]$DryRun
+  )
+  $dir = Split-Path -Parent $Path
+  if ($DryRun) { Write-Host "  [dry] write $Path"; return }
+  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+
+  # Read existing file preserving all top-level keys
+  $topLevel = [ordered]@{}
+  $existingServers = [ordered]@{}
+  if (Test-Path $Path) {
+    try {
+      $existing = Get-Content $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+      foreach ($prop in $existing.PSObject.Properties) {
+        if ($prop.Name -eq $ServersProperty) {
+          if ($prop.Value) {
+            foreach ($sp in $prop.Value.PSObject.Properties) {
+              $existingServers[$sp.Name] = $sp.Value
+            }
+          }
+        } else {
+          $topLevel[$prop.Name] = $prop.Value
+        }
+      }
+    } catch {
+      Write-Warning "Existing $Path is invalid JSON; hub servers will replace it."
+    }
+  }
+
+  # Remove stale hub-managed servers (in the catalog but not in this project's set)
+  if ($ManagedServerNames) {
+    foreach ($name in $ManagedServerNames) {
+      if ($existingServers.Contains($name) -and -not $HubServers.ContainsKey($name)) {
+        $existingServers.Remove($name)
+      }
+    }
+  }
+
+  # Upsert current hub servers
+  foreach ($k in $HubServers.Keys) { $existingServers[$k] = $HubServers[$k] }
+
+  # Rebuild the full object with original top-level props preserved
+  $output = [ordered]@{}
+  foreach ($k in $topLevel.Keys) { $output[$k] = $topLevel[$k] }
+  $output[$ServersProperty] = $existingServers
+  $json = $output | ConvertTo-Json -Depth 10
+  Set-Content -Path $Path -Value $json -Encoding UTF8
+  Write-Host "  wrote $Path (merged)"
 }
 
 function Write-PointerRules {
@@ -809,8 +888,8 @@ function Write-PointerRules {
 function Write-SlimStubs {
   param([string]$RepoPath, [string[]]$Ides, [switch]$DryRun)
   $stub = @"
-<!-- Point to AGENTS.md - full stack guides live in D:\IA\agents skills (on demand). -->
-See **AGENTS.md**. Load stack skills from the linked `D:\IA\agents` instead of duplicating guides here.
+<!-- Point to AGENTS.md - full stack guides live in D:\AGENTS skills (on demand). -->
+See **AGENTS.md**. Load stack skills from the linked `D:\AGENTS` instead of duplicating guides here.
 "@
   $targets = @()
   if ($Ides -contains 'Cursor') {
@@ -894,7 +973,7 @@ inclusion: always
 # $ProjectName
 
 See **AGENTS.md** for stack, commands, and skills. Full stack guides live in
-``D:\IA\agents`` skills (junctions under ``.kiro/skills``); load them on demand
+``D:\AGENTS`` skills (junctions under ``.kiro/skills``); load them on demand
 instead of duplicating guides here.
 "@
   if ($DryRun) { Write-Host "  [dry] .kiro/steering/stack-pointer.md"; return }
@@ -910,8 +989,21 @@ function Remove-FatAlwaysOnRules {
     (Join-Path $RepoPath '.cursor\rules\cursor.mdc'),
     (Join-Path $RepoPath '.cursor\rules\.cursorrules.mdc')
   )
+  # Only remove files that were originally generated by the hub or contain
+  # known hub/legacy content markers. This avoids deleting project-specific
+  # rules that happen to share the same filename.
+  $hubMarkers = @('AgentHub', 'Install-AgentHub', 'alwaysApply:', 'nestjs-clean-architecture', 'D:\AGENTS')
   foreach ($fr in $fatRules) {
     if (-not (Test-Path $fr)) { continue }
+    $content = Get-Content $fr -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+    $isHubGenerated = $false
+    foreach ($marker in $hubMarkers) {
+      if ($content -and $content.Contains($marker)) { $isHubGenerated = $true; break }
+    }
+    if (-not $isHubGenerated) {
+      Write-Warning "Skipping removal of $(Split-Path $fr -Leaf) — does not appear hub-generated. Remove manually if unneeded."
+      continue
+    }
     if ($DryRun) { Write-Host "  [dry] remove fat rule $(Split-Path $fr -Leaf)"; continue }
     Remove-Item $fr -Force
     Write-Host "  removed fat rule $(Split-Path $fr -Leaf)"
@@ -1010,28 +1102,27 @@ $HubPath = Resolve-HubPath -Path $HubPath
 $catalogPath = Join-Path $HubPath 'catalog\projects.json'
 $catalog = Get-Content $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
+$defaultSistemas = 'D:\SISTEMAS'
+# Project repositories are direct children of these family folders. Keep this
+# list deliberately narrow: other D:\SISTEMAS folders are not managed by
+# default.
+$defaultProjectRoots = @('ERPCLASS', 'MOBICLASS', 'NFECLASS', 'SHOPCLASS')
+
 if ($Roots.Count -eq 0) {
-  $defaultSistemas = 'D:\SISTEMAS'
-  if ($catalog.roots -and $catalog.roots.Count -gt 0) {
-    $Roots = @($catalog.roots | ForEach-Object { Join-Path $defaultSistemas $_ } | Where-Object { Test-Path $_ })
-  }
-  if ($Roots.Count -eq 0) {
-    # Fallback for legacy catalogs without roots
-    if (Test-Path $defaultSistemas) {
-      $Roots = @(
-        (Join-Path $defaultSistemas 'ERPCLASS'),
-        (Join-Path $defaultSistemas 'NFECLASS'),
-        (Join-Path $defaultSistemas 'MOBICLASS')
-      ) | Where-Object { Test-Path $_ }
-    } else {
-      $parent = Split-Path -Parent $HubPath
-      $Roots = @(
-        (Join-Path $parent 'ERPCLASS'),
-        (Join-Path $parent 'NFECLASS'),
-        (Join-Path $parent 'MOBICLASS')
-      ) | Where-Object { Test-Path $_ }
-    }
-  }
+  $Roots = @($defaultProjectRoots |
+    ForEach-Object { Join-Path $defaultSistemas $_ } |
+    Where-Object { Test-Path $_ })
+} else {
+  # Accept D:\SISTEMAS as a convenient container root too. The main loop
+  # intentionally scans only one level, so expand it to the managed family
+  # folders before enumerating project repositories.
+  $Roots = @($Roots | ForEach-Object {
+    $root = $_
+    $managedChildren = @($defaultProjectRoots |
+      ForEach-Object { Join-Path $root $_ } |
+      Where-Object { Test-Path $_ })
+    if ($managedChildren.Count -gt 0) { $managedChildren } else { $root }
+  })
 }
 $families = @{}
 foreach ($prop in $catalog.families.PSObject.Properties) {

@@ -25,7 +25,7 @@ stack-specific coding rules.
 
 ## MCP servers (templated in `mcp/*.template.json`, selected by `catalog/projects.json`)
 
-- **code-review-graph** — Python (`python -m code_review_graph serve`). All families.
+- **codegraph** — native binary (`codegraph serve --mcp --path <repo>`), no runtime dependency. All families.
 - **context7** — `npx -y @upstash/context7-mcp`. All families. Optional `CONTEXT7_API_KEY`.
 - **filesystem** — `npx -y @modelcontextprotocol/server-filesystem`, scoped to the target repo + hub. All families.
 - **mongodb** — `npx -y mongodb-mcp-server@2`, read-only. NestJS family only. Default URI `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin`. Override with `$env:MDB_MCP_CONNECTION_STRING` at install.

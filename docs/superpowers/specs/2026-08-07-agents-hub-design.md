@@ -54,3 +54,15 @@ Install no longer merges every `mcp/*.template.json` into every repo.
 - NestJS APIs: + `mongodb` (read-only) and + `openapi` when Swagger exists in `main.ts` (skipped on Codex)
 - Angular + `*-www` / `*-ajuda`: + `playwright` (skipped on Codex)
 - Catalog fields: `mcp.common`, `mcp.skipIdes`, `mcp.extra`, `families.*.mcp`
+
+## Follow-up (code-review-graph → codegraph — 2026-08-23)
+
+`code-review-graph` dropped from the stack: catalog (`mcp.common` + per-family
+`skills`), MCP templates, the venv/build logic and Cursor hook conversion in
+`Install-AgentHub.ps1`, `Fix-CursorHooks.ps1`, and the `skills/code-review-graph`
+skill itself. Replaced by `codegraph` (github.com/colbymchenry/codegraph): a
+native binary (no per-hub venv), `mcp/codegraph.template.json`, a
+`codegraph init` step per project, and a new `skills/codegraph` skill. The
+process skills (`debug-issue`, `explore-codebase`, `refactor-safely`,
+`review-changes`) were rewritten around `codegraph_explore`. See
+`docs/CONTEXT-HYGIENE.md` for details.

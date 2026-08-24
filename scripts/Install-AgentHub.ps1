@@ -10,18 +10,13 @@
     mongodb + openapi on NestJS APIs that already have Swagger;
     playwright on Angular/www/ajuda frontends)
   - Optionally removes unused IDE folders (.qoder, .codebuddy)
-  - Runs "code-review-graph build --repo <path>" for projects using that
-    skill that don't have a ".code-review-graph" folder yet (skip with
-    -SkipCodeReviewGraph, force a rebuild with -ForceCodeReviewGraphBuild).
-    MCP configs always use the venv Python even when graph builds are skipped.
-    Uses a dedicated venv (.venv-code-review-graph, created on first run)
-    instead of the system Python: the Microsoft Store Python's user-site
-    packages are invisible to code-review-graph's "python -I" tree-sitter
-    probe, which silently produces EMPTY graphs (0 nodes) for every
-    non-Python language. The venv is also used for the MCP "serve" command.
-    Does NOT run "code-review-graph install": that CLI subcommand overwrites
-    the merged mcp.json files this script writes and duplicates AGENTS.md
-    content already managed here.
+  - Runs "codegraph init <path>" for projects using the codegraph skill
+    that don't have a ".codegraph" folder yet (skip with -SkipCodegraphInit).
+    Assumes the codegraph binary is already installed and on PATH (npm i -g
+    @colbymchenry/codegraph, or the official installer) — unlike the old
+    code-review-graph MCP, codegraph is a self-contained native binary with
+    no per-hub Python venv to manage. Does NOT run "codegraph install": that
+    CLI subcommand overwrites the merged mcp.json files this script writes.
 
 .EXAMPLE
   .\Install-AgentHub.ps1 -RemoveUnusedIdeFolders -WriteAgents
@@ -45,8 +40,7 @@ param(
   [switch]$IncludeQoder,
   [switch]$ForceAgents,
   [switch]$MigrateLegacyPaths,
-  [switch]$SkipCodeReviewGraph,
-  [switch]$ForceCodeReviewGraphBuild
+  [switch]$SkipCodegraphInit
 )
 
 Set-StrictMode -Version Latest
@@ -101,85 +95,6 @@ function Get-DetectedIdes {
     $candidates = @($candidates | Where-Object { $Allowed -contains $_ })
   }
   return , $candidates
-}
-
-function Test-UsablePythonExe {
-  # Rejects missing files, 0-byte Windows Store aliases, and venv launchers
-  # whose home Python was uninstalled (exit 103: "did not find executable").
-  param([string]$Path, [string]$ImportModule = '')
-  if (-not $Path -or -not (Test-Path $Path)) { return $false }
-  $item = Get-Item $Path -Force -ErrorAction SilentlyContinue
-  if (-not $item -or $item.Length -eq 0) { return $false }
-  if ($Path -match '\\WindowsApps\\(python|py)\.exe$') { return $false }
-  $code = if ($ImportModule) { "import $ImportModule" } else { 'import sys' }
-  $prev = $ErrorActionPreference
-  $ErrorActionPreference = 'SilentlyContinue'
-  try {
-    & $Path -c $code 2>$null | Out-Null
-    return ($LASTEXITCODE -eq 0)
-  } catch {
-    return $false
-  } finally {
-    $ErrorActionPreference = $prev
-  }
-}
-
-function Find-PythonExe {
-  $localCore = @(Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Python') -Directory -Filter 'pythoncore-*' -ErrorAction SilentlyContinue |
-    ForEach-Object { Join-Path $_.FullName 'python.exe' })
-  $candidates = @(
-    (Join-Path $env:LOCALAPPDATA 'Python\pythoncore-3.14-64\python.exe'),
-    (Join-Path $env:LOCALAPPDATA 'Python\bin\python.exe')
-  ) + $localCore + @(
-    "$env:LOCALAPPDATA\Programs\Python\Python314\python.exe",
-    "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
-    "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-    (Get-Command py -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source),
-    (Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
-  ) | Where-Object { $_ } | Select-Object -Unique
-  foreach ($c in $candidates) {
-    if (Test-UsablePythonExe -Path $c) { return $c }
-  }
-  Write-Warning 'Python not found; MCP configs will use "python" on PATH.'
-  return 'python'
-}
-
-function Get-CodeReviewGraphPython {
-  # The system/Microsoft Store Python installs packages into the per-user
-  # site-packages dir, which code-review-graph's tree-sitter availability
-  # probe cannot see (it launches "python -I", which disables user-site).
-  # That silently produces EMPTY graphs for every non-Python language
-  # (javascript/typescript included) even though "build" exits 0. Using a
-  # dedicated venv avoids this: venv site-packages are visible even under -I.
-  # On a new machine the venv folder may exist but the launcher still points
-  # at an uninstalled Store Python — treat that as missing and recreate.
-  param([string]$HubPath, [string]$SystemPython, [switch]$DryRun)
-  $venvDir = Join-Path $HubPath '.venv-code-review-graph'
-  $venvPython = Join-Path $venvDir 'Scripts\python.exe'
-  if (Test-UsablePythonExe -Path $venvPython -ImportModule 'code_review_graph') {
-    return $venvPython
-  }
-  if ($DryRun) {
-    Write-Host "  [dry] create venv $venvDir + pip install code-review-graph"
-    return $venvPython
-  }
-  if (Test-Path $venvDir) {
-    Write-Host "Existing venv at $venvDir is broken (Python home missing); recreating."
-    Remove-Item $venvDir -Recurse -Force
-  }
-  Write-Host "Creating dedicated venv for code-review-graph: $venvDir"
-  & $SystemPython -m venv $venvDir
-  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $venvPython)) {
-    Write-Warning "Failed to create venv at $venvDir; falling back to $SystemPython (tree-sitter parsers may be unavailable for non-Python languages)."
-    return $SystemPython
-  }
-  & $venvPython -m pip install --quiet --upgrade pip
-  & $venvPython -m pip install --quiet code-review-graph
-  if ($LASTEXITCODE -ne 0) {
-    Write-Warning "pip install code-review-graph failed in $venvDir; falling back to $SystemPython."
-    return $SystemPython
-  }
-  return $venvPython
 }
 
 function Ensure-VendorAgentSkills {
@@ -315,42 +230,37 @@ function New-JunctionOrCopy {
   if ($ok) { Write-Host "  linked $LinkPath" }
 }
 
-function Ensure-CodeReviewGraphBuilt {
-  # Runs "code-review-graph build --repo <path>" for projects that use the
-  # code-review-graph skill and don't have a graph yet. Deliberately does NOT
-  # call "code-review-graph install" here: that CLI command overwrites
-  # .cursor\mcp.json / .vscode\mcp.json / .kiro\settings\mcp.json /
-  # .qoder\mcp.json with a single-server config, wiping out the family-scoped
-  # MCP set that Write-McpConfigs already wrote, and it
-  # duplicates AGENTS.md / .cursorrules content this hub already manages.
+function Ensure-CodegraphInit {
+  # Runs "codegraph init <path>" for projects that use the codegraph skill
+  # and don't have an index yet. Deliberately does NOT call "codegraph
+  # install" here: that CLI command auto-configures editor MCP configs
+  # directly, overwriting the family-scoped MCP set that Write-McpConfigs
+  # already wrote.
   param(
     [string]$RepoPath,
     [string[]]$Skills,
-    [string]$PythonExe,
     [switch]$Force,
     [switch]$DryRun
   )
-  if ($Skills -notcontains 'code-review-graph') { return }
-  $graphDir = Join-Path $RepoPath '.code-review-graph'
-  if ((Test-Path $graphDir) -and -not $Force) {
-    return
-  }
+  if ($Skills -notcontains 'codegraph') { return }
+  $graphDir = Join-Path $RepoPath '.codegraph'
+  if ((Test-Path $graphDir) -and -not $Force) { return }
   if ($DryRun) {
-    Write-Host "  [dry] $PythonExe -m code_review_graph build --repo $RepoPath"
+    Write-Host "  [dry] codegraph init `"$RepoPath`""
     return
   }
-  if (-not (Test-Path $PythonExe) -and -not (Get-Command $PythonExe -ErrorAction SilentlyContinue)) {
-    Write-Warning "  code-review-graph python ($PythonExe) not found; skipping graph build for $RepoPath"
+  if (-not (Get-Command codegraph -ErrorAction SilentlyContinue)) {
+    Write-Warning "  codegraph not found on PATH; skipping index init for $RepoPath (npm i -g @colbymchenry/codegraph)"
     return
   }
-  Write-Host "  building code-review-graph for $RepoPath ..."
-  & $PythonExe -m code_review_graph build --repo $RepoPath -q
+  Write-Host "  initializing codegraph index for $RepoPath ..."
+  & codegraph init $RepoPath
   if ($LASTEXITCODE -ne 0) {
-    Write-Warning "  code-review-graph build failed for $RepoPath (exit $LASTEXITCODE)"
+    Write-Warning "  codegraph init failed for $RepoPath (exit $LASTEXITCODE)"
     return
   }
   $gitignore = Join-Path $RepoPath '.gitignore'
-  $entry = '.code-review-graph/'
+  $entry = '.codegraph/'
   if (Test-Path $gitignore) {
     $lines = Get-Content $gitignore -Encoding UTF8
     if ($lines -notcontains $entry) {
@@ -475,7 +385,7 @@ function Get-CatalogMcpCommon {
   if ($Catalog.mcp -and $Catalog.mcp.common) {
     return @($Catalog.mcp.common)
   }
-  return @('code-review-graph', 'context7', 'filesystem')
+  return @('context7', 'filesystem')
 }
 
 function Get-ManagedMcpServerNames {
@@ -528,8 +438,11 @@ function Select-McpServersForIde {
   $out = [ordered]@{}
   foreach ($name in @($Servers.Keys)) {
     $skipFor = @()
-    if ($SkipIdes -and $SkipIdes.PSObject.Properties.Name -contains $name) {
-      $skipFor = @($SkipIdes.$name)
+    if ($SkipIdes) {
+      $skipPropNames = @($SkipIdes.PSObject.Properties | ForEach-Object { $_.Name })
+      if ($skipPropNames -contains $name) {
+        $skipFor = @($SkipIdes.$name)
+      }
     }
     if ($skipFor -contains $Ide) { continue }
     $out[$name] = $Servers[$name]
@@ -1111,17 +1024,12 @@ $qoderOptIn = [bool]$catalog.qoderOptIn
 $detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn)
 if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides to force or update catalog ides list.' }
 
-$python = Find-PythonExe
-# Always resolve the dedicated venv for MCP configs. -SkipCodeReviewGraph only
-# skips per-repo graph *builds*, not the Python path written into mcp.json.
-$crgPython = Get-CodeReviewGraphPython -HubPath $HubPath -SystemPython $python -DryRun:$DryRun
 $context7ApiKey = $env:CONTEXT7_API_KEY
 if ([string]::IsNullOrWhiteSpace($context7ApiKey)) {
   Write-Warning 'CONTEXT7_API_KEY not set; context7 MCP will run with public rate limits (get a key at context7.com/dashboard).'
   $context7ApiKey = ''
 }
 $mcpBaseVars = @{
-  PYTHON = $crgPython
   HUB = $HubPath
   CONTEXT7_API_KEY = $context7ApiKey
   MDB_MCP_CONNECTION_STRING = if ($env:MDB_MCP_CONNECTION_STRING) { $env:MDB_MCP_CONNECTION_STRING } else { 'mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin' }
@@ -1182,8 +1090,8 @@ foreach ($root in $Roots) {
     Write-KiroSteeringPointer -RepoPath $proj.FullName -ProjectName $proj.Name -Ides $detected -DryRun:$DryRun
     Remove-FatAlwaysOnRules -RepoPath $proj.FullName -DryRun:$DryRun
 
-    if (-not $SkipCodeReviewGraph) {
-      Ensure-CodeReviewGraphBuilt -RepoPath $proj.FullName -Skills @($cfg.skills) -PythonExe $crgPython -Force:$ForceCodeReviewGraphBuild -DryRun:$DryRun
+    if (-not $SkipCodegraphInit) {
+      Ensure-CodegraphInit -RepoPath $proj.FullName -Skills @($cfg.skills) -DryRun:$DryRun
     }
 
     if ($WriteAgents -or $ForceAgents) {
@@ -1200,90 +1108,6 @@ foreach ($root in $Roots) {
       Remove-LegacyAgentPaths -RepoPath $proj.FullName -DryRun:$DryRun
     }
     $stats.linked++
-  }
-}
-
-# Convert Cursor hooks from .sh to .ps1 for Windows compatibility
-$cursorHooksDir = Join-Path $env:USERPROFILE '.cursor\hooks'
-if ((Test-Path $cursorHooksDir) -and $detected -contains 'Cursor') {
-  Write-Host "`nConverting Cursor hooks to PowerShell..."
-
-  # crg-session-start
-  $shPath = Join-Path $cursorHooksDir 'crg-session-start.sh'
-  $ps1Path = Join-Path $cursorHooksDir 'crg-session-start.ps1'
-  if ((Test-Path $shPath) -and -not (Test-Path $ps1Path)) {
-    $content = @'
-# code-review-graph: show graph status on session start (Cursor hook)
-# Fails gracefully — never blocks the editor.
-
-$ErrorActionPreference = 'SilentlyContinue'
-$null = $input
-try {
-    $output = & code-review-graph status 2>&1 | Out-String
-} catch {
-    $output = "graph not built yet"
-}
-$response = @{ message = $output.Trim(); passed = $true } | ConvertTo-Json -Compress
-Write-Output $response
-exit 0
-'@
-    if (-not $DryRun) {
-      Set-Content -Path $ps1Path -Value $content -Encoding UTF8
-      Remove-Item $shPath -Force
-      Write-Host "  converted crg-session-start.sh -> .ps1"
-    }
-  }
-
-  # crg-update
-  $shPath = Join-Path $cursorHooksDir 'crg-update.sh'
-  $ps1Path = Join-Path $cursorHooksDir 'crg-update.ps1'
-  if ((Test-Path $shPath) -and -not (Test-Path $ps1Path)) {
-    $content = @'
-# code-review-graph: auto-update graph after file edits (Cursor hook)
-# Fails gracefully — never blocks the editor.
-
-$ErrorActionPreference = 'SilentlyContinue'
-$null = $input
-try {
-    $output = & code-review-graph update --skip-flows 2>&1
-} catch {
-    $output = ""
-}
-$response = @{ message = 'graph updated'; passed = $true } | ConvertTo-Json -Compress
-Write-Output $response
-exit 0
-'@
-    if (-not $DryRun) {
-      Set-Content -Path $ps1Path -Value $content -Encoding UTF8
-      Remove-Item $shPath -Force
-      Write-Host "  converted crg-update.sh -> .ps1"
-    }
-  }
-
-  # crg-pre-commit
-  $shPath = Join-Path $cursorHooksDir 'crg-pre-commit.sh'
-  $ps1Path = Join-Path $cursorHooksDir 'crg-pre-commit.ps1'
-  if ((Test-Path $shPath) -and -not (Test-Path $ps1Path)) {
-    $content = @'
-# code-review-graph: detect changes before git commit (Cursor hook)
-# Fails gracefully — never blocks the editor.
-
-$ErrorActionPreference = 'SilentlyContinue'
-$null = $input
-try {
-    $output = & code-review-graph detect-changes --brief 2>&1 | Out-String
-} catch {
-    $output = ""
-}
-$response = @{ message = $output.Trim(); passed = $true } | ConvertTo-Json -Compress
-Write-Output $response
-exit 0
-'@
-    if (-not $DryRun) {
-      Set-Content -Path $ps1Path -Value $content -Encoding UTF8
-      Remove-Item $shPath -Force
-      Write-Host "  converted crg-pre-commit.sh -> .ps1"
-    }
   }
 }
 

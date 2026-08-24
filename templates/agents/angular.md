@@ -18,14 +18,14 @@ npm test
 ## Agent instructions (keep this file small)
 > Do **not** paste stack guides here — they live in `D:\AGENTS` skills (on demand). Keep this file organized and short.
 - Chat in **Portuguese**; code/comments/commits in **English**.
-- Before exploring code with Grep/Glob/Read, use skill **code-review-graph** (MCP) when available.
+- Before exploring code with Grep/Glob/Read, use skill **codegraph** (`codegraph_explore`, MCP) when available.
 - For architecture and naming, load skill **angular-coreui**.
 - For UI classes/layout, load skill **coreui-styling**.
 
 ## Skills (from `D:\AGENTS`)
 - `angular-coreui`
 - `coreui-styling`
-- `code-review-graph`
+- `codegraph`
 - `debug-issue` / `explore-codebase` / `refactor-safely` / `review-changes`
 - `using-agent-skills` / `git-workflow-and-versioning` / `code-review-and-quality` / `security-and-hardening` / `observability-and-instrumentation`
 

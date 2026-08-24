@@ -25,7 +25,7 @@
 | `delphi-erpclass` | 16 | Delphi |
 | `angular-coreui` | 10 | Angular |
 | `coreui-styling` | 6 | Angular |
-| `code-review-graph` | 2 | todas |
+| `codegraph` | 2 | nestjs/angular/minimal |
 | `debug-issue` / `explore-codebase` / `refactor-safely` / `review-changes` | ~1 | processo |
 
 ## Fonte canônica
@@ -59,7 +59,7 @@ cd D:\AGENTS\scripts
 
 O install **não** joga mais todo `mcp/*.template.json` em todo repo. A lista vem de `catalog/projects.json` (`mcp.common` + `families.*.mcp` + `mcp.extra`).
 
-- `code-review-graph` — Python (`python -m code_review_graph serve`) para análise de grafo do repo. **Todas** as famílias.
+- `codegraph` — binário nativo (`codegraph serve --mcp --path <repo>`), sem dependência de runtime. **Todas** as famílias.
 - `context7` — `npx -y @upstash/context7-mcp`; rate limits maiores com chave de API. **Todas** as famílias.
 - `filesystem` — `npx -y @modelcontextprotocol/server-filesystem` restringido ao repo + hub. **Todas** as famílias.
 - `mongodb` — `npx -y mongodb-mcp-server@2`, somente leitura. Só família **nestjs**. URI local padrão: `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin` (igual ao Docker/dev). Override: `$env:MDB_MCP_CONNECTION_STRING` no install.
@@ -140,10 +140,39 @@ O install deixa de mesclar todo `mcp/*.template.json` em todos os repos.
 
 | Família / match | MCPs |
 |---|---|
-| todas | `code-review-graph`, `context7`, `filesystem` |
+| todas | `codegraph`, `context7`, `filesystem` |
 | nestjs (`*-api`, `*-auth`, `*-sync`, `*-hook`) | + `mongodb` (read-only) e + `openapi` se o `main.ts` tiver Swagger (não no Codex) |
 | angular (`*-admin`, `*-dash`, `*-app`, `*-cob`) e `*-www` / `*-ajuda` | + `playwright` (headless; **não** no Codex) |
 | delphi / minimal | só o trio comum |
 
 Desative os plugins globais MongoDB e Playwright no Cursor se quiser evitar ferramentas duplicadas (plugin = todos os workspaces; hub = só a família certa).
+
+## Revisão 2026-08-23 — code-review-graph → codegraph
+
+O `code-review-graph` (MCP Python + skill + hooks Cursor `crg-*`) foi removido
+da stack: catálogo, templates MCP, lógica de venv/build em
+`Install-AgentHub.ps1`, `Fix-CursorHooks.ps1` e a skill dedicada.
+
+Substituído pela ferramenta `codegraph` (github.com/colbymchenry/codegraph,
+MIT, sem API key):
+
+- Binário nativo instalado globalmente (`npm i -g @colbymchenry/codegraph`
+  ou o instalador oficial) — sem venv/runtime dedicado no hub, diferente do
+  code-review-graph.
+- `mcp/codegraph.template.json`: `codegraph serve --mcp --path {{REPO}}`,
+  `cwd = {{REPO}}`.
+- `codegraph init <repo>` roda uma vez por projeto (cria `.codegraph/`,
+  gitignored) via `Install-AgentHub.ps1`; o índice depois auto-sincroniza
+  sozinho (file watcher do `codegraph serve`) — não precisa de hooks Cursor
+  como o `crg-update.sh` antigo.
+- Skill `codegraph` nova (nestjs/angular/minimal, mesmo padrão do
+  code-review-graph antigo); ferramenta MCP principal é `codegraph_explore`
+  (retorna código-fonte + call paths + blast radius em uma chamada).
+- As skills de processo (`debug-issue`, `explore-codebase`, `refactor-safely`,
+  `review-changes`) foram reescritas em torno de `codegraph_explore` — os
+  nomes de ferramenta antigos do code-review-graph (`semantic_search_nodes_tool`,
+  `get_minimal_context`, `detail_level`, etc.) não existem no codegraph e
+  foram removidos.
+- **Não** rodar `codegraph install`: sobrescreveria os `mcp.json` gerados
+  pelo hub (mesmo motivo que já valia para `code-review-graph install`).
 

@@ -5,24 +5,15 @@ description: Plan and execute safe refactoring using dependency analysis
 
 ## Refactor Safely
 
-Use the knowledge graph to plan and execute refactoring with confidence.
+Use the codegraph MCP tools (see skill `codegraph`) to plan and execute refactoring with confidence.
 
 ### Steps
 
-1. Use `refactor_tool` with mode="suggest" for community-driven refactoring suggestions.
-2. Use `refactor_tool` with mode="dead_code" to find unreferenced code.
-3. For renames, use `refactor_tool` with mode="rename" to preview all affected locations.
-4. Use `apply_refactor_tool` with the refactor_id to apply renames.
-5. After changes, run `detect_changes_tool` to verify the refactoring impact.
+1. Ask `codegraph_explore` about the symbol/area you plan to change to see its current callers, callees, and blast radius.
+2. For a rename or signature change, treat every caller returned as an edit site — verify each before editing.
+3. After changes, ask `codegraph_explore` again about the same symbol (the index auto-syncs) to confirm the impact matches what you expected.
 
 ### Safety Checks
 
-- Always preview before applying (rename mode gives you an edit list).
-- Check `get_impact_radius_tool` before major refactors.
-- Use `get_affected_flows_tool` to ensure no critical paths are broken.
-- Run `find_large_functions` to identify decomposition targets.
-
-## Token Efficiency Rules
-- ALWAYS start with `get_minimal_context(task="<your task>")` before any other graph tool.
-- Use `detail_level="minimal"` on all calls. Only escalate to "standard" when minimal is insufficient.
-- Target: complete any review/debug/refactor task in ≤5 tool calls and ≤800 total output tokens.
+- Always check the blast-radius summary before a major refactor — it's the fastest way to see what breaks.
+- If `codegraph_explore` doesn't surface something you expect to be affected (e.g. dynamic dispatch, reflection, string-based lookups), verify manually with Grep.

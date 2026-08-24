@@ -37,15 +37,15 @@ D:\IA\agents/
   `description` (the description drives when an agent should load it), followed
   by the guide body. Stack-specific skills (nestjs/angular/delphi) are written
   in the target repo's convention language; process skills (debug-issue,
-  explore-codebase, refactor-safely, review-changes, code-review-graph) are
-  short (~1-2 KB) and end with a shared "Token Efficiency Rules" section.
+  explore-codebase, refactor-safely, review-changes) are short (~1-2 KB) and
+  end with a shared "Token Efficiency Rules" section.
 - **Family definitions** (`catalog/projects.json`): each family has `match`
   (glob patterns against project folder name), `skills` (list to link),
   `mcp` (extra MCP servers on top of `mcp.common`), `agentsTemplate`,
   `cursorRule`, `extraRules`. Top-level `mcp.common` / `mcp.skipIdes` /
   `mcp.extra` select servers per repo and per IDE. Family resolution order in
   `Install-AgentHub.ps1` is nestjs → angular → delphi → minimal (first match wins).
-- **Templates use placeholders**: `{{PROJECT}}`, `{{PYTHON}}`, `{{REPO}}`,
+- **Templates use placeholders**: `{{PROJECT}}`, `{{REPO}}`,
   `{{HUB}}`, `{{CONTEXT7_API_KEY}}` — substituted by `Install-AgentHub.ps1`
   when writing into target repos.
 - **Dated docs**: files under `docs/superpowers/plans/` and `specs/` are named

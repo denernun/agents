@@ -142,7 +142,7 @@ if ($Full) {
   }
   if ($hubMcpServerNames.Count -eq 0) {
     # Hardcoded fallback covering known hub servers
-    $hubMcpServerNames = @('code-review-graph', 'context7', 'filesystem', 'memorix', 'mongodb', 'openapi', 'playwright')
+    $hubMcpServerNames = @('context7', 'filesystem', 'memorix', 'mongodb', 'openapi', 'playwright')
   }
 }
 

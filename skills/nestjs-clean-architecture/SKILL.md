@@ -345,7 +345,87 @@ Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CON
 
 ---
 
-## 6. Checklist Antes de Entregar Código
+---
+
+## 6. Database Connection e Infraestrutura
+
+### 6.1 Padrão de Conexão
+
+O projeto **NÃO** usa `@nestjs/typeorm`. Usa um **DataSource provider customizado**:
+
+```ts
+// src/domain/connection/connection.source.ts
+export const connectionSource = [{
+  provide: 'POSTGRES_SOURCE',
+  useFactory: async (configService: ConfigService): Promise<DataSource> =>
+    await new DataSource({ type: 'postgres', ...configFromJson }).initialize(),
+  inject: [ConfigService],
+}];
+```
+
+- Config em `src/config/.<env>.json` sob `source.pgsql` (host, port, username, password, database, schema, logging).
+- Entities glob-loaded: `${currentDir}/../**/*.entity{.ts,.js}`.
+- Pool sizing PM2-aware.
+
+### 6.2 PgBouncer (Produção)
+
+Produção usa **PgBouncer na porta 6432** (modo `transaction`). Regras obrigatórias:
+
+- **`synchronize: false`** em produção (PgBouncer não suporta DDL via sync).
+- **NÃO** colocar `statement_timeout` no `extra` (PgBouncer rejeita como unsupported startup parameter).
+- Ao criar um **novo banco**: registrar em `/etc/pgbouncer/pgbouncer.ini` na vm05 e `sudo systemctl reload pgbouncer`.
+- Tabelas criadas **manualmente via psql** (direto na vm05 porta 5432) ou via migrations.
+
+### 6.3 Migrations
+
+- DataSource para CLI: `src/app.data.ts` (exporta default DataSource com `synchronize: false` e `logging: true`).
+- Migrations em: `src/domain/migrations/`.
+- Scripts no `package.json`:
+  ```
+  migration:generate  — gera migration a partir do diff entity vs banco
+  migration:run       — aplica migrations pendentes
+  migration:revert    — reverte a última migration
+  migration:show      — lista migrations e status
+  ```
+- **Dev** usa `synchronize: true` (cria tabelas automaticamente).
+- **Prod** usa `synchronize: false` + migrations manuais.
+
+### 6.4 Config JSON
+
+Os JSONs de config (`src/config/.development.json`, `.production.json`) **fazem parte do repositório** — não usar `.env`, não gitignorar, não usar fluxo `.example`.
+
+Seção obrigatória para banco:
+```json
+"source": {
+  "pgsql": {
+    "database": "erpclass_<app>",
+    "host": "127.0.0.1",       // dev: localhost, prod: 172.18.2.101
+    "port": 5432,              // dev: 5432, prod: 6432 (PgBouncer)
+    "username": "postgres",
+    "password": "postgres",    // dev: postgres, prod: ver credenciais
+    "schema": "public",
+    "logging": false
+  }
+}
+```
+
+### 6.5 Infraestrutura de Servidores
+
+| VM | Função | IP/Porta |
+|----|--------|----------|
+| vm01 | NestJS apps (api, auth, ajuda, kb, bot) | — |
+| vm02 | NestJS módulos (sync, hook, cob, dash, shop) | — |
+| vm03 | NestJS outras famílias (mobi, nfe) | — |
+| vm04 | Observabilidade (Loki, Grafana, Prometheus) | — |
+| vm05 | PostgreSQL 5432 + PgBouncer 6432 | 172.18.2.101 |
+| vm06 | Redis + RabbitMQ + MongoDB | 172.18.2.136 |
+| vm07 | Docker (Evolution API, Nginx) | — |
+
+SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 reload).
+
+---
+
+## 7. Checklist Antes de Entregar Código
 
 - [ ] Camadas respeitadas: Controller → Application → Database → Repository. Sem "atalhos".
 - [ ] Interfaces + tokens em uso; nenhuma classe concreta injetada onde deveria ser interface.
@@ -358,43 +438,3 @@ Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CON
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).
 - [ ] Swagger: `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer se JWT. Plugin CLI ligado com `dtoFileNameSuffix` cobrindo `.dto.ts`, `.entity.ts`, `.request.ts`, `.response.ts`. Sem `@ApiProperty` nos DTOs.
 - [ ] `npm run lint` e `npm run build` sem erros.
-
-<!-- code-review-graph MCP tools -->
-## MCP Tools: code-review-graph
-
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
-the codebase.** The graph is faster, cheaper (fewer tokens), and gives
-you structural context (callers, dependents, test coverage) that file
-scanning cannot.
-
-### When to use graph tools FIRST
-
-- **Exploring code**: `semantic_search_nodes_tool` or `query_graph_tool` instead of Grep
-- **Understanding impact**: `get_impact_radius_tool` instead of manually tracing imports
-- **Code review**: `detect_changes_tool` + `get_review_context_tool` instead of reading entire files
-- **Finding relationships**: `query_graph_tool` with callers_of/callees_of/imports_of/tests_for
-- **Architecture questions**: `get_architecture_overview_tool` + `list_communities_tool`
-
-Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
-
-### Key Tools
-
-| Tool | Use when |
-| ------ | ---------- |
-| `detect_changes_tool` | Reviewing code changes — gives risk-scored analysis |
-| `get_review_context_tool` | Need source snippets for review — token-efficient |
-| `get_impact_radius_tool` | Understanding blast radius of a change |
-| `get_affected_flows_tool` | Finding which execution paths are impacted |
-| `query_graph_tool` | Tracing callers, callees, imports, tests, dependencies |
-| `semantic_search_nodes_tool` | Finding functions/classes by name or keyword |
-| `get_architecture_overview_tool` | Understanding high-level codebase structure |
-| `refactor_tool` | Planning renames, finding dead code |
-
-### Workflow
-
-1. The graph auto-updates on file changes (via hooks).
-2. Use `detect_changes_tool` for code review.
-3. Use `get_affected_flows_tool` to understand impact.
-4. Use `query_graph_tool` pattern="tests_for" to check coverage.
-

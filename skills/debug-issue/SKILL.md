@@ -5,23 +5,16 @@ description: Systematically debug issues using graph-powered code navigation
 
 ## Debug Issue
 
-Use the knowledge graph to systematically trace and debug issues.
+Use the codegraph MCP tools (see skill `codegraph`) to systematically trace and debug issues.
 
 ### Steps
 
-1. Use `semantic_search_nodes_tool` to find code related to the issue.
-2. Use `query_graph_tool` with `callers_of` and `callees_of` to trace call chains.
-3. Use `get_flow` to see full execution paths through suspected areas.
-4. Run `detect_changes_tool` to check if recent changes caused the issue.
-5. Use `get_impact_radius_tool` on suspected files to see what else is affected.
+1. Ask `codegraph_explore` about the symptom, error message, or the suspected function/file — it returns source, call paths, and callers/callees in one call.
+2. Follow the returned call paths to find the entry point that triggers the bug.
+3. Check the blast-radius summary to see what else touches the affected code.
+4. Re-run `codegraph_explore` on any new suspect area surfaced by the first answer.
 
 ### Tips
 
-- Check both callers and callees to understand the full context.
-- Look at affected flows to find the entry point that triggers the bug.
-- Recent changes are the most common source of new issues.
-
-## Token Efficiency Rules
-- ALWAYS start with `get_minimal_context(task="<your task>")` before any other graph tool.
-- Use `detail_level="minimal"` on all calls. Only escalate to "standard" when minimal is insufficient.
-- Target: complete any review/debug/refactor task in ≤5 tool calls and ≤800 total output tokens.
+- codegraph auto-syncs on file changes, so answers reflect the current working tree without a manual rebuild.
+- Recent changes are the most common source of new issues — ask about the symbol you (or the last commit) touched.

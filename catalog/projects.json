@@ -7,7 +7,7 @@
   ],
   "mcp": {
     "common": [
-      "code-review-graph",
+      "codegraph",
       "context7",
       "filesystem",
       "memorix"
@@ -36,7 +36,7 @@
       ],
       "skills": [
         "nestjs-clean-architecture",
-        "code-review-graph",
+        "codegraph",
         "debug-issue",
         "explore-codebase",
         "refactor-safely",
@@ -62,7 +62,7 @@
       "skills": [
         "angular-coreui",
         "coreui-styling",
-        "code-review-graph",
+        "codegraph",
         "debug-issue",
         "explore-codebase",
         "refactor-safely",
@@ -96,7 +96,7 @@
         "*"
       ],
       "skills": [
-        "code-review-graph",
+        "codegraph",
         "debug-issue",
         "explore-codebase",
         "refactor-safely",

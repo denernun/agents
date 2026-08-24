@@ -27,12 +27,12 @@ Fonte única de skills, templates e scripts para agentes de IA nos produtos **ER
 | **Git** | Clone do hub + submodules | `winget install Git.Git` |
 | **PowerShell 7+** | Scripts usam sintaxe PS7 | `winget install Microsoft.PowerShell` |
 | **Node.js 18+** | MCPs rodam via `npx` (download automático) | `winget install OpenJS.NodeJS.LTS` |
-| **Python 3.10+** | code-review-graph MCP | `winget install Python.Python.3.13` |
+| **codegraph** | Grafo de conhecimento do código (MCP) | `npm i -g @colbymchenry/codegraph` (ou o instalador oficial — ver abaixo) |
 | **Docker** _(opcional)_ | MongoDB local | Já instalado se usa containers |
 
 > **Sobre pacotes npm**: todos os MCPs baseados em npm (`context7`, `filesystem`, `openapi`, `mongodb`, `playwright`) usam `npx -y` que **baixa automaticamente** na primeira execução. Não precisa instalar nenhum pacote global.
 >
-> **Sobre Python**: o script detecta automaticamente o Python disponível. Ele cria um venv em `.venv-code-review-graph/` e instala o pacote `code-review-graph` via pip. Se o venv já existir, reutiliza.
+> **Sobre codegraph**: binário nativo (Rust + wrapper Node), instale uma vez globalmente com `npm i -g @colbymchenry/codegraph` ou o instalador oficial (`irm https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.ps1 | iex`). O hub gera o `mcp.json` de cada projeto apontando pro binário; **não** rode `codegraph install` (ele sobrescreveria os `mcp.json` gerados pelo hub). O install roda `codegraph init` uma vez por projeto (cria `.codegraph/`, local, gitignored) — depois disso o índice se auto-atualiza sozinho (file watcher do `codegraph serve`).
 
 ### Clone e instalação
 
@@ -55,10 +55,10 @@ cd D:\AGENTS\scripts
 
 O instalador faz tudo automaticamente:
 - Detecta IDEs instaladas na máquina
-- Cria venv Python + instala `code-review-graph`
 - Baixa vendor skills (submodule `addyosmani/agent-skills`)
 - Cria junctions de skills em cada projeto
 - Gera configs MCP por projeto e por IDE
+- Roda `codegraph init` nos projetos que ainda não têm `.codegraph/`
 - Escreve `AGENTS.md` enxuto (preserva seção `## Local`)
 - Remove regras gordas duplicadas
 
@@ -76,7 +76,6 @@ cd D:\AGENTS\scripts
 ```
 
 **O que NÃO precisa copiar manualmente:**
-- `.venv-code-review-graph/` — recriado automaticamente pelo install
 - Junctions em repos (`skills/`, `references`) — recriadas pelo install
 - Configs MCP dos projetos — regeneradas pelo install
 - Vendor skills — baixadas via git submodule
@@ -142,7 +141,7 @@ Definidos em `catalog/projects.json`:
 
 | Família | Projetos | MCPs |
 |---------|----------|------|
-| **Todos** | `*` | `code-review-graph`, `context7`, `filesystem`, `memorix` |
+| **Todos** | `*` | `codegraph`, `context7`, `filesystem`, `memorix` |
 | **NestJS** | `*-api`, `*-auth`, `*-sync`, `*-hook`, `*-cob-api` | + `mongodb` (read-only), `openapi` (se Swagger detectado) |
 | **Angular** | `*-admin`, `*-dash`, `*-app`, `*-cob` | + `playwright` |
 | **Sites** | `*-www`, `*-ajuda` | + `playwright` |
@@ -183,9 +182,9 @@ ou
 
 > "Mostre os detalhes do endpoint POST /auth/login — quais parâmetros ele aceita?"
 
-### Teste code-review-graph
+### Teste codegraph
 
-> "Use detect_changes_tool para analisar as mudanças do último commit"
+> "Use codegraph_explore para explicar como o fluxo de autenticação funciona neste projeto"
 
 ### Teste context7
 
@@ -229,8 +228,8 @@ cmd /c "npx -y mongodb-mcp-server@2 --help"
 # OpenAPI:
 cmd /c "npx -y @ivotoby/openapi-mcp-server --help"
 
-# code-review-graph:
-& "D:\AGENTS\.venv-code-review-graph\Scripts\python.exe" -m code_review_graph --version
+# codegraph:
+codegraph status "D:\SISTEMAS\ERPCLASS\erpclass-api" --json
 ```
 
 4. **Reiniciar a IDE** após mudanças em variáveis de ambiente (setx)
@@ -267,7 +266,6 @@ D:\AGENTS/
     Install-AgentHub.ps1    # instala tudo
     Uninstall-AgentHub.ps1  # remove tudo (ou só junctions)
     Inventory-AgentFiles.ps1 # audita tamanhos
-    Fix-CursorHooks.ps1    # converte hooks sh→ps1
   skills/                 # guias on-demand por stack/processo
   templates/
     agents/               # AGENTS.md enxutos por família
@@ -291,12 +289,6 @@ D:\AGENTS/
 git -C D:\AGENTS submodule update --remote
 ```
 
-### Atualizar code-review-graph
-
-```powershell
-& "D:\AGENTS\.venv-code-review-graph\Scripts\pip.exe" install --upgrade code-review-graph
-```
-
 ---
 
 ## Troubleshooting
@@ -307,23 +299,12 @@ git -C D:\AGENTS submodule update --remote
 |-----|-------------|---------|
 | **openapi** | API não está rodando | Inicie a API (`npm run start:dev`) e clique Retry |
 | **mongodb** | Docker parado ou user/senha errados | Suba o Mongo local (`root` / `password`) e clique Retry |
-| **code-review-graph** | Python errado ou venv ausente | Re-rode `Install-AgentHub.ps1` (recria o venv) |
+| **codegraph** | Binário não está no PATH, ou `.codegraph/` corrompido/travado | `npm i -g @colbymchenry/codegraph`; `codegraph unlock <repo>` se o índice ficou travado |
 | **context7** | Rede instável ou rate limit | Defina `CONTEXT7_API_KEY` para mais requests |
-
-### Múltiplas janelas de terminal no Cursor (Windows)
-
-Se ao usar o Cursor muitas janelas do Git Bash aparecerem executando `crg-update.sh`:
-
-```powershell
-cd D:\AGENTS\scripts
-.\Fix-CursorHooks.ps1
-```
-
-> **Nota**: `Install-AgentHub.ps1` já faz essa conversão automaticamente.
 
 ### MCP global vs projeto
 
 MCPs **universais** (como `memorix`) ficam na config global do usuário (`~\.kiro\settings\mcp.json`).
-MCPs **per-project** (como `code-review-graph`, `openapi`, `mongodb`) ficam na config do projeto e são gerados pelo install.
+MCPs **per-project** (como `codegraph`, `openapi`, `mongodb`) ficam na config do projeto e são gerados pelo install.
 
 Se um MCP aparecer com erro na config global mas funcionar por projeto, **remova-o da config global** — a de projeto tem prioridade.

@@ -1,6 +1,3 @@
-# Machine-local Python venv for the code-review-graph MCP
-.venv-code-review-graph/
-
 # Windows junctions into vendor/addyosmani-agent-skills (recreated by Install-AgentHub.ps1)
 references/
 skills/using-agent-skills/

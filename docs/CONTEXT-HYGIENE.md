@@ -69,14 +69,11 @@ O install **não** joga mais todo `mcp/*.template.json` em todo repo. A lista ve
 
 Não entram no hub: GitHub, Stripe, Figma, Pencil, Chrome DevTools.
 
-Para usar sua chave Context7, exporte antes de rodar o install:
+Para usar sua chave Context7, coloque `CONTEXT7_API_KEY` em `D:\AGENTS\.env` (ou exporte no processo) e rode o install. Sem a chave o servidor ainda funciona, mas com limites públicos.
 
-```powershell
-$env:CONTEXT7_API_KEY='sua-chave'
-.\Install-AgentHub.ps1 -WriteAgents
-```
+## IDEs por máquina
 
-Sem a chave o servidor ainda funciona, mas com limites públicos.
+Allow/exclude **não** é um padrão único no git. Cada PC copia `.env.example` → `.env` e define `AGENTHUB_IDES` / `AGENTHUB_EXCLUDE_IDES`. Sem `.env`, o fallback é `catalog/projects.json`. Exclude apaga skills/MCP dessa IDE.
 
 ## Revisão 2026-08-08
 

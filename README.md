@@ -43,10 +43,12 @@ git clone --recurse-submodules git@github.com:denernun/agents.git D:\AGENTS
 # Se o clone já existia sem submodule:
 git -C D:\AGENTS submodule update --init --recursive
 
-# 2. Opcional: chave para rate limits maiores no context7
-setx CONTEXT7_API_KEY "sua-chave"
+# 2. Copie o .env desta máquina (IDEs diferem por PC; o ficheiro não vai no git)
+copy D:\AGENTS\.env.example D:\AGENTS\.env
+# Edite AGENTHUB_IDES e AGENTHUB_EXCLUDE_IDES
 
-# 3. Reinicie o terminal (setx só aplica em novos processos)
+# 3. Opcional: chave para rate limits maiores no context7
+#    (também pode ir no .env como CONTEXT7_API_KEY)
 
 # 4. Rode o instalador
 cd D:\AGENTS\scripts
@@ -81,15 +83,22 @@ cd D:\AGENTS\scripts
 - Vendor skills — baixadas via git submodule (`vendor/addyosmani-agent-skills`, `vendor/claude-android-ninja`)
 
 **O que precisa configurar na máquina nova:**
-- Opcionalmente `CONTEXT7_API_KEY` (rate limits). Mongo local já vai no template (`root` / `password`).
+- Copiar `.env.example` → `.env` e ajustar `AGENTHUB_IDES` / `AGENTHUB_EXCLUDE_IDES` (cada PC tem IDEs diferentes)
+- Opcionalmente `CONTEXT7_API_KEY` (no `.env` ou setx). Mongo local já vai no template (`root` / `password`).
 - Ter os repos de produto em `D:\SISTEMAS\<ROOT>\` (o install detecta o que existir)
-- IDEs instaladas (o install detecta automaticamente quais estão presentes)
+- IDEs instaladas (o install detecta e depois aplica allow/exclude do `.env`)
 
 ---
 
 ## IDEs suportadas
 
-O install detecta automaticamente quais IDEs estão instaladas verificando pastas no `$HOME`:
+O install **detecta** o que está na máquina e depois aplica a política local:
+
+1. `D:\AGENTS\.env` — `AGENTHUB_IDES` e `AGENTHUB_EXCLUDE_IDES` (por máquina, gitignored)
+2. Sem `.env`, fallback: `catalog/projects.json` → `ides` / `excludeIdes`
+3. `-Ides` na linha de comando ainda restringe a allowlist desta execução; o exclude continua a valer
+
+Cópia inicial: `copy .env.example .env`
 
 | IDE | Detecção | Skills em | MCP config em |
 |-----|----------|-----------|---------------|
@@ -97,8 +106,14 @@ O install detecta automaticamente quais IDEs estão instaladas verificando pasta
 | **Kiro** | `~\.kiro` | `.kiro\skills\` | `.kiro\settings\mcp.json` |
 | **OpenCode** | `opencode` no PATH | `.opencode\skills\` | `opencode.json` |
 | **Antigravity** | `~\.gemini` | `.agents\skills\` | `.agents\mcp_config.json` |
+| **VS Code** | `~\.vscode` | `.github\skills\` | `.vscode\mcp.json` |
+| **Claude** | `~\.claude` | `.claude\skills\` | `.mcp.json` |
+| **Codex** | `~\.codex` | `.codex\skills\` | `.codex\` |
+| **Devin** | `~\.devin` | `.devin\skills\` | `.devin\mcp_config.json` |
 
-Fora do catálogo ativo (`excludeIdes` hoje: VS Code, Claude Code, Codex, Devin) o install **não** liga skills nem MCP e **apaga** todas as configs do hub dessa IDE (pastas + ficheiros). O mapa está em `Get-IdeManagedPaths` no install.
+Quem estiver em `AGENTHUB_EXCLUDE_IDES` (ou `excludeIdes` do catálogo) **não** recebe skills/MCP e o install **apaga** as configs do hub dessa IDE. O mapa está em `Get-IdeManagedPaths`.
+
+`AGENTHUB_IDES=auto` (ou vazio) = todas as IDEs detectadas, menos o exclude.
 
 ### Forçar lista de IDEs
 

@@ -35,8 +35,10 @@ stack-specific coding rules.
 
 ## Supported IDEs/agents
 
-Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin (Qoder is opt-in via
-`-IncludeQoder`, disabled by default in `catalog/projects.json`).
+Detected: Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin
+(Qoder is opt-in via `-IncludeQoder`). Per-machine allow/exclude lives in
+`D:\AGENTS\.env` (`AGENTHUB_IDES`, `AGENTHUB_EXCLUDE_IDES`); catalog `ides` /
+`excludeIdes` is only the fallback when `.env` is missing.
 
 ## Common commands
 

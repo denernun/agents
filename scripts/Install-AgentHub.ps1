@@ -58,12 +58,87 @@ function Resolve-HubPath {
   throw "Hub not found. Pass -HubPath."
 }
 
+function Import-HubDotEnv {
+  # Load D:\AGENTS\.env into the process. Already-set env vars win (CI / setx).
+  param([string]$HubPath)
+  $path = Join-Path $HubPath '.env'
+  if (-not (Test-Path -LiteralPath $path)) { return $false }
+  foreach ($raw in Get-Content -LiteralPath $path -Encoding UTF8) {
+    $line = $raw.Trim()
+    if (-not $line -or $line.StartsWith('#')) { continue }
+    if ($line -match '^\s*export\s+') { $line = $line -replace '^\s*export\s+', '' }
+    $eq = $line.IndexOf('=')
+    if ($eq -lt 1) { continue }
+    $key = $line.Substring(0, $eq).Trim()
+    $val = $line.Substring($eq + 1).Trim()
+    if (($val.StartsWith('"') -and $val.EndsWith('"')) -or ($val.StartsWith("'") -and $val.EndsWith("'"))) {
+      if ($val.Length -ge 2) { $val = $val.Substring(1, $val.Length - 2) }
+    }
+    if (-not $key) { continue }
+    if ($null -ne [Environment]::GetEnvironmentVariable($key, 'Process')) { continue }
+    Set-Item -Path "Env:$key" -Value $val
+  }
+  return $true
+}
+
+function ConvertTo-IdeNameList {
+  param([string]$Raw)
+  if ($null -eq $Raw) { return @() }
+  return @($Raw -split '[,;]' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+
+function Test-ProcessEnvDefined {
+  param([string]$Name)
+  return ($null -ne [Environment]::GetEnvironmentVariable($Name, 'Process'))
+}
+
+function Resolve-IdePolicy {
+  # Per-machine lists: process env / .env override catalog/projects.json.
+  # AGENTHUB_IDES empty or "auto" = no allowlist (every detected IDE minus exclude).
+  param([object]$Catalog)
+  $known = @('Cursor', 'VSCode', 'Kiro', 'OpenCode', 'Antigravity', 'Claude', 'Codex', 'Devin', 'Qoder')
+  $allowedSource = 'catalog.ides'
+  $excludeSource = 'catalog.excludeIdes'
+  $allowedIdes = @($Catalog.ides)
+  $excludeIdes = @()
+  if ($Catalog.excludeIdes) { $excludeIdes = @($Catalog.excludeIdes) }
+
+  if (Test-ProcessEnvDefined -Name 'AGENTHUB_IDES') {
+    $parsed = ConvertTo-IdeNameList -Raw $env:AGENTHUB_IDES
+    $allowedSource = '.env AGENTHUB_IDES'
+    if ($parsed.Count -eq 0 -or ($parsed.Count -eq 1 -and $parsed[0] -in @('auto', '*'))) {
+      $allowedIdes = @()
+    } else {
+      $allowedIdes = $parsed
+    }
+  }
+  if (Test-ProcessEnvDefined -Name 'AGENTHUB_EXCLUDE_IDES') {
+    $excludeIdes = ConvertTo-IdeNameList -Raw $env:AGENTHUB_EXCLUDE_IDES
+    $excludeSource = '.env AGENTHUB_EXCLUDE_IDES'
+  }
+
+  foreach ($name in @($allowedIdes + $excludeIdes)) {
+    if ($name -and $known -notcontains $name) {
+      Write-Warning "Unknown IDE name '$name' (valid: $($known -join ', '))"
+    }
+  }
+  return [pscustomobject]@{
+    Allowed        = $allowedIdes
+    Excluded       = $excludeIdes
+    AllowedSource  = $allowedSource
+    ExcludedSource = $excludeSource
+  }
+}
+
 function Get-DetectedIdes {
   param([string[]]$Override, [string[]]$Allowed, [string[]]$Excluded, [switch]$IncludeQoder)
   if ($Override -and $Override.Count -gt 0) {
     $candidates = @($Override | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     if ($Allowed -and $Allowed.Count -gt 0) {
       $candidates = @($candidates | Where-Object { $Allowed -contains $_ })
+    }
+    if ($Excluded -and $Excluded.Count -gt 0) {
+      $candidates = @($candidates | Where-Object { $Excluded -notcontains $_ })
     }
     return , $candidates
   }
@@ -1218,6 +1293,9 @@ function Link-ProjectSkills {
 
 # --- main ---
 $HubPath = Resolve-HubPath -Path $HubPath
+$loadedDotEnv = Import-HubDotEnv -HubPath $HubPath
+if ($loadedDotEnv) { Write-Host "Loaded $HubPath\.env" }
+else { Write-Warning "No $HubPath\.env — using catalog ides/excludeIdes. Copy .env.example to .env for this machine." }
 
 $catalogPath = Join-Path $HubPath 'catalog\projects.json'
 $catalog = Get-Content $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -1287,12 +1365,14 @@ if ($allSkillNamesInUse.Contains('claude-android-ninja')) {
     -Url 'https://github.com/Drjacky/claude-android-ninja.git' `
     -DryRun:$DryRun
 }
-$allowedIdes = @($catalog.ides)
-$excludeIdes = @()
-if ($catalog.excludeIdes) { $excludeIdes = @($catalog.excludeIdes) }
+$idePolicy = Resolve-IdePolicy -Catalog $catalog
+$allowedIdes = @($idePolicy.Allowed)
+$excludeIdes = @($idePolicy.Excluded)
 $qoderOptIn = [bool]$catalog.qoderOptIn
 $detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -Excluded $excludeIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn)
-if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides to force or update catalog ides list.' }
+if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides, AGENTHUB_IDES in .env, or catalog.ides.' }
+Write-Host "IDE allowlist ($($idePolicy.AllowedSource)): $(if ($allowedIdes.Count) { $allowedIdes -join ', ' } else { 'auto (all detected)' })"
+Write-Host "IDE exclude ($($idePolicy.ExcludedSource)): $(if ($excludeIdes.Count) { $excludeIdes -join ', ' } else { '(none)' })"
 
 $context7ApiKey = $env:CONTEXT7_API_KEY
 if ([string]::IsNullOrWhiteSpace($context7ApiKey)) {

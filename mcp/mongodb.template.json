@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "mongodb": {
-      "command": "cmd",
-      "args": ["/c", "npx", "-y", "mongodb-mcp-server@2"],
+      "command": "{{NODE}}",
+      "args": ["{{MDB_MCP_ENTRY}}"],
       "env": {
-        "MDB_MCP_CONNECTION_STRING": "mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin",
+        "MDB_MCP_CONNECTION_STRING": "{{MDB_MCP_CONNECTION_STRING}}",
         "MDB_MCP_READ_ONLY": "true"
       },
       "type": "stdio"

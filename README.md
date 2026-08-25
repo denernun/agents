@@ -26,11 +26,11 @@ Fonte única de skills, templates e scripts para agentes de IA nos produtos **ER
 |-----------|---------|------------|
 | **Git** | Clone do hub + submodules | `winget install Git.Git` |
 | **PowerShell 7+** | Scripts usam sintaxe PS7 | `winget install Microsoft.PowerShell` |
-| **Node.js 18+** | MCPs rodam via `npx` (download automático) | `winget install OpenJS.NodeJS.LTS` |
+| **Node.js 18+** | MCPs (npx) + `mongodb-mcp-server` global | `winget install OpenJS.NodeJS.LTS` |
 | **codegraph** | Grafo de conhecimento do código (MCP) | `npm i -g @colbymchenry/codegraph` (ou o instalador oficial — ver abaixo) |
 | **Docker** _(opcional)_ | MongoDB local | Já instalado se usa containers |
 
-> **Sobre pacotes npm**: todos os MCPs baseados em npm (`context7`, `filesystem`, `openapi`, `mongodb`, `playwright`) usam `npx -y` que **baixa automaticamente** na primeira execução. Não precisa instalar nenhum pacote global.
+> **Sobre pacotes npm**: a maioria dos MCPs (`context7`, `filesystem`, `openapi`, `playwright`) usa `npx -y`. **MongoDB não**: no Windows o `npx` via `cmd` deixa processos órfãos. O install usa `node` + `mongodb-mcp-server@2` global (`npm i -g mongodb-mcp-server@2`).
 >
 > **Sobre codegraph**: binário nativo (Rust + wrapper Node), instale uma vez globalmente com `npm i -g @colbymchenry/codegraph` ou o instalador oficial (`irm https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.ps1 | iex`). O hub gera o `mcp.json` de cada projeto apontando pro binário; **não** rode `codegraph install` (ele sobrescreveria os `mcp.json` gerados pelo hub). O install roda `codegraph init` uma vez por projeto (cria `.codegraph/`, local, gitignored) — depois disso o índice se auto-atualiza sozinho (file watcher do `codegraph serve`).
 
@@ -161,6 +161,8 @@ Definidos em `catalog/projects.json`:
 - Padrão local (igual ao `.development.json` das APIs): `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin`
 - Override no install: `$env:MDB_MCP_CONNECTION_STRING`
 - Modo read-only por padrão
+- Launch: `node <npm-global>/mongodb-mcp-server/dist/esm/index.js` (URI só em `env`, não na linha de comando)
+- **Não** ligue o MCP do plugin MongoDB do Cursor (skills do plugin ok). **Não** deixe `mongodb` também em `~/.cursor/mcp.json` — o hub já grava por projeto NestJS; duplicar abre outro processo em toda janela.
 
 ---
 
@@ -224,8 +226,8 @@ Get-Content "D:\SISTEMAS\ERPCLASS\erpclass-api\.kiro\settings\mcp.json" | Conver
 3. **Testar o server diretamente**:
 
 ```powershell
-# MongoDB:
-cmd /c "npx -y mongodb-mcp-server@2 --help"
+# MongoDB (binário global, sem npx):
+node "$(npm root -g)/mongodb-mcp-server/dist/esm/index.js" --help
 
 # OpenAPI:
 cmd /c "npx -y @ivotoby/openapi-mcp-server --help"
@@ -300,7 +302,7 @@ git -C D:\AGENTS submodule update --remote
 | MCP | Causa comum | Solução |
 |-----|-------------|---------|
 | **openapi** | API não está rodando | Inicie a API (`npm run start:dev`) e clique Retry |
-| **mongodb** | Docker parado ou user/senha errados | Suba o Mongo local (`root` / `password`) e clique Retry |
+| **mongodb** | Docker parado, user/senha errados, ou `npx`/plugin a criar zumbis | Suba o Mongo local (`root` / `password`); o hub **não** usa npx. Desative o MCP do plugin Cursor e o `mongodb` global em `~/.cursor/mcp.json`. |
 | **codegraph** | Binário não está no PATH, ou `.codegraph/` corrompido/travado | `npm i -g @colbymchenry/codegraph`; `codegraph unlock <repo>` se o índice ficou travado |
 | **context7** | Rede instável ou rate limit | Defina `CONTEXT7_API_KEY` para mais requests |
 

@@ -63,7 +63,7 @@ O install **não** joga mais todo `mcp/*.template.json` em todo repo. A lista ve
 - `codegraph` — binário nativo (`codegraph serve --mcp --path <repo>`), sem dependência de runtime. **Todas** as famílias.
 - `context7` — `npx -y @upstash/context7-mcp`; rate limits maiores com chave de API. **Todas** as famílias.
 - `filesystem` — `npx -y @modelcontextprotocol/server-filesystem` restringido ao repo + hub. **Todas** as famílias.
-- `mongodb` — `npx -y mongodb-mcp-server@2`, somente leitura. Só família **nestjs**. URI local padrão: `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin` (igual ao Docker/dev). Override: `$env:MDB_MCP_CONNECTION_STRING` no install.
+- `mongodb` — `node` + `mongodb-mcp-server@2` **global** (`npm i -g`), somente leitura. Só família **nestjs**. URI local padrão: `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin` (igual ao Docker/dev). Override: `$env:MDB_MCP_CONNECTION_STRING` no install. **Não** usa `npx`/`cmd` no Windows (processos órfãos). URI só em `env`. Desative o MCP do plugin Cursor (skills ok) e não duplique `mongodb` em `~/.cursor/mcp.json`.
 - `openapi` — `npx -y @ivotoby/openapi-mcp-server --tools dynamic`. Só NestJS **com Swagger no `main.ts`**. Spec em `/swagger/json` (ou o `jsonDocumentUrl` do projeto). Omitido no **Codex**. A API local precisa estar rodando. Não grava JWT no `mcp.json`.
 - `playwright` — `npx -y @playwright/mcp --headless`. Família **angular** e projetos `*-www` / `*-ajuda`. Omitido no **Codex** (`mcp.skipIdes`) porque já interrompeu o startup.
 
@@ -188,4 +188,13 @@ Família `android` no catálogo para `mobiclass-apk`, `mobiclass-leitor` e
 - Apps atuais são Java + XML Views; a skill é Kotlin/Compose — o `AGENTS.md` pede para **não** migrar a stack sem pedido explícito.
 - Skills também em `.github/skills` (Copilot/VS Code) e `.codex/skills` (Codex).
 - `mobiclass-apk` hoje só tem `.idea`; o install inclui o nome da família mesmo sem `src/` / `.git`.
+
+## Revisão 2026-08-25 — MongoDB MCP sem npx
+
+No Windows, `cmd /c npx mongodb-mcp-server` deixa cadeias `npx → cmd → conhost → node` órfãs quando o Cursor fecha (e reinícios acumulam dezenas de processos).
+
+- Template e install passam a `node` + `mongodb-mcp-server@2` **global** (`dist/esm/index.js`).
+- URI continua só em `env` (`MDB_MCP_CONNECTION_STRING`), não em `args`.
+- O install aplica o mesmo payload a **todas** as IDEs do `Write-McpConfigs` (incluindo Antigravity em `.agents/mcp_config.json`).
+- Plugin Cursor: MCP vazio, skills ok. Não duplicar `mongodb` em `~/.cursor/mcp.json`.
 

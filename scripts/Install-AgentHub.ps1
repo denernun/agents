@@ -7,7 +7,8 @@
   - Creates junctions from hub skills into each project
   - Writes slim AGENTS.md (preserves ## Local section)
   - Generates MCP configs only for detected IDEs (common trio everywhere;
-    mongodb + openapi on NestJS APIs that already have Swagger;
+    mongodb + openapi on NestJS APIs that already have Swagger
+    (mongodb is node + global mongodb-mcp-server@2, never npx on Windows);
     playwright on Angular/www/ajuda frontends;
     Android family uses the common MCPs only)
   - Optionally removes unused IDE folders (.qoder, .codebuddy)
@@ -359,6 +360,76 @@ function ConvertTo-TomlBasicString {
   return $Value.Replace('\', '\\').Replace('"', '\"')
 }
 
+function Get-NpmGlobalRoot {
+  if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { return $null }
+  $root = (& npm root -g 2>$null | Select-Object -Last 1)
+  if ([string]::IsNullOrWhiteSpace($root)) { return $null }
+  return $root.Trim()
+}
+
+function Find-MongodbMcpEntry {
+  param([string]$GlobalRoot)
+  if (-not $GlobalRoot) { return $null }
+  foreach ($rel in @(
+      'mongodb-mcp-server\dist\esm\index.js',
+      'mongodb-mcp-server\dist\index.js'
+    )) {
+    $p = Join-Path $GlobalRoot $rel
+    if (Test-Path -LiteralPath $p) { return (Resolve-Path -LiteralPath $p).Path }
+  }
+  return $null
+}
+
+function Resolve-MongodbMcpLaunch {
+  # Direct node + global package entry. Do not use `cmd /c npx` on Windows:
+  # Cursor/VS Code leaving that chain orphaned accumulates zombie
+  # node/cmd/conhost processes and can freeze the IDE.
+  param([switch]$DryRun)
+  $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+  if (-not $nodeCmd) {
+    Write-Warning 'node not on PATH; skipping mongodb MCP (no npx fallback — it orphans processes on Windows).'
+    return $null
+  }
+  $nodeExe = $nodeCmd.Source
+  $globalRoot = Get-NpmGlobalRoot
+  $entry = Find-MongodbMcpEntry -GlobalRoot $globalRoot
+  if (-not $entry) {
+    if ($DryRun) {
+      Write-Host '  [dry] npm i -g mongodb-mcp-server@2'
+      return $null
+    }
+    Write-Host 'Installing mongodb-mcp-server@2 globally (node launch, no npx)...'
+    & npm i -g mongodb-mcp-server@2
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning 'npm i -g mongodb-mcp-server@2 failed; skipping mongodb MCP.'
+      return $null
+    }
+    $globalRoot = Get-NpmGlobalRoot
+    $entry = Find-MongodbMcpEntry -GlobalRoot $globalRoot
+  }
+  if (-not $entry) {
+    Write-Warning "mongodb-mcp-server entry script not found under $globalRoot"
+    return $null
+  }
+  Write-Host "MongoDB MCP: $nodeExe $entry"
+  return @{ Node = $nodeExe; Entry = $entry }
+}
+
+function Warn-GlobalCursorMongodbDuplicate {
+  $path = Join-Path $env:USERPROFILE '.cursor\mcp.json'
+  if (-not (Test-Path -LiteralPath $path)) { return }
+  try {
+    $obj = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    $names = @()
+    if ($obj.mcpServers) { $names = @($obj.mcpServers.PSObject.Properties.Name) }
+    if ($names -contains 'mongodb') {
+      Write-Warning 'Global ~/.cursor/mcp.json also defines mongodb. Hub writes it per NestJS project — disable the global server to avoid a second process in every Cursor window.'
+    }
+  } catch {
+    # ignore unreadable global config
+  }
+}
+
 function Expand-McpTemplate {
   param([string]$Content, [hashtable]$Vars, [switch]$JsonEscape)
   foreach ($k in $Vars.Keys) {
@@ -614,6 +685,8 @@ function Write-McpConfigs {
     [object]$SkipIdes,
     [switch]$DryRun
   )
+  # New IDEs: add a switch arm below. Server payloads (including mongodb
+  # launched via node + global entry, not npx) come from mcp/*.template.json.
   $allServers = Merge-McpJsonTemplates -HubPath $Vars['HUB'] -Vars $Vars -ServerNames $ServerNames
   if ([string]::IsNullOrWhiteSpace($Vars['CONTEXT7_API_KEY'])) {
     $ctx = $allServers['context7']
@@ -1141,10 +1214,16 @@ if ([string]::IsNullOrWhiteSpace($context7ApiKey)) {
   Write-Warning 'CONTEXT7_API_KEY not set; context7 MCP will run with public rate limits (get a key at context7.com/dashboard).'
   $context7ApiKey = ''
 }
+$mongoLaunch = Resolve-MongodbMcpLaunch -DryRun:$DryRun
+Warn-GlobalCursorMongodbDuplicate
 $mcpBaseVars = @{
   HUB = $HubPath
   CONTEXT7_API_KEY = $context7ApiKey
   MDB_MCP_CONNECTION_STRING = if ($env:MDB_MCP_CONNECTION_STRING) { $env:MDB_MCP_CONNECTION_STRING } else { 'mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin' }
+}
+if ($mongoLaunch) {
+  $mcpBaseVars['NODE'] = $mongoLaunch.Node
+  $mcpBaseVars['MDB_MCP_ENTRY'] = $mongoLaunch.Entry
 }
 $managedMcpServers = Get-ManagedMcpServerNames -Catalog $catalog -Families $families
 $mcpSkipIdes = $null
@@ -1191,6 +1270,9 @@ foreach ($root in $Roots) {
     $mcpVars = $mcpBaseVars.Clone()
     $mcpVars['REPO'] = $proj.FullName
     $mcpServers = Get-ProjectMcpServerNames -ProjectName $proj.Name -FamilyCfg $cfg -Catalog $catalog
+    if (-not $mongoLaunch) {
+      $mcpServers = @($mcpServers | Where-Object { $_ -ne 'mongodb' })
+    }
     if ($mcpServers -contains 'openapi') {
       $oa = Get-NestSwaggerMcpVars -RepoPath $proj.FullName
       if ($oa) {

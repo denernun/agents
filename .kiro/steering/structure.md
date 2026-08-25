@@ -44,7 +44,7 @@ D:\IA\agents/
   `mcp` (extra MCP servers on top of `mcp.common`), `agentsTemplate`,
   `cursorRule`, `extraRules`. Top-level `mcp.common` / `mcp.skipIdes` /
   `mcp.extra` select servers per repo and per IDE. Family resolution order in
-  `Install-AgentHub.ps1` is nestjs → angular → delphi → minimal (first match wins).
+  `Install-AgentHub.ps1` is nestjs → angular → delphi → android → minimal (first match wins).
 - **Templates use placeholders**: `{{PROJECT}}`, `{{REPO}}`,
   `{{HUB}}`, `{{CONTEXT7_API_KEY}}` — substituted by `Install-AgentHub.ps1`
   when writing into target repos.

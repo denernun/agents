@@ -3,12 +3,13 @@
   Links D:\AGENTS skills into ERPCLASS / NFECLASS / MOBICLASS / SHOPCLASS repos (D:\SISTEMAS).
 
 .DESCRIPTION
-  - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Devin)
+  - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin)
   - Creates junctions from hub skills into each project
   - Writes slim AGENTS.md (preserves ## Local section)
   - Generates MCP configs only for detected IDEs (common trio everywhere;
     mongodb + openapi on NestJS APIs that already have Swagger;
-    playwright on Angular/www/ajuda frontends)
+    playwright on Angular/www/ajuda frontends;
+    Android family uses the common MCPs only)
   - Optionally removes unused IDE folders (.qoder, .codebuddy)
   - Runs "codegraph init <path>" for projects using the codegraph skill
     that don't have a ".codegraph" folder yet (skip with -SkipCodegraphInit).
@@ -72,7 +73,9 @@ function Get-DetectedIdes {
     [void]$found.Add('VSCode')
   }
   if (Test-Path (Join-Path $userHome '.kiro')) { [void]$found.Add('Kiro') }
-  if ((Test-Path (Join-Path $userHome '.antigravity')) -or (Test-Path (Join-Path $env:APPDATA 'Antigravity'))) {
+  if ((Test-Path (Join-Path $userHome '.antigravity')) -or
+      (Test-Path (Join-Path $env:APPDATA 'Antigravity')) -or
+      (Test-Path (Join-Path $userHome '.gemini'))) {
     [void]$found.Add('Antigravity')
   }
   if ($IncludeQoder -and (Test-Path (Join-Path $userHome '.qoder'))) { [void]$found.Add('Qoder') }
@@ -84,6 +87,10 @@ function Get-DetectedIdes {
   if ((Test-Path (Join-Path $userHome '.claude')) -or
       (Get-Command claude -ErrorAction SilentlyContinue)) {
     [void]$found.Add('Claude')
+  }
+  if ((Test-Path (Join-Path $userHome '.codex')) -or
+      (Get-Command codex -ErrorAction SilentlyContinue)) {
+    [void]$found.Add('Codex')
   }
   if ((Test-Path (Join-Path $userHome '.devin')) -or
       (Test-Path (Join-Path $env:APPDATA 'devin')) -or
@@ -150,10 +157,50 @@ function Ensure-VendorSkillMirrors {
   }
 }
 
+function Ensure-VendorStandaloneSkill {
+  # Clone or init a vendor skill whose SKILL.md lives at the vendor root
+  # (not under vendor/skills/<name>). Junctions hub skills/<name> -> vendor.
+  param(
+    [string]$HubPath,
+    [string]$SkillName,
+    [string]$VendorRelativePath,
+    [string]$Url,
+    [switch]$DryRun
+  )
+  $vendor = Join-Path $HubPath ($VendorRelativePath -replace '/', '\')
+  $skillMd = Join-Path $vendor 'SKILL.md'
+  if (-not (Test-Path $skillMd)) {
+    if ($DryRun) {
+      Write-Host "  [dry] clone $Url -> $vendor"
+    } else {
+      $parent = Split-Path -Parent $vendor
+      if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+      Push-Location $HubPath
+      try {
+        if (Test-Path (Join-Path $HubPath '.gitmodules')) {
+          git submodule update --init --recursive -- $VendorRelativePath 2>$null | Out-Null
+        }
+      } finally {
+        Pop-Location
+      }
+      if (-not (Test-Path $skillMd)) {
+        Write-Host "Cloning $Url -> $vendor"
+        git clone --depth 1 $Url $vendor
+      }
+    }
+  }
+  if (-not (Test-Path $skillMd)) {
+    Write-Warning "Standalone vendor skill unavailable: $Url ($VendorRelativePath)"
+    return
+  }
+  New-JunctionOrCopy -LinkPath (Join-Path $HubPath "skills\$SkillName") -TargetPath $vendor -DryRun:$DryRun
+}
+
 function Get-ProjectFamily {
   param([string]$Name, [hashtable]$Families)
-  $order = @('nestjs', 'angular', 'delphi')
+  $order = @('nestjs', 'angular', 'delphi', 'android')
   foreach ($key in $order) {
+    if (-not $Families.ContainsKey($key)) { continue }
     foreach ($pattern in $Families[$key].match) {
       if ($Name -like $pattern) { return $key }
     }
@@ -915,6 +962,54 @@ function Remove-UnusedIdeFolders {
   }
 }
 
+function Get-IdeFolders {
+  # Maps an IDE name to the project-relative folder paths it owns.
+  # Used by Remove-ExcludedIdeFolders to clean up IDE folders for excluded IDEs.
+  param([string]$Ide)
+  switch ($Ide) {
+    'Cursor'      { return @('.cursor') }
+    'VSCode'      { return @('.vscode') }
+    'Kiro'        { return @('.kiro') }
+    'OpenCode'    { return @('.opencode') }
+    'Antigravity' { return @('.agents') }
+    'Claude'      { return @('.claude') }
+    'Codex'       { return @('.codex') }
+    'Devin'       { return @('.devin') }
+    'Qoder'       { return @('.qoder') }
+    default       { return @() }
+  }
+}
+
+function Remove-ExcludedIdeFolders {
+  # Removes project folders belonging to IDEs listed in excludeIdes.
+  # Only removes folders that contain hub-managed content (skills junctions,
+  # MCP configs, etc.). Safe to re-run: if the IDE is moved back to the active
+  # list, Install will recreate the folders.
+  param([string]$RepoPath, [string[]]$ExcludeIdes, [switch]$DryRun)
+  if (-not $ExcludeIdes -or $ExcludeIdes.Count -eq 0) { return }
+  foreach ($ide in $ExcludeIdes) {
+    $folders = Get-IdeFolders -Ide $ide
+    foreach ($rel in $folders) {
+      $path = Join-Path $RepoPath $rel
+      if (-not (Test-Path $path)) { continue }
+      if ($DryRun) { Write-Host "  [dry] remove excluded IDE folder $rel ($ide)"; continue }
+      Remove-Item $path -Recurse -Force
+      Write-Host "  removed excluded IDE folder $rel ($ide)"
+    }
+  }
+  # Also remove top-level files that belong to excluded IDEs
+  $topLevelFiles = @()
+  if ($ExcludeIdes -contains 'Claude') { $topLevelFiles += '.mcp.json' }
+  if ($ExcludeIdes -contains 'Cursor') { $topLevelFiles += '.cursorrules' }
+  foreach ($f in $topLevelFiles) {
+    $path = Join-Path $RepoPath $f
+    if (-not (Test-Path $path)) { continue }
+    if ($DryRun) { Write-Host "  [dry] remove excluded IDE file $f"; continue }
+    Remove-Item $path -Force
+    Write-Host "  removed excluded IDE file $f"
+  }
+}
+
 function Link-ProjectSkills {
   param(
     [string]$RepoPath,
@@ -925,6 +1020,11 @@ function Link-ProjectSkills {
   )
   $skillRoots = [System.Collections.Generic.List[string]]::new()
   if ($Ides -contains 'Cursor') { [void]$skillRoots.Add((Join-Path $RepoPath '.cursor\skills')) }
+  if ($Ides -contains 'VSCode') {
+    # GitHub Copilot (VS Code / Copilot CLI) discovers project skills at
+    # .github\skills\<name>\SKILL.md
+    [void]$skillRoots.Add((Join-Path $RepoPath '.github\skills'))
+  }
   if ($Ides -contains 'Antigravity') {
     # Antigravity workspace skills live under .agents\skills (see
     # codelabs.developers.google.com/autonomous-ai-developer-pipelines-antigravity).
@@ -941,6 +1041,10 @@ function Link-ProjectSkills {
   if ($Ides -contains 'Claude') {
     # Claude Code discovers project skills at .claude\skills\<name>\SKILL.md
     [void]$skillRoots.Add((Join-Path $RepoPath '.claude\skills'))
+  }
+  if ($Ides -contains 'Codex') {
+    # Codex discovers project skills at .codex\skills\<name>\SKILL.md
+    [void]$skillRoots.Add((Join-Path $RepoPath '.codex\skills'))
   }
   if ($Ides -contains 'Devin') {
     # Devin discovers SKILL.md under .devin\skills (docs.devin.ai/product-guides/skills).
@@ -1019,6 +1123,14 @@ if ($emptySkills.Count -gt 0) {
 }
 
 Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $commonSkills -DryRun:$DryRun
+if ($allSkillNamesInUse.Contains('claude-android-ninja')) {
+  Ensure-VendorStandaloneSkill `
+    -HubPath $HubPath `
+    -SkillName 'claude-android-ninja' `
+    -VendorRelativePath 'vendor/claude-android-ninja' `
+    -Url 'https://github.com/Drjacky/claude-android-ninja.git' `
+    -DryRun:$DryRun
+}
 $allowedIdes = @($catalog.ides)
 $qoderOptIn = [bool]$catalog.qoderOptIn
 $detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn)
@@ -1050,15 +1162,22 @@ foreach ($root in $Roots) {
   Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
     $proj = $_
     if ($exclude -contains $proj.Name) { return }
-    # skip non-repos without AGENTS and without src/source
+    $family = Get-ProjectFamily -Name $proj.Name -Families $families
+    # skip non-repos without AGENTS and without src/source (Android Gradle
+    # trees and the android family are included even when the git root is
+    # only a wrapper around src/ or Android Studio metadata).
     $looksLikeProject = (Test-Path (Join-Path $proj.FullName 'AGENTS.md')) -or
       (Test-Path (Join-Path $proj.FullName 'src')) -or
       (Test-Path (Join-Path $proj.FullName 'source')) -or
       (Test-Path (Join-Path $proj.FullName 'package.json')) -or
-      (Test-Path (Join-Path $proj.FullName '.git'))
+      (Test-Path (Join-Path $proj.FullName '.git')) -or
+      (Test-Path (Join-Path $proj.FullName 'settings.gradle')) -or
+      (Test-Path (Join-Path $proj.FullName 'settings.gradle.kts')) -or
+      (Test-Path (Join-Path $proj.FullName 'build.gradle')) -or
+      (Test-Path (Join-Path $proj.FullName 'app')) -or
+      ($family -eq 'android')
     if (-not $looksLikeProject) { return }
 
-    $family = Get-ProjectFamily -Name $proj.Name -Families $families
     $cfg = $families[$family]
     Write-Host "`n=== $($proj.Name) [$family] ==="
     $stats.projects++
@@ -1094,7 +1213,11 @@ foreach ($root in $Roots) {
       Ensure-CodegraphInit -RepoPath $proj.FullName -Skills @($cfg.skills) -DryRun:$DryRun
     }
 
-    if ($WriteAgents -or $ForceAgents) {
+    $agentsPath = Join-Path $proj.FullName 'AGENTS.md'
+    $writeAgentsHere = $WriteAgents -or $ForceAgents -or (
+      ($family -eq 'android') -and -not (Test-Path $agentsPath)
+    )
+    if ($writeAgentsHere) {
       $tpl = Join-Path $HubPath "templates\agents\$($cfg.agentsTemplate)"
       Write-AgentsFile -RepoPath $proj.FullName -ProjectName $proj.Name -TemplatePath $tpl -Force:$ForceAgents -DryRun:$DryRun
       Write-SlimStubs -RepoPath $proj.FullName -Ides $detected -DryRun:$DryRun
@@ -1104,6 +1227,10 @@ foreach ($root in $Roots) {
       $toRemove = @($catalog.unusedIdeFolders)
       Remove-UnusedIdeFolders -RepoPath $proj.FullName -Folders $toRemove -DryRun:$DryRun
     }
+    # Always remove folders for excluded IDEs (keeps projects clean)
+    $excludeIdes = @()
+    if ($catalog.excludeIdes) { $excludeIdes = @($catalog.excludeIdes) }
+    Remove-ExcludedIdeFolders -RepoPath $proj.FullName -ExcludeIdes $excludeIdes -DryRun:$DryRun
     if ($MigrateLegacyPaths) {
       Remove-LegacyAgentPaths -RepoPath $proj.FullName -DryRun:$DryRun
     }

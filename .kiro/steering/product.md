@@ -26,7 +26,7 @@ hub instead of duplicating it.
 ## Core concepts
 
 - **Hub** (`D:\IA\agents`): canonical skills, templates, MCP templates, catalog, scripts.
-- **Family**: a stack profile (`nestjs`, `angular`, `delphi`, `minimal`) matched
+- **Family**: a stack profile (`nestjs`, `angular`, `delphi`, `android`, `minimal`) matched
   by project name pattern in `catalog/projects.json`, determining which skills/
   templates/rules get applied to a project.
 - **Install**: `scripts/Install-AgentHub.ps1` detects installed IDEs and, per

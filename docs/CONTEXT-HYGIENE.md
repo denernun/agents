@@ -25,7 +25,8 @@
 | `delphi-erpclass` | 16 | Delphi |
 | `angular-coreui` | 10 | Angular |
 | `coreui-styling` | 6 | Angular |
-| `codegraph` | 2 | nestjs/angular/minimal |
+| `claude-android-ninja` | vendor | Android (junction → `vendor/claude-android-ninja`) |
+| `codegraph` | 2 | nestjs/angular/android/minimal |
 | `debug-issue` / `explore-codebase` / `refactor-safely` / `review-changes` | ~1 | processo |
 
 ## Fonte canônica
@@ -143,6 +144,7 @@ O install deixa de mesclar todo `mcp/*.template.json` em todos os repos.
 | todas | `codegraph`, `context7`, `filesystem` |
 | nestjs (`*-api`, `*-auth`, `*-sync`, `*-hook`) | + `mongodb` (read-only) e + `openapi` se o `main.ts` tiver Swagger (não no Codex) |
 | angular (`*-admin`, `*-dash`, `*-app`, `*-cob`) e `*-www` / `*-ajuda` | + `playwright` (headless; **não** no Codex) |
+| android (`mobiclass-apk`, `mobiclass-leitor`, `mobiclass-comanda`) | só o trio comum |
 | delphi / minimal | só o trio comum |
 
 Desative os plugins globais MongoDB e Playwright no Cursor se quiser evitar ferramentas duplicadas (plugin = todos os workspaces; hub = só a família certa).
@@ -165,7 +167,7 @@ MIT, sem API key):
   gitignored) via `Install-AgentHub.ps1`; o índice depois auto-sincroniza
   sozinho (file watcher do `codegraph serve`) — não precisa de hooks Cursor
   como o `crg-update.sh` antigo.
-- Skill `codegraph` nova (nestjs/angular/minimal, mesmo padrão do
+- Skill `codegraph` nova (nestjs/angular/android/minimal, mesmo padrão do
   code-review-graph antigo); ferramenta MCP principal é `codegraph_explore`
   (retorna código-fonte + call paths + blast radius em uma chamada).
 - As skills de processo (`debug-issue`, `explore-codebase`, `refactor-safely`,
@@ -175,4 +177,15 @@ MIT, sem API key):
   foram removidos.
 - **Não** rodar `codegraph install`: sobrescreveria os `mcp.json` gerados
   pelo hub (mesmo motivo que já valia para `code-review-graph install`).
+
+## Revisão 2026-08-24 — Android (claude-android-ninja)
+
+Família `android` no catálogo para `mobiclass-apk`, `mobiclass-leitor` e
+`mobiclass-comanda` (saíram de `excludeProjectNames`).
+
+- Vendor: submodule `vendor/claude-android-ninja` (https://github.com/Drjacky/claude-android-ninja).
+- Junction `skills/claude-android-ninja` → vendor (gitignored, recriada pelo install).
+- Apps atuais são Java + XML Views; a skill é Kotlin/Compose — o `AGENTS.md` pede para **não** migrar a stack sem pedido explícito.
+- Skills também em `.github/skills` (Copilot/VS Code) e `.codex/skills` (Codex).
+- `mobiclass-apk` hoje só tem `.idea`; o install inclui o nome da família mesmo sem `src/` / `.git`.
 

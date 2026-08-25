@@ -153,7 +153,9 @@ $skillDirs = @(
   '.kiro\skills',
   '.opencode\skills',
   '.claude\skills',
-  '.devin\skills'
+  '.codex\skills',
+  '.devin\skills',
+  '.github\skills'
 )
 foreach ($root in $Roots) {
   if (-not (Test-Path $root)) { continue }
@@ -201,7 +203,7 @@ foreach ($root in $Roots) {
       # Rules / pointers / stubs - only remove files this hub is known to
       # write, never the whole .cursor\rules directory (it may contain
       # rules the user added by hand or via the Cursor marketplace).
-      foreach ($rule in @('stack-pointer-nestjs.mdc', 'stack-pointer-angular.mdc', 'stack-pointer-delphi.mdc', 'decorator-placement.mdc')) {
+      foreach ($rule in @('stack-pointer-nestjs.mdc', 'stack-pointer-angular.mdc', 'stack-pointer-delphi.mdc', 'stack-pointer-android.mdc', 'decorator-placement.mdc')) {
         Remove-PathIfExists -Path (Join-Path $projPath ".cursor\rules\$rule") -DryRun:$DryRun
       }
       Remove-PathIfExists -Path (Join-Path $projPath '.cursorrules') -DryRun:$DryRun

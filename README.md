@@ -55,7 +55,7 @@ cd D:\AGENTS\scripts
 
 O instalador faz tudo automaticamente:
 - Detecta IDEs instaladas na máquina
-- Baixa vendor skills (submodule `addyosmani/agent-skills`)
+- Baixa vendor skills (submodules `addyosmani/agent-skills` e `Drjacky/claude-android-ninja`)
 - Cria junctions de skills em cada projeto
 - Gera configs MCP por projeto e por IDE
 - Roda `codegraph init` nos projetos que ainda não têm `.codegraph/`
@@ -78,7 +78,7 @@ cd D:\AGENTS\scripts
 **O que NÃO precisa copiar manualmente:**
 - Junctions em repos (`skills/`, `references`) — recriadas pelo install
 - Configs MCP dos projetos — regeneradas pelo install
-- Vendor skills — baixadas via git submodule
+- Vendor skills — baixadas via git submodule (`vendor/addyosmani-agent-skills`, `vendor/claude-android-ninja`)
 
 **O que precisa configurar na máquina nova:**
 - Opcionalmente `CONTEXT7_API_KEY` (rate limits). Mongo local já vai no template (`root` / `password`).
@@ -94,11 +94,12 @@ O install detecta automaticamente quais IDEs estão instaladas verificando pasta
 | IDE | Detecção | Skills em | MCP config em |
 |-----|----------|-----------|---------------|
 | **Cursor** | `~\.cursor` | `.cursor\skills\` | `.cursor\mcp.json` |
-| **VS Code** | `~\.vscode` | — | `.vscode\mcp.json` |
+| **VS Code** | `~\.vscode` | `.github\skills\` (Copilot) | `.vscode\mcp.json` |
 | **Kiro** | `~\.kiro` | `.kiro\skills\` | `.kiro\settings\mcp.json` |
 | **OpenCode** | `opencode` no PATH | `.opencode\skills\` | `opencode.json` |
 | **Antigravity** | `~\.gemini` | `.agents\skills\` | `.agents\mcp_config.json` |
 | **Claude Code** | `claude` no PATH | `.claude\skills\` | `.mcp.json` |
+| **Codex** | `~\.codex` ou `codex` no PATH | `.codex\skills\` | — (skills only; MCP Codex não é gerado) |
 | **Devin** | `devin` no PATH | `.devin\skills\` | `.devin\mcp_config.json` |
 
 ### Forçar lista de IDEs
@@ -144,6 +145,7 @@ Definidos em `catalog/projects.json`:
 | **Todos** | `*` | `codegraph`, `context7`, `filesystem`, `memorix` |
 | **NestJS** | `*-api`, `*-auth`, `*-sync`, `*-hook`, `*-cob-api` | + `mongodb` (read-only), `openapi` (se Swagger detectado) |
 | **Angular** | `*-admin`, `*-dash`, `*-app`, `*-cob` | + `playwright` |
+| **Android** | `mobiclass-apk`, `mobiclass-leitor`, `mobiclass-comanda` | só os comuns |
 | **Sites** | `*-www`, `*-ajuda` | + `playwright` |
 | **Delphi** | `*-erp` | só os comuns |
 
@@ -272,7 +274,7 @@ D:\AGENTS/
     rules/                # ponteiros curtos p/ Cursor (.mdc)
     copilot/              # instruções GitHub Copilot por família
     antigravity/          # pointer Antigravity
-  vendor/                 # submodule addyosmani/agent-skills (gitignored content)
+  vendor/                 # submodules addyosmani/agent-skills e Drjacky/claude-android-ninja
 ```
 
 ---

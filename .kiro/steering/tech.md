@@ -17,6 +17,7 @@ inclusion: always
 | nestjs | NestJS + TypeScript, Clean Architecture, DDD | `*-api`, `*-auth`, `*-sync`, `*-hook`, `*-cob-api` |
 | angular | Angular 22+, CoreUI, Clean Architecture | `*-admin`, `*-dash`, `*-app`, `*-cob` |
 | delphi | Delphi VCL (ERPClass Domain/Providers, ANSI encoding) | `*-erp` |
+| android | Java + XML Views (MOBICLASS APKs); skill vendor `claude-android-ninja` | `mobiclass-apk`, `mobiclass-leitor`, `mobiclass-comanda` |
 | minimal | fallback, no specific stack | `*` |
 
 Full stack conventions live in `skills/<family>/SKILL.md` — do not duplicate

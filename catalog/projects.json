@@ -91,6 +91,25 @@
       "cursorRule": "stack-pointer-delphi.mdc",
       "extraRules": []
     },
+    "android": {
+      "match": [
+        "mobiclass-apk",
+        "mobiclass-leitor",
+        "mobiclass-comanda"
+      ],
+      "skills": [
+        "claude-android-ninja",
+        "codegraph",
+        "debug-issue",
+        "explore-codebase",
+        "refactor-safely",
+        "review-changes"
+      ],
+      "mcp": [],
+      "agentsTemplate": "android.md",
+      "cursorRule": "stack-pointer-android.mdc",
+      "extraRules": []
+    },
     "minimal": {
       "match": [
         "*"
@@ -117,11 +136,14 @@
   ],
   "ides": [
     "Cursor",
-    "VSCode",
     "Kiro",
     "OpenCode",
-    "Antigravity",
+    "Antigravity"
+  ],
+  "excludeIdes":[
+    "VSCode",
     "Claude",
+    "Codex",
     "Devin"
   ],
   "excludeProjectNames": [
@@ -130,10 +152,7 @@
     "trash",
     "erpclass-erp",
     "erpclass-docs",
-    "erpclass-misc",
-    "mobiclass-apk",
-    "mobiclass-leitor",
-    "mobiclass-comanda"
+    "erpclass-misc"
   ],
   "unusedIdeFolders": [
     ".qoder",

@@ -1,0 +1,15 @@
+---
+description: Android family — load shared skill instead of duplicating the full guide
+globs:
+  - "**/*.java"
+  - "**/*.kt"
+  - "**/*.xml"
+  - "**/*.gradle"
+  - "**/*.gradle.kts"
+  - "**/AndroidManifest.xml"
+alwaysApply: false
+---
+
+Follow the shared skill `claude-android-ninja` from `D:\AGENTS` (linked under `.cursor/skills`).
+These MOBICLASS apps are Java + XML today — do not migrate to Compose unless asked.
+Keep AGENTS.md project-specific only.

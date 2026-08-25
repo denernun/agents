@@ -26,13 +26,13 @@ Fonte única de skills, templates e scripts para agentes de IA nos produtos **ER
 |-----------|---------|------------|
 | **Git** | Clone do hub + submodules | `winget install Git.Git` |
 | **PowerShell 7+** | Scripts usam sintaxe PS7 | `winget install Microsoft.PowerShell` |
-| **Node.js 18+** | MCPs (npx) + `mongodb-mcp-server` global | `winget install OpenJS.NodeJS.LTS` |
-| **codegraph** | Grafo de conhecimento do código (MCP) | `npm i -g @colbymchenry/codegraph` (ou o instalador oficial — ver abaixo) |
+| **Node.js 18+** | MCPs (npx) + pacotes globais (`mongodb-mcp-server`, `codegraph`) | `winget install OpenJS.NodeJS.LTS` |
+| **codegraph** | Grafo de conhecimento do código (MCP) | O `Install-AgentHub.ps1` faz `npm i -g @colbymchenry/codegraph` se faltar |
 | **Docker** _(opcional)_ | MongoDB local | Já instalado se usa containers |
 
 > **Sobre pacotes npm**: a maioria dos MCPs (`context7`, `filesystem`, `openapi`, `playwright`) usa `npx -y`. **MongoDB não**: no Windows o `npx` via `cmd` deixa processos órfãos. O install usa `node` + `mongodb-mcp-server@2` global (`npm i -g mongodb-mcp-server@2`).
 >
-> **Sobre codegraph**: binário nativo (Rust + wrapper Node), instale uma vez globalmente com `npm i -g @colbymchenry/codegraph` ou o instalador oficial (`irm https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.ps1 | iex`). O hub gera o `mcp.json` de cada projeto apontando pro binário; **não** rode `codegraph install` (ele sobrescreveria os `mcp.json` gerados pelo hub). O install roda `codegraph init` uma vez por projeto (cria `.codegraph/`, local, gitignored) — depois disso o índice se auto-atualiza sozinho (file watcher do `codegraph serve`).
+> **Sobre codegraph**: binário nativo (Rust + wrapper Node). O install instala globalmente se faltar (`npm i -g @colbymchenry/codegraph`). O hub gera o `mcp.json` apontando pro binário; **não** rode `codegraph install` (ele sobrescreveria os `mcp.json` gerados pelo hub). Depois roda `codegraph init` uma vez por projeto (cria `.codegraph/`, local, gitignored).
 
 ### Clone e instalação
 
@@ -94,13 +94,11 @@ O install detecta automaticamente quais IDEs estão instaladas verificando pasta
 | IDE | Detecção | Skills em | MCP config em |
 |-----|----------|-----------|---------------|
 | **Cursor** | `~\.cursor` | `.cursor\skills\` | `.cursor\mcp.json` |
-| **VS Code** | `~\.vscode` | `.github\skills\` (Copilot) | `.vscode\mcp.json` |
 | **Kiro** | `~\.kiro` | `.kiro\skills\` | `.kiro\settings\mcp.json` |
 | **OpenCode** | `opencode` no PATH | `.opencode\skills\` | `opencode.json` |
 | **Antigravity** | `~\.gemini` | `.agents\skills\` | `.agents\mcp_config.json` |
-| **Claude Code** | `claude` no PATH | `.claude\skills\` | `.mcp.json` |
-| **Codex** | `~\.codex` ou `codex` no PATH | `.codex\skills\` | — (skills only; MCP Codex não é gerado) |
-| **Devin** | `devin` no PATH | `.devin\skills\` | `.devin\mcp_config.json` |
+
+Fora do catálogo ativo (`excludeIdes` hoje: VS Code, Claude Code, Codex, Devin) o install **não** liga skills nem MCP e **apaga** todas as configs do hub dessa IDE (pastas + ficheiros). O mapa está em `Get-IdeManagedPaths` no install.
 
 ### Forçar lista de IDEs
 

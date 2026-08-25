@@ -59,7 +59,7 @@ function Resolve-HubPath {
 }
 
 function Get-DetectedIdes {
-  param([string[]]$Override, [string[]]$Allowed, [switch]$IncludeQoder)
+  param([string[]]$Override, [string[]]$Allowed, [string[]]$Excluded, [switch]$IncludeQoder)
   if ($Override -and $Override.Count -gt 0) {
     $candidates = @($Override | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     if ($Allowed -and $Allowed.Count -gt 0) {
@@ -101,6 +101,9 @@ function Get-DetectedIdes {
   $candidates = @($found | Select-Object -Unique)
   if ($Allowed -and $Allowed.Count -gt 0) {
     $candidates = @($candidates | Where-Object { $Allowed -contains $_ })
+  }
+  if ($Excluded -and $Excluded.Count -gt 0) {
+    $candidates = @($candidates | Where-Object { $Excluded -notcontains $_ })
   }
   return , $candidates
 }
@@ -297,12 +300,13 @@ function Ensure-CodegraphInit {
     Write-Host "  [dry] codegraph init `"$RepoPath`""
     return
   }
-  if (-not (Get-Command codegraph -ErrorAction SilentlyContinue)) {
-    Write-Warning "  codegraph not found on PATH; skipping index init for $RepoPath (npm i -g @colbymchenry/codegraph)"
+  $codegraphExe = Get-CodegraphExe
+  if (-not $codegraphExe) {
+    Write-Warning "  codegraph not found; skipping index init for $RepoPath"
     return
   }
   Write-Host "  initializing codegraph index for $RepoPath ..."
-  & codegraph init $RepoPath
+  & $codegraphExe init $RepoPath
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "  codegraph init failed for $RepoPath (exit $LASTEXITCODE)"
     return
@@ -360,6 +364,60 @@ function ConvertTo-TomlBasicString {
   return $Value.Replace('\', '\\').Replace('"', '\"')
 }
 
+function Invoke-NpmGlobalInstall {
+  # Capture npm stdout/stderr. Leaving it on the success stream breaks
+  # Set-StrictMode callers (Object[] without expected properties).
+  param([string]$Package, [switch]$DryRun)
+  if ($DryRun) {
+    Write-Host "  [dry] npm i -g $Package"
+    return $true
+  }
+  if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    Write-Warning "npm not on PATH; cannot install $Package"
+    return $false
+  }
+  Write-Host "Installing $Package globally..."
+  $npmOut = & npm i -g $Package 2>&1
+  $npmCode = $LASTEXITCODE
+  foreach ($line in @($npmOut)) { Write-Host $line }
+  if ($npmCode -ne 0) {
+    Write-Warning "npm i -g $Package failed."
+    return $false
+  }
+  return $true
+}
+
+function Get-NpmGlobalBin {
+  $root = Get-NpmGlobalRoot
+  if (-not $root) { return $null }
+  return (Split-Path -Parent $root)
+}
+
+function Get-CodegraphExe {
+  $cmd = Get-Command codegraph -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  $bin = Get-NpmGlobalBin
+  if (-not $bin) { return $null }
+  foreach ($name in @('codegraph.cmd', 'codegraph.exe', 'codegraph')) {
+    $p = Join-Path $bin $name
+    if (Test-Path -LiteralPath $p) { return $p }
+  }
+  return $null
+}
+
+function Ensure-CodegraphCli {
+  param([switch]$DryRun)
+  $exe = Get-CodegraphExe
+  if ($exe) { return $exe }
+  if (-not (Invoke-NpmGlobalInstall -Package '@colbymchenry/codegraph' -DryRun:$DryRun)) {
+    return $null
+  }
+  $exe = Get-CodegraphExe
+  if ($exe) { return $exe }
+  Write-Warning 'codegraph was installed but is not on PATH. Open a new terminal or add the npm global bin folder to PATH.'
+  return $null
+}
+
 function Get-NpmGlobalRoot {
   if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { return $null }
   $root = (& npm root -g 2>$null | Select-Object -Last 1)
@@ -403,10 +461,7 @@ function Resolve-MongodbMcpLaunch {
       return $null
     }
     Write-Host 'Installing mongodb-mcp-server@2 globally (node launch, no npx)...'
-    $npmOut = & npm i -g mongodb-mcp-server@2 2>&1
-    $npmCode = $LASTEXITCODE
-    foreach ($line in @($npmOut)) { Write-Host $line }
-    if ($npmCode -ne 0) {
+    if (-not (Invoke-NpmGlobalInstall -Package 'mongodb-mcp-server@2' -DryRun:$DryRun)) {
       Write-Warning 'npm i -g mongodb-mcp-server@2 failed; skipping mongodb MCP.'
       return $null
     }
@@ -900,8 +955,10 @@ function Write-CopilotPointer {
     [string]$RepoPath,
     [string]$HubPath,
     [string]$Family,
+    [string[]]$Ides,
     [switch]$DryRun
   )
+  if ($Ides -notcontains 'VSCode') { return }
   $src = Join-Path $HubPath "templates\copilot\$Family.md"
   if (-not (Test-Path $src)) { return }
   $dest = Join-Path $RepoPath '.github\copilot-instructions.md'
@@ -1041,51 +1098,71 @@ function Remove-UnusedIdeFolders {
   }
 }
 
-function Get-IdeFolders {
-  # Maps an IDE name to the project-relative folder paths it owns.
-  # Used by Remove-ExcludedIdeFolders to clean up IDE folders for excluded IDEs.
+function Get-IdeManagedPaths {
+  # Single map of hub-owned folders and files per IDE. excludeIdes removes
+  # every path listed here (skills, MCP, pointers). Keep in sync with
+  # Link-ProjectSkills, Write-McpConfigs, Write-CopilotPointer, Write-SlimStubs.
   param([string]$Ide)
   switch ($Ide) {
-    'Cursor'      { return @('.cursor') }
-    'VSCode'      { return @('.vscode') }
-    'Kiro'        { return @('.kiro') }
-    'OpenCode'    { return @('.opencode') }
-    'Antigravity' { return @('.agents') }
-    'Claude'      { return @('.claude') }
-    'Codex'       { return @('.codex') }
-    'Devin'       { return @('.devin') }
-    'Qoder'       { return @('.qoder') }
-    default       { return @() }
+    'Cursor' {
+      return @{ Folders = @('.cursor'); Files = @('.cursorrules') }
+    }
+    'VSCode' {
+      return @{
+        Folders = @('.vscode', '.github\skills')
+        Files   = @('.github\copilot-instructions.md')
+      }
+    }
+    'Kiro' {
+      return @{ Folders = @('.kiro'); Files = @() }
+    }
+    'OpenCode' {
+      return @{ Folders = @('.opencode'); Files = @('opencode.json') }
+    }
+    'Antigravity' {
+      return @{ Folders = @('.agents'); Files = @() }
+    }
+    'Claude' {
+      return @{ Folders = @('.claude'); Files = @('.mcp.json', 'CLAUDE.md') }
+    }
+    'Codex' {
+      return @{ Folders = @('.codex'); Files = @() }
+    }
+    'Devin' {
+      return @{ Folders = @('.devin'); Files = @() }
+    }
+    'Qoder' {
+      return @{ Folders = @('.qoder'); Files = @() }
+    }
+    default {
+      return @{ Folders = @(); Files = @() }
+    }
   }
 }
 
 function Remove-ExcludedIdeFolders {
-  # Removes project folders belonging to IDEs listed in excludeIdes.
-  # Only removes folders that contain hub-managed content (skills junctions,
-  # MCP configs, etc.). Safe to re-run: if the IDE is moved back to the active
-  # list, Install will recreate the folders.
+  # Removes every hub-managed folder and file for IDEs in catalog.excludeIdes.
+  # Safe to re-run: putting the IDE back in catalog.ides recreates the files.
   param([string]$RepoPath, [string[]]$ExcludeIdes, [switch]$DryRun)
   if (-not $ExcludeIdes -or $ExcludeIdes.Count -eq 0) { return }
   foreach ($ide in $ExcludeIdes) {
-    $folders = Get-IdeFolders -Ide $ide
-    foreach ($rel in $folders) {
+    $paths = Get-IdeManagedPaths -Ide $ide
+    foreach ($rel in @($paths.Folders)) {
+      if (-not $rel) { continue }
       $path = Join-Path $RepoPath $rel
       if (-not (Test-Path $path)) { continue }
       if ($DryRun) { Write-Host "  [dry] remove excluded IDE folder $rel ($ide)"; continue }
       Remove-Item $path -Recurse -Force
       Write-Host "  removed excluded IDE folder $rel ($ide)"
     }
-  }
-  # Also remove top-level files that belong to excluded IDEs
-  $topLevelFiles = @()
-  if ($ExcludeIdes -contains 'Claude') { $topLevelFiles += '.mcp.json' }
-  if ($ExcludeIdes -contains 'Cursor') { $topLevelFiles += '.cursorrules' }
-  foreach ($f in $topLevelFiles) {
-    $path = Join-Path $RepoPath $f
-    if (-not (Test-Path $path)) { continue }
-    if ($DryRun) { Write-Host "  [dry] remove excluded IDE file $f"; continue }
-    Remove-Item $path -Force
-    Write-Host "  removed excluded IDE file $f"
+    foreach ($rel in @($paths.Files)) {
+      if (-not $rel) { continue }
+      $path = Join-Path $RepoPath $rel
+      if (-not (Test-Path $path)) { continue }
+      if ($DryRun) { Write-Host "  [dry] remove excluded IDE file $rel ($ide)"; continue }
+      Remove-Item $path -Force
+      Write-Host "  removed excluded IDE file $rel ($ide)"
+    }
   }
 }
 
@@ -1211,8 +1288,10 @@ if ($allSkillNamesInUse.Contains('claude-android-ninja')) {
     -DryRun:$DryRun
 }
 $allowedIdes = @($catalog.ides)
+$excludeIdes = @()
+if ($catalog.excludeIdes) { $excludeIdes = @($catalog.excludeIdes) }
 $qoderOptIn = [bool]$catalog.qoderOptIn
-$detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn)
+$detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -Excluded $excludeIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn)
 if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides to force or update catalog ides list.' }
 
 $context7ApiKey = $env:CONTEXT7_API_KEY
@@ -1229,6 +1308,8 @@ if ($mongoLaunch -is [System.Array]) {
 if (-not ($mongoLaunch -and $mongoLaunch.PSObject.Properties['Node'])) {
   $mongoLaunch = $null
 }
+$codegraphExe = Ensure-CodegraphCli -DryRun:$DryRun
+if ($codegraphExe) { Write-Host "codegraph: $codegraphExe" }
 Warn-GlobalCursorMongodbDuplicate
 $mcpBaseVars = @{
   HUB = $HubPath
@@ -1300,7 +1381,7 @@ foreach ($root in $Roots) {
     Write-Host "  MCP: $($mcpServers -join ', ')"
     Write-McpConfigs -RepoPath $proj.FullName -Ides $detected -Vars $mcpVars -ServerNames $mcpServers -ManagedServers $managedMcpServers -SkipIdes $mcpSkipIdes -DryRun:$DryRun
     Write-PointerRules -RepoPath $proj.FullName -HubPath $HubPath -FamilyCfg $cfg -Ides $detected -DryRun:$DryRun
-    Write-CopilotPointer -RepoPath $proj.FullName -HubPath $HubPath -Family $family -DryRun:$DryRun
+    Write-CopilotPointer -RepoPath $proj.FullName -HubPath $HubPath -Family $family -Ides $detected -DryRun:$DryRun
     Write-AntigravityPointer -RepoPath $proj.FullName -HubPath $HubPath -Ides $detected -DryRun:$DryRun
     Write-KiroSteeringPointer -RepoPath $proj.FullName -ProjectName $proj.Name -Ides $detected -DryRun:$DryRun
     Remove-FatAlwaysOnRules -RepoPath $proj.FullName -DryRun:$DryRun
@@ -1323,9 +1404,7 @@ foreach ($root in $Roots) {
       $toRemove = @($catalog.unusedIdeFolders)
       Remove-UnusedIdeFolders -RepoPath $proj.FullName -Folders $toRemove -DryRun:$DryRun
     }
-    # Always remove folders for excluded IDEs (keeps projects clean)
-    $excludeIdes = @()
-    if ($catalog.excludeIdes) { $excludeIdes = @($catalog.excludeIdes) }
+    # Always strip hub configs for IDEs in catalog.excludeIdes
     Remove-ExcludedIdeFolders -RepoPath $proj.FullName -ExcludeIdes $excludeIdes -DryRun:$DryRun
     if ($MigrateLegacyPaths) {
       Remove-LegacyAgentPaths -RepoPath $proj.FullName -DryRun:$DryRun

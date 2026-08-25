@@ -384,6 +384,10 @@ function Resolve-MongodbMcpLaunch {
   # Direct node + global package entry. Do not use `cmd /c npx` on Windows:
   # Cursor/VS Code leaving that chain orphaned accumulates zombie
   # node/cmd/conhost processes and can freeze the IDE.
+  #
+  # npm writes to the success stream; capture it. Otherwise (with
+  # Set-StrictMode) the caller sees an Object[] and `.Node` throws
+  # "The property 'Node' cannot be found on this object".
   param([switch]$DryRun)
   $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
   if (-not $nodeCmd) {
@@ -399,8 +403,10 @@ function Resolve-MongodbMcpLaunch {
       return $null
     }
     Write-Host 'Installing mongodb-mcp-server@2 globally (node launch, no npx)...'
-    & npm i -g mongodb-mcp-server@2
-    if ($LASTEXITCODE -ne 0) {
+    $npmOut = & npm i -g mongodb-mcp-server@2 2>&1
+    $npmCode = $LASTEXITCODE
+    foreach ($line in @($npmOut)) { Write-Host $line }
+    if ($npmCode -ne 0) {
       Write-Warning 'npm i -g mongodb-mcp-server@2 failed; skipping mongodb MCP.'
       return $null
     }
@@ -412,7 +418,7 @@ function Resolve-MongodbMcpLaunch {
     return $null
   }
   Write-Host "MongoDB MCP: $nodeExe $entry"
-  return @{ Node = $nodeExe; Entry = $entry }
+  return [pscustomobject]@{ Node = $nodeExe; Entry = $entry }
 }
 
 function Warn-GlobalCursorMongodbDuplicate {
@@ -1215,6 +1221,14 @@ if ([string]::IsNullOrWhiteSpace($context7ApiKey)) {
   $context7ApiKey = ''
 }
 $mongoLaunch = Resolve-MongodbMcpLaunch -DryRun:$DryRun
+if ($mongoLaunch -is [System.Array]) {
+  $mongoLaunch = $mongoLaunch |
+    Where-Object { $_ -and $_.PSObject.Properties['Node'] } |
+    Select-Object -Last 1
+}
+if (-not ($mongoLaunch -and $mongoLaunch.PSObject.Properties['Node'])) {
+  $mongoLaunch = $null
+}
 Warn-GlobalCursorMongodbDuplicate
 $mcpBaseVars = @{
   HUB = $HubPath

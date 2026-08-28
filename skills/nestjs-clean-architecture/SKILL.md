@@ -1,6 +1,6 @@
 ---
 name: nestjs-clean-architecture
-description: NestJS Clean Architecture + DDD conventions for ERPCLASS/NFECLASS/MOBICLASS APIs. Use when editing NestJS/TypeScript backend code in *-api, *-auth, *-sync, *-hook, or when adding controllers, endpoints, DTOs, or Swagger/OpenAPI.
+description: NestJS Clean Architecture + DDD conventions for ERPCLASS/NFECLASS/MOBICLASS APIs. Use when editing NestJS/TypeScript backend code in *-api, *-auth, *-kb, *-bot, *-sync, *-hook, or when adding controllers, endpoints, DTOs, Swagger/OpenAPI, authentication guards, or Prometheus metrics.
 ---
 Você é um(a) programador(a) sênior em TypeScript com experiência em NestJS, Clean Architecture e Domain-Driven Design (DDD), atuando em APIs NestJS desta família (ERPCLASS / NFECLASS / MOBICLASS).
 
@@ -124,7 +124,7 @@ Arquivos por feature: `<feature>.controller.ts`, `<feature>.request.ts`, `<featu
 - **DEVE** transformar a resposta com `plainToInstance(FeatureResponse, data, { excludeExtraneousValues: true })`.
 - Prefixo de rota padrão: `api/v1/<feature>`.
 - Cada método público tem JSDoc no formato: `<VERB> /rota — <descrição de negócio>. <Rota pública ou administrativa (requer TokenGuard)>`.
-- **DEVE** sair com Swagger (ver §2.9): `@ApiTags`, `@ApiOperation`, `@ApiResponse`, e `@ApiBearerAuth` se a rota usa JWT/`TokenGuard`. Sem documentação OpenAPI a rota não está pronta.
+- **DEVE** sair com Swagger (ver §2.9 e [swagger.md](swagger.md)): `@ApiTags`, `@ApiOperation`, `@ApiResponse`, e `@ApiBearerAuth`/`@ApiSecurity` alinhados ao `DocumentBuilder`. Sem documentação OpenAPI a rota não está pronta.
 
 **DTOs de request** (`*.request.ts`): classes com `class-validator` (`@IsString`, `@IsNumber`, `@IsOptional`, `@IsBoolean`) e `class-transformer` (`@Transform(({ value }) => toDate(value))` para coerção). Um arquivo pode conter várias `Request` classes relacionadas.
 
@@ -255,6 +255,8 @@ export class TitulosController {
 | rotas públicas | omitir Bearer; não inventar 401 |
 
 Ao pedir para “adicionar Swagger” num repo: só setup + decorators + plugin CLI. Ao criar endpoint: os decorators vão no mesmo PR da rota. Confirme UI em `/swagger` (ou o path do projeto) e JSON válido no endpoint da spec.
+
+Checklist, template TypeScript e auditoria de **erpclass-kb** / **erpclass-bot**: [swagger.md](swagger.md). Auth (JWT, `x-api-key`, `apikey`): [autenticacao.md](autenticacao.md). Métricas: [metricas.md](metricas.md) e `D:\AGENTS\docs\metricas\`. Connect+Bot: [bot-connect-setup.md](bot-connect-setup.md) (operacional completo em `erpclass-bot/docs/bot-connect-setup.md`).
 
 ---
 
@@ -436,5 +438,5 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 - [ ] Cache invalidado explicitamente após writes.
 - [ ] Exceções de negócio como classes derivadas de `BaseException`, mensagens em português.
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).
-- [ ] Swagger: `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer se JWT. Plugin CLI ligado com `dtoFileNameSuffix` cobrindo `.dto.ts`, `.entity.ts`, `.request.ts`, `.response.ts`. Sem `@ApiProperty` nos DTOs.
+- [ ] Swagger: checklist em [swagger.md](swagger.md) — `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer/`apiKey` no DocumentBuilder. Plugin CLI com `dtoFileNameSuffix` completo. Sem `@ApiProperty` nos DTOs (exceto gaps do plugin).
 - [ ] `npm run lint` e `npm run build` sem erros.

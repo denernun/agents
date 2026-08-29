@@ -7,6 +7,21 @@ skills/security-and-hardening/
 skills/observability-and-instrumentation/
 skills/claude-android-ninja/
 
+# Windows junctions into vendor/mattpocock-skills (recreated by Install-AgentHub.ps1)
+skills/grilling/
+skills/grill-me/
+skills/grill-with-docs/
+skills/domain-modeling/
+skills/codebase-design/
+skills/tdd/
+skills/code-review/
+skills/to-spec/
+skills/to-tickets/
+skills/implement/
+skills/handoff/
+skills/wayfinder/
+skills/setup-matt-pocock-skills/
+
 # OS / editor
 Thumbs.db
 Desktop.ini

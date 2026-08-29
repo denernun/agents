@@ -4,6 +4,8 @@
 
 .DESCRIPTION
   - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin)
+  - Mirrors vendor skills into hub skills/ (addyosmani commonSkills;
+    mattpocock process skills from catalog.mattPocockSkills)
   - Creates junctions from hub skills into each project
   - Writes slim AGENTS.md (preserves ## Local section)
   - Generates MCP configs only for detected IDEs (common trio everywhere;
@@ -273,6 +275,62 @@ function Ensure-VendorStandaloneSkill {
     return
   }
   New-JunctionOrCopy -LinkPath (Join-Path $HubPath "skills\$SkillName") -TargetPath $vendor -DryRun:$DryRun
+}
+
+function Get-MattPocockSkillPath {
+  # mattpocock/skills nests skills one level deeper: skills/<category>/<name>.
+  # Resolve the category folder dynamically so catalog entries stay plain names.
+  param([string]$VendorRoot, [string]$SkillName)
+  $skillsRoot = Join-Path $VendorRoot 'skills'
+  if (-not (Test-Path $skillsRoot)) { return $null }
+  foreach ($category in Get-ChildItem $skillsRoot -Directory) {
+    $candidate = Join-Path $category.FullName $SkillName
+    if (Test-Path (Join-Path $candidate 'SKILL.md')) { return $candidate }
+  }
+  return $null
+}
+
+function Ensure-VendorMattPocockSkillMirrors {
+  # Clone or init the mattpocock/skills submodule and junction each
+  # catalog.mattPocockSkills entry from hub skills/<name> into the vendor
+  # clone. Hub-side junctions are gitignored; this is what makes them usable.
+  param([string]$HubPath, [string[]]$SkillNames, [switch]$DryRun)
+  if (-not $SkillNames -or $SkillNames.Count -eq 0) { return }
+  $vendor = Join-Path $HubPath 'vendor\mattpocock-skills'
+  $url = 'https://github.com/mattpocock/skills.git'
+  if (-not (Test-Path (Join-Path $vendor 'skills'))) {
+    if ($DryRun) {
+      Write-Host "  [dry] clone $url -> $vendor"
+      foreach ($name in $SkillNames) { Write-Host "  [dry] junction $(Join-Path $HubPath "skills\$name") -> $vendor\skills\<category>\$name" }
+      return
+    }
+    $parent = Split-Path -Parent $vendor
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    Push-Location $HubPath
+    try {
+      if (Test-Path (Join-Path $HubPath '.gitmodules')) {
+        git submodule update --init --recursive -- vendor/mattpocock-skills 2>$null | Out-Null
+      }
+    } finally {
+      Pop-Location
+    }
+    if (-not (Test-Path (Join-Path $vendor 'skills'))) {
+      Write-Host "Cloning $url -> $vendor"
+      git clone --depth 1 $url $vendor
+    }
+  }
+  if (-not (Test-Path (Join-Path $vendor 'skills'))) {
+    Write-Warning "mattpocock/skills unavailable: git submodule/clone failed for $url. mattPocockSkills will be skipped."
+    return
+  }
+  foreach ($name in $SkillNames) {
+    $target = Get-MattPocockSkillPath -VendorRoot $vendor -SkillName $name
+    if (-not $target) {
+      Write-Warning "mattpocock skill missing: $name (looked under $vendor\skills\*\$name)"
+      continue
+    }
+    New-JunctionOrCopy -LinkPath (Join-Path $HubPath "skills\$name") -TargetPath $target -DryRun:$DryRun
+  }
 }
 
 function Get-ProjectFamily {
@@ -1331,6 +1389,10 @@ $commonSkills = @()
 if ($catalog.PSObject.Properties.Name -contains 'commonSkills') {
   $commonSkills = @($catalog.commonSkills)
 }
+$mattPocockSkills = @()
+if ($catalog.PSObject.Properties.Name -contains 'mattPocockSkills') {
+  $mattPocockSkills = @($catalog.mattPocockSkills)
+}
 
 # Guard: verify every native hub skill (skills/<name>/SKILL.md, not the
 # vendor-mirrored ones) has real content before linking anything into
@@ -1357,6 +1419,7 @@ if ($emptySkills.Count -gt 0) {
 }
 
 Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $commonSkills -DryRun:$DryRun
+Ensure-VendorMattPocockSkillMirrors -HubPath $HubPath -SkillNames $mattPocockSkills -DryRun:$DryRun
 if ($allSkillNamesInUse.Contains('claude-android-ninja')) {
   Ensure-VendorStandaloneSkill `
     -HubPath $HubPath `
@@ -1436,7 +1499,7 @@ foreach ($root in $Roots) {
     Write-Host "`n=== $($proj.Name) [$family] ==="
     $stats.projects++
 
-    $skillNames = @($commonSkills) + @($cfg.skills)
+    $skillNames = @($commonSkills) + @($cfg.skills) + @($mattPocockSkills)
     Link-ProjectSkills -RepoPath $proj.FullName -HubPath $HubPath -SkillNames $skillNames -Ides $detected -DryRun:$DryRun
     $hubRefs = Join-Path $HubPath 'references'
     if (Test-Path $hubRefs) {

@@ -4,3 +4,6 @@
 [submodule "vendor/claude-android-ninja"]
 	path = vendor/claude-android-ninja
 	url = https://github.com/Drjacky/claude-android-ninja.git
+[submodule "vendor/mattpocock-skills"]
+	path = vendor/mattpocock-skills
+	url = git@github.com:mattpocock/skills.git

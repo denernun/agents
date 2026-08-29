@@ -134,15 +134,30 @@
     "security-and-hardening",
     "observability-and-instrumentation"
   ],
+  "mattPocockSkills": [
+    "grilling",
+    "grill-me",
+    "grill-with-docs",
+    "domain-modeling",
+    "codebase-design",
+    "tdd",
+    "code-review",
+    "to-spec",
+    "to-tickets",
+    "implement",
+    "handoff",
+    "wayfinder",
+    "setup-matt-pocock-skills"
+  ],
   "ides": [
     "Cursor",
+    "Claude",
     "Kiro",
     "OpenCode",
     "Antigravity"
   ],
   "excludeIdes":[
     "VSCode",
-    "Claude",
     "Codex",
     "Devin"
   ],

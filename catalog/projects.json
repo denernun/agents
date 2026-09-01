@@ -152,14 +152,14 @@
   "ides": [
     "Cursor",
     "Claude",
-    "Kiro",
     "OpenCode",
-    "Antigravity"
   ],
   "excludeIdes":[
     "VSCode",
     "Codex",
-    "Devin"
+    "Devin",
+    "Kiro",
+    "Antigravity"
   ],
   "excludeProjectNames": [
     "node_modules",

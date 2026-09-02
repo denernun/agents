@@ -7,3 +7,6 @@
 [submodule "vendor/mattpocock-skills"]
 	path = vendor/mattpocock-skills
 	url = git@github.com:mattpocock/skills.git
+[submodule "vendor/unlazy"]
+	path = vendor/unlazy
+	url = https://github.com/Leonxlnx/unlazy.git

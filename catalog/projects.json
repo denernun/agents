@@ -3,7 +3,8 @@
     "ERPCLASS",
     "NFECLASS",
     "MOBICLASS",
-    "SHOPCLASS"
+    "SHOPCLASS",
+	"CRMCLASS"
   ],
   "mcp": {
     "common": [
@@ -132,7 +133,8 @@
     "git-workflow-and-versioning",
     "code-review-and-quality",
     "security-and-hardening",
-    "observability-and-instrumentation"
+    "observability-and-instrumentation",
+    "unlazy"
   ],
   "mattPocockSkills": [
     "grilling",

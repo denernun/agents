@@ -6,6 +6,7 @@ skills/code-review-and-quality/
 skills/security-and-hardening/
 skills/observability-and-instrumentation/
 skills/claude-android-ninja/
+skills/unlazy/
 
 # Windows junctions into vendor/mattpocock-skills (recreated by Install-AgentHub.ps1)
 skills/grilling/

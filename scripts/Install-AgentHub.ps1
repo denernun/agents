@@ -1428,6 +1428,15 @@ if ($allSkillNamesInUse.Contains('claude-android-ninja')) {
     -Url 'https://github.com/Drjacky/claude-android-ninja.git' `
     -DryRun:$DryRun
 }
+
+if ($allSkillNamesInUse.Contains('unlazy')) {
+  Ensure-VendorStandaloneSkill `
+    -HubPath $HubPath `
+    -SkillName 'unlazy' `
+    -VendorRelativePath 'vendor/unlazy' `
+    -Url 'https://github.com/Leonxlnx/unlazy.git' `
+    -DryRun:$DryRun
+}
 $idePolicy = Resolve-IdePolicy -Catalog $catalog
 $allowedIdes = @($idePolicy.Allowed)
 $excludeIdes = @($idePolicy.Excluded)

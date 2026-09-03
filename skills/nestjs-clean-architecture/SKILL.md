@@ -337,12 +337,13 @@ Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CON
 
 ## 5. Testing
 
-- Framework: **Jest** (`jest -i --no-cache --detectOpenHandles --passWithNoTests --runInBand --forceExit`).
+- Framework: **Vitest** (`npm test` / `test:watch` / `test:cov`). Referência: `erpclass-kb` e `erpclass-auth` — `vitest.config.mts` + `unplugin-swc` (decorator metadata) + `test/setup.ts`. Specs `*.spec.ts` ao lado do código. **Não use Jest.**
+- Mocks: `vi.fn()` / `vi.clearAllMocks()` (API compatível com o antigo `jest.fn`).
 - **Arrange-Act-Assert** para testes unitários; **Given-When-Then** para testes de aceitação de módulo.
 - Nomenclatura de variáveis de teste: `inputX`, `mockX`, `actualX`, `expectedX`.
 - Um teste unitário para cada método público de controller/service/application/database.
 - Use test doubles para dependências internas; dependências de terceiros baratas (ex: `class-transformer`) podem ser usadas de verdade.
-- End-to-end tests por módulo de API.
+- End-to-end tests por módulo de API (`*.e2e-spec.ts` quando o projeto já tiver o project `e2e` no Vitest).
 - Cada controller pode expor um método `admin/test` como smoke test.
 
 ---

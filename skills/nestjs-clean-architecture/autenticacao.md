@@ -36,6 +36,8 @@ Referência: `erpclass-kb/src/guards/api-key.guard.ts`, `erpclass-bot/src/contro
 
 Referência: `erpclass-kb/src/auth/`.
 
+O **erpclass-bot** valida o mesmo JWT **sem Passport** (`verifyHs256Jwt` + `TokenGuard` + `AccountAccessGuard`) nas rotas da inbox (`/api/v1/conversations`, `/api/v1/contacts`). Webhooks e provision continuam em API key.
+
 ### 3. Webhook Evolution (padrão kb + bot)
 
 1. Header **`apikey`** (não é `x-api-key`).
@@ -50,10 +52,10 @@ Referência: `erpclass-kb/src/auth/`.
 
 | Segredo | KB `src/config/.<env>.json` | Bot `src/config/.<env>.json` |
 |---|---|---|
-| JWT | `jwt.tokenSecret` | — (bot não valida JWT de usuário) |
+| JWT | `jwt.tokenSecret` | `jwt.tokenSecret` (inbox Connect/CRM — `TokenGuard` HS256, sem Passport) |
 | Key Bot↔KB | `auth.apiKey` **e** `bot.apiKey` | `knowledgeBase.apiKey` |
 | Evolution | `source.evolution.apiKey` | `evolution.apiKey` / `evolution.webhookSecret` |
-| Auth HTTP | `auth.apiUrl` | — |
+| Auth HTTP | `auth.apiUrl` | `auth.apiUrl` (profile para `AccountAccessGuard`) |
 | Bot HTTP | `bot.apiUrl`, `bot.webhookUrl` | `api.port` |
 
 JSON de config **entra no git** (sem `.example`). Não commitar valores de outro ambiente no arquivo errado.

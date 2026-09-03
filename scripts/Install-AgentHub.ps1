@@ -121,7 +121,9 @@ function Resolve-IdePolicy {
   if ($Catalog.excludeIdes) { $excludeIdes = @($Catalog.excludeIdes) }
 
   if (Test-ProcessEnvDefined -Name 'AGENTHUB_IDES') {
-    $parsed = ConvertTo-IdeNameList -Raw $env:AGENTHUB_IDES
+    # @() guard: a function returning an empty array unrolls to $null on the
+    # way out, and $null.Count throws under Set-StrictMode.
+    $parsed = @(ConvertTo-IdeNameList -Raw $env:AGENTHUB_IDES)
     $allowedSource = '.env AGENTHUB_IDES'
     if ($parsed.Count -eq 0 -or ($parsed.Count -eq 1 -and $parsed[0] -in @('auto', '*'))) {
       $allowedIdes = @()
@@ -130,7 +132,7 @@ function Resolve-IdePolicy {
     }
   }
   if (Test-ProcessEnvDefined -Name 'AGENTHUB_EXCLUDE_IDES') {
-    $excludeIdes = ConvertTo-IdeNameList -Raw $env:AGENTHUB_EXCLUDE_IDES
+    $excludeIdes = @(ConvertTo-IdeNameList -Raw $env:AGENTHUB_EXCLUDE_IDES)
     $excludeSource = '.env AGENTHUB_EXCLUDE_IDES'
   }
 
@@ -1368,6 +1370,16 @@ function Get-AiMemoryExe {
   foreach ($name in @('ai-memory', 'ai-memory.exe')) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
+  }
+  # PATH isn't refreshed in an already-open shell right after install; also
+  # check the standard native-install locations (Scenario C zip / cargo / ~/bin).
+  foreach ($p in @(
+      (Join-Path $env:LOCALAPPDATA 'ai-memory\ai-memory.exe'),
+      (Join-Path $env:USERPROFILE '.cargo\bin\ai-memory.exe'),
+      (Join-Path $env:USERPROFILE 'bin\ai-memory.cmd'),
+      (Join-Path $env:USERPROFILE 'bin\ai-memory.ps1')
+    )) {
+    if ($p -and (Test-Path -LiteralPath $p)) { return $p }
   }
   return $null
 }

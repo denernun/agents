@@ -10,3 +10,6 @@
 [submodule "vendor/unlazy"]
 	path = vendor/unlazy
 	url = https://github.com/Leonxlnx/unlazy.git
+[submodule "vendor/browser-harness"]
+	path = vendor/browser-harness
+	url = https://github.com/browser-use/browser-harness.git

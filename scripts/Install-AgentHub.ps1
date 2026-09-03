@@ -21,6 +21,14 @@
     code-review-graph MCP, codegraph is a self-contained native binary with
     no per-hub Python venv to manage. Does NOT run "codegraph install": that
     CLI subcommand overwrites the merged mcp.json files this script writes.
+  - Wires the akitaonrails/ai-memory shared-memory server into every detected
+    agent when AI_MEMORY_ENABLED is set in .env (skip with -SkipAiMemory).
+    ai-memory is GLOBAL per agent (one HTTP MCP entry + lifecycle hooks in
+    ~/.claude.json / ~/.claude/settings.json / Cursor / OpenCode), not a
+    per-project mcp.json server — the running server derives the project from
+    the agent's working dir. Needs the `ai-memory` CLI on PATH and a running
+    server (docker run ... akitaonrails/ai-memory). Optionally pins the
+    project slug per repo via -WriteAiMemoryToml (.ai-memory.toml).
 
 .EXAMPLE
   .\Install-AgentHub.ps1 -RemoveUnusedIdeFolders -WriteAgents
@@ -32,6 +40,11 @@
   # One-time cleanup of paths written by older script versions
   # (.antigravity\mcp.json, .opencode\opencode.json, .gemini\GEMINI.md)
   .\Install-AgentHub.ps1 -MigrateLegacyPaths -WriteAgents
+
+.EXAMPLE
+  # With ai-memory enabled in .env (AI_MEMORY_ENABLED=1). Also pin the
+  # project slug per repo (.ai-memory.toml). -SkipAiMemory turns the wiring off.
+  .\Install-AgentHub.ps1 -WriteAgents -WriteAiMemoryToml
 #>
 [CmdletBinding()]
 param(
@@ -44,7 +57,9 @@ param(
   [switch]$IncludeQoder,
   [switch]$ForceAgents,
   [switch]$MigrateLegacyPaths,
-  [switch]$SkipCodegraphInit
+  [switch]$SkipCodegraphInit,
+  [switch]$SkipAiMemory,
+  [switch]$WriteAiMemoryToml
 )
 
 Set-StrictMode -Version Latest
@@ -1349,6 +1364,89 @@ function Link-ProjectSkills {
   }
 }
 
+function Get-AiMemoryExe {
+  foreach ($name in @('ai-memory', 'ai-memory.exe')) {
+    $cmd = Get-Command $name -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+  }
+  return $null
+}
+
+function Test-AiMemoryEnabled {
+  $v = [Environment]::GetEnvironmentVariable('AI_MEMORY_ENABLED', 'Process')
+  if ([string]::IsNullOrWhiteSpace($v)) { return $false }
+  return ($v.Trim().ToLower() -notin @('0', 'false', 'no', 'off'))
+}
+
+function Ensure-AiMemory {
+  # Wires akitaonrails/ai-memory (shared cross-agent memory) into each
+  # detected agent. Unlike the per-project MCPs this hub writes, ai-memory
+  # registers ONE global HTTP MCP entry per agent (~/.claude.json, Cursor
+  # config, ...) plus global lifecycle hooks (~/.claude/settings.json,
+  # OpenCode plugin); the running server derives the "current project" from
+  # the agent's working dir + git root. Requires a running server
+  # (docker run ... akitaonrails/ai-memory) and the `ai-memory` CLI on PATH.
+  # No-op unless AI_MEMORY_ENABLED is truthy in .env.
+  param([string[]]$Ides, [switch]$DryRun)
+
+  if (-not (Test-AiMemoryEnabled)) { return }
+
+  $url = [Environment]::GetEnvironmentVariable('AI_MEMORY_URL', 'Process')
+  if ([string]::IsNullOrWhiteSpace($url)) { $url = 'http://127.0.0.1:49374' }
+  $url = $url.TrimEnd('/')
+  $token = [Environment]::GetEnvironmentVariable('AI_MEMORY_TOKEN', 'Process')
+
+  $exe = Get-AiMemoryExe
+  if (-not $exe) {
+    Write-Warning "AI_MEMORY_ENABLED is set but 'ai-memory' CLI is not on PATH. Install it (see README 'Memoria compartilhada') or unset AI_MEMORY_ENABLED. Skipping ai-memory wiring."
+    return
+  }
+
+  # Detected-IDE name -> ai-memory --client / --agent slug
+  $slugs = @{ Cursor = 'cursor'; Claude = 'claude-code'; OpenCode = 'opencode'; Codex = 'codex'; Devin = 'devin' }
+  $targets = @($Ides | ForEach-Object { $slugs[$_] } | Where-Object { $_ } | Select-Object -Unique)
+  if ($targets.Count -eq 0) {
+    Write-Warning "ai-memory: none of the detected IDEs ($($Ides -join ', ')) map to a supported agent. Skipping."
+    return
+  }
+
+  Write-Host "ai-memory: server $url ; agents: $($targets -join ', ')"
+  foreach ($slug in $targets) {
+    $mcpArgs  = @('install-mcp', '--client', $slug, '--server-url', "$url/mcp", '--apply')
+    $hookArgs = @('install-hooks', '--agent', $slug, '--server-url', $url, '--apply')
+    if ($token) {
+      $mcpArgs  += @('--auth-token', $token)
+      $hookArgs += @('--auth-token', $token)
+    }
+    if ($DryRun) {
+      Write-Host "  [dry] ai-memory $($mcpArgs -join ' ')"
+      Write-Host "  [dry] ai-memory $($hookArgs -join ' ')"
+      continue
+    }
+    & $exe @mcpArgs
+    if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-mcp failed for $slug (exit $LASTEXITCODE)" }
+    & $exe @hookArgs
+    if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-hooks failed for $slug (exit $LASTEXITCODE)" }
+  }
+}
+
+function Write-AiMemoryProjectConfig {
+  # Optional (-WriteAiMemoryToml): pin the ai-memory project slug for a repo.
+  # Normally unnecessary - the server derives the project from the git root -
+  # only needed for ambiguous checkouts / monorepos / work-vs-personal splits.
+  # Never overwrites an existing (possibly hand-edited) file.
+  # NOTE: the .ai-memory.toml schema is not fully documented upstream; this
+  # writes the minimal `project = "<name>"` form. Verify against your
+  # ai-memory version before relying on it.
+  param([string]$RepoPath, [string]$ProjectName, [switch]$DryRun)
+  if (-not (Test-AiMemoryEnabled)) { return }
+  $dest = Join-Path $RepoPath '.ai-memory.toml'
+  if (Test-Path $dest) { return }
+  if ($DryRun) { Write-Host "  [dry] write .ai-memory.toml (project = `"$ProjectName`")"; return }
+  Set-Content -Path $dest -Value "project = `"$ProjectName`"`r`n" -Encoding UTF8
+  Write-Host "  wrote .ai-memory.toml"
+}
+
 # --- main ---
 $HubPath = Resolve-HubPath -Path $HubPath
 $loadedDotEnv = Import-HubDotEnv -HubPath $HubPath
@@ -1437,6 +1535,15 @@ if ($allSkillNamesInUse.Contains('unlazy')) {
     -Url 'https://github.com/Leonxlnx/unlazy.git' `
     -DryRun:$DryRun
 }
+
+if ($allSkillNamesInUse.Contains('browser-harness')) {
+  Ensure-VendorStandaloneSkill `
+    -HubPath $HubPath `
+    -SkillName 'browser-harness' `
+    -VendorRelativePath 'vendor/browser-harness' `
+    -Url 'https://github.com/browser-use/browser-harness.git' `
+    -DryRun:$DryRun
+}
 $idePolicy = Resolve-IdePolicy -Catalog $catalog
 $allowedIdes = @($idePolicy.Allowed)
 $excludeIdes = @($idePolicy.Excluded)
@@ -1462,6 +1569,7 @@ if (-not ($mongoLaunch -and $mongoLaunch.PSObject.Properties['Node'])) {
 }
 $codegraphExe = Ensure-CodegraphCli -DryRun:$DryRun
 if ($codegraphExe) { Write-Host "codegraph: $codegraphExe" }
+if (-not $SkipAiMemory) { Ensure-AiMemory -Ides $detected -DryRun:$DryRun }
 Warn-GlobalCursorMongodbDuplicate
 $mcpBaseVars = @{
   HUB = $HubPath
@@ -1473,6 +1581,12 @@ if ($mongoLaunch) {
   $mcpBaseVars['MDB_MCP_ENTRY'] = $mongoLaunch.Entry
 }
 $managedMcpServers = Get-ManagedMcpServerNames -Catalog $catalog -Families $families
+# Retired hub MCP servers: kept here so Write-McpJsonMerged prunes leftover
+# entries (written by older script versions) from every project's mcp.json
+# even though they're no longer in catalog/projects.json.
+#  - memorix: dead placeholder, superseded by ai-memory (global, not per-project)
+$retiredMcpServers = @('memorix')
+$managedMcpServers = @($managedMcpServers) + @($retiredMcpServers | Where-Object { $managedMcpServers -notcontains $_ })
 $mcpSkipIdes = $null
 if ($catalog.mcp) { $mcpSkipIdes = $catalog.mcp.skipIdes }
 
@@ -1540,6 +1654,10 @@ foreach ($root in $Roots) {
 
     if (-not $SkipCodegraphInit) {
       Ensure-CodegraphInit -RepoPath $proj.FullName -Skills @($cfg.skills) -DryRun:$DryRun
+    }
+
+    if ($WriteAiMemoryToml) {
+      Write-AiMemoryProjectConfig -RepoPath $proj.FullName -ProjectName $proj.Name -DryRun:$DryRun
     }
 
     $agentsPath = Join-Path $proj.FullName 'AGENTS.md'

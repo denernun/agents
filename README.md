@@ -155,7 +155,7 @@ Definidos em `catalog/projects.json`:
 
 | Família | Projetos | MCPs |
 |---------|----------|------|
-| **Todos** | `*` | `codegraph`, `context7`, `filesystem`, `memorix` |
+| **Todos** | `*` | `codegraph`, `context7`, `filesystem` |
 | **NestJS** | `*-api`, `*-auth`, `*-sync`, `*-hook`, `*-cob-api` | + `mongodb` (read-only), `openapi` (se Swagger detectado) |
 | **Angular** | `*-admin`, `*-dash`, `*-app`, `*-cob` | + `playwright` |
 | **Android** | `mobiclass-apk`, `mobiclass-leitor`, `mobiclass-comanda` | só os comuns |
@@ -321,7 +321,61 @@ git -C D:\AGENTS submodule update --remote
 
 ### MCP global vs projeto
 
-MCPs **universais** (como `memorix`) ficam na config global do usuário (`~\.kiro\settings\mcp.json`).
-MCPs **per-project** (como `codegraph`, `openapi`, `mongodb`) ficam na config do projeto e são gerados pelo install.
+MCPs **universais** (como `ai-memory`, ver abaixo) ficam na config global do usuário.
+MCPs **per-project** (`codegraph`, `context7`, `filesystem`, `openapi`, `mongodb`, `playwright`) ficam na config do projeto e são gerados pelo install.
 
 Se um MCP aparecer com erro na config global mas funcionar por projeto, **remova-o da config global** — a de projeto tem prioridade.
+
+---
+
+## Memória compartilhada (ai-memory)
+
+[`akitaonrails/ai-memory`](https://github.com/akitaonrails/ai-memory) — memória de longo prazo
+**compartilhada entre agentes** (Claude Code, Cursor, OpenCode, Codex…): sai do Claude
+no meio de uma task, abre o Codex no mesmo diretório e continua sem re-explicar a
+arquitetura. Um binário Rust roda um servidor MCP/HTTP + hooks de ciclo de vida; a
+wiki é markdown versionado por git. Funciona sem API key (modo zero-LLM).
+
+### Diferença do resto do hub
+
+| | `ai-memory` | `codegraph`, `mongodb`… |
+|---|---|---|
+| Config MCP | **1 entrada HTTP global** por agente (`~/.claude.json`, config do Cursor, plugin do OpenCode) | `mcp.json` por projeto |
+| Hooks | globais (`~/.claude/settings.json`) — o hub **não** gerencia isso sozinho | — |
+| Projeto atual | derivado do **git root / CWD** (opcional: `.ai-memory.toml`) | caminho passado como arg |
+| Pré-requisito | **servidor rodando** + CLI `ai-memory` no PATH | binário no PATH |
+
+Por isso o hub **não** escreve `ai-memory` nos `mcp.json` dos projetos: ele chama o
+instalador nativo (`ai-memory install-mcp` / `install-hooks`), uma vez por agente
+detectado, quando `AI_MEMORY_ENABLED=1` no `.env`.
+
+### Setup
+
+```powershell
+# 1. Servidor (Windows: Docker Desktop; loopback-only, sem auth)
+docker run -d --name ai-memory --restart unless-stopped `
+  -p 127.0.0.1:49374:49374 -v ai-memory-data:/data `
+  akitaonrails/ai-memory:latest
+
+# 2. CLI `ai-memory` no PATH (ver docs/install.md do projeto — AUR, binário ou
+#    `docker run --rm akitaonrails/ai-memory:latest ...` como wrapper)
+
+# 3. .env do hub
+#    AI_MEMORY_ENABLED=1
+#    AI_MEMORY_URL=http://127.0.0.1:49374
+#    AI_MEMORY_TOKEN=            (vazio no modo loopback)
+
+# 4. Rode o install normalmente
+.\Install-AgentHub.ps1 -WriteAgents
+#    -SkipAiMemory        desliga o passo pontualmente
+#    -WriteAiMemoryToml   grava .ai-memory.toml (project = "<repo>") por repo
+#                         — só necessário em checkout ambíguo / monorepo
+```
+
+Mapeamento IDE detectada → agente: `Cursor→cursor`, `Claude→claude-code`,
+`OpenCode→opencode`, `Codex→codex`, `Devin→devin`.
+
+### Desinstalar
+
+`.\Uninstall-AgentHub.ps1 -Full` roda `ai-memory uninstall --apply` (global, **todos os
+agentes da máquina**) e remove o `.ai-memory.toml` gerado pelo hub.

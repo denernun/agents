@@ -6,8 +6,11 @@
 .DESCRIPTION
   By default only removes skill junctions (safe, reversible: re-run Install
   to relink). Pass -Full to also remove generated MCP configs, AGENTS.md,
-  slim stubs, Cursor rules, and Copilot/Antigravity/Kiro pointers - i.e. a
-  complete, symmetric uninstall of everything Install-AgentHub.ps1 writes.
+  slim stubs, Cursor rules, Copilot/Antigravity/Kiro pointers, the
+  hub-generated .ai-memory.toml, and (via `ai-memory uninstall`) the global
+  ai-memory MCP + lifecycle hooks - i.e. a complete, symmetric uninstall of
+  everything Install-AgentHub.ps1 writes. Note the ai-memory step is global
+  (all agents on the machine), matching how Install wires it.
 
 .EXAMPLE
   .\Uninstall-AgentHub.ps1 -DryRun
@@ -144,6 +147,11 @@ if ($Full) {
     # Hardcoded fallback covering known hub servers
     $hubMcpServerNames = @('context7', 'filesystem', 'memorix', 'mongodb', 'openapi', 'playwright')
   }
+  # Retired servers no longer in the catalog but still present in older
+  # project mcp.json files (must stay listed so -Full cleans them up).
+  foreach ($retired in @('memorix')) {
+    if ($hubMcpServerNames -notcontains $retired) { $hubMcpServerNames += $retired }
+  }
 }
 
 # Skill junctions (matches Link-ProjectSkills targets in Install-AgentHub.ps1)
@@ -211,6 +219,18 @@ foreach ($root in $Roots) {
       Remove-PathIfExists -Path (Join-Path $projPath '.agents\rules\stack-pointer.md') -DryRun:$DryRun
       Remove-PathIfExists -Path (Join-Path $projPath '.kiro\steering\stack-pointer.md') -DryRun:$DryRun
 
+      # .ai-memory.toml: only remove the exact hub-generated one-liner; a
+      # hand-edited file (monorepo / capture rules) is left in place.
+      $aiToml = Join-Path $projPath '.ai-memory.toml'
+      if (Test-Path $aiToml) {
+        $tomlText = (Get-Content $aiToml -Raw -Encoding UTF8 -ErrorAction SilentlyContinue).Trim()
+        if ($tomlText -match '^project\s*=\s*"[^"]*"$') {
+          Remove-PathIfExists -Path $aiToml -DryRun:$DryRun
+        } else {
+          Write-Host "kept $aiToml (hand-edited; remove manually if unneeded)"
+        }
+      }
+
       # AGENTS.md is intentionally NOT removed by default (it may contain a
       # hand-edited "## Local" section). Remove manually if truly needed.
     }
@@ -218,6 +238,21 @@ foreach ($root in $Roots) {
 }
 
 if ($Full) {
+  # ai-memory registers GLOBAL per-agent MCP + hooks (not per-project), so its
+  # own installer is the only clean way to undo Ensure-AiMemory. This affects
+  # every project on this machine, not just hub repos.
+  $aiMem = Get-Command ai-memory -ErrorAction SilentlyContinue
+  if (-not $aiMem) { $aiMem = Get-Command ai-memory.exe -ErrorAction SilentlyContinue }
+  if ($aiMem) {
+    if ($DryRun) {
+      Write-Host "[dry] ai-memory uninstall --apply  (removes global MCP + hooks for ALL agents)"
+    } else {
+      Write-Host "`nRemoving ai-memory global MCP + lifecycle hooks (all agents on this machine)..."
+      & $aiMem.Source uninstall --apply
+      if ($LASTEXITCODE -ne 0) { Write-Warning "ai-memory uninstall exited $LASTEXITCODE" }
+    }
+  }
+
   Write-Host "`nNote: AGENTS.md and opencode.json were left in place (they may contain project-specific / hand-edited content)."
   Write-Host "Remove them manually per repo if you no longer want AgentHub-managed files there."
 }

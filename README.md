@@ -1,6 +1,6 @@
 # AgentHub
 
-Fonte única de skills, templates e scripts para agentes de IA nos produtos **ERPCLASS**, **NFECLASS**, **SHOPCLASS** e **MOBICLASS**.
+Fonte única de skills, templates e scripts para agentes de IA nos produtos **ERPCLASS**, **NFECLASS**, **SHOPCLASS**, **MOBICLASS** e **CRMCLASS**.
 
 > ## AVISO — manter organizado
 >

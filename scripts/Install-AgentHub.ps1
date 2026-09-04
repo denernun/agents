@@ -1,6 +1,8 @@
 ﻿<#
 .SYNOPSIS
-  Links D:\AGENTS skills into ERPCLASS / NFECLASS / MOBICLASS / SHOPCLASS repos (D:\SISTEMAS).
+  Links D:\AGENTS skills into the repos under the D:\SISTEMAS family folders
+  listed in catalog/projects.json "roots" (ERPCLASS / NFECLASS / MOBICLASS /
+  SHOPCLASS / CRMCLASS).
 
 .DESCRIPTION
   - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin)
@@ -1469,10 +1471,14 @@ $catalogPath = Join-Path $HubPath 'catalog\projects.json'
 $catalog = Get-Content $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 $defaultSistemas = 'D:\SISTEMAS'
-# Project repositories are direct children of these family folders. Keep this
-# list deliberately narrow: other D:\SISTEMAS folders are not managed by
-# default.
+# Family folders under D:\SISTEMAS whose direct children are managed repos.
+# Driven by catalog.roots (Uninstall-AgentHub.ps1 reads the same key); the
+# hardcoded list is only a fallback for an older catalog without it. Other
+# D:\SISTEMAS folders are not managed.
 $defaultProjectRoots = @('ERPCLASS', 'MOBICLASS', 'NFECLASS', 'SHOPCLASS')
+if (($catalog.PSObject.Properties.Name -contains 'roots') -and (@($catalog.roots).Count -gt 0)) {
+  $defaultProjectRoots = @($catalog.roots)
+}
 
 if ($Roots.Count -eq 0) {
   $Roots = @($defaultProjectRoots |

@@ -116,11 +116,9 @@ if ($Roots.Count -eq 0) {
     }
   }
   if ($Roots.Count -eq 0) {
-    $Roots = @(
-      (Join-Path $defaultSistemas 'ERPCLASS'),
-      (Join-Path $defaultSistemas 'NFECLASS'),
-      (Join-Path $defaultSistemas 'MOBICLASS')
-    ) | Where-Object { Test-Path $_ }
+    $Roots = @('ERPCLASS', 'NFECLASS', 'MOBICLASS', 'SHOPCLASS', 'CRMCLASS') |
+      ForEach-Object { Join-Path $defaultSistemas $_ } |
+      Where-Object { Test-Path $_ }
   }
 }
 

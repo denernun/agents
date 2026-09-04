@@ -4,7 +4,7 @@
     "NFECLASS",
     "MOBICLASS",
     "SHOPCLASS",
-	"CRMCLASS"
+	  "CRMCLASS"
   ],
   "mcp": {
     "common": [
@@ -150,7 +150,17 @@
     "implement",
     "handoff",
     "wayfinder",
-    "setup-matt-pocock-skills"
+    "setup-matt-pocock-skills",
+    "improve-codebase-architecture"
+  ],
+  "superpowersSkills": [
+    "systematic-debugging",
+    "receiving-code-review",
+    "verification-before-completion",
+    "dispatching-parallel-agents",
+    "using-git-worktrees",
+    "finishing-a-development-branch",
+    "writing-skills"
   ],
   "ides": [
     "Cursor",

@@ -277,7 +277,8 @@ codegraph status "D:\SISTEMAS\ERPCLASS\erpclass-api" --json
 ```
 D:\AGENTS/
   catalog/projects.json   # families, match patterns, MCPs, IDEs
-  docs/                   # CONTEXT-HYGIENE, superpowers
+  docs/                   # CONTEXT-HYGIENE, SKILLS-PLAYBOOK (quando usar cada skill),
+                          #   gitnexus-vs-codegraph, unlazy-cheatsheet, superpowers/
   mcp/                    # templates MCP (*.template.json / *.template.toml)
   scripts/
     Install-AgentHub.ps1    # instala tudo
@@ -289,8 +290,17 @@ D:\AGENTS/
     rules/                # ponteiros curtos p/ Cursor (.mdc)
     copilot/              # instruções GitHub Copilot por família
     antigravity/          # pointer Antigravity
-  vendor/                 # submodules addyosmani/agent-skills e Drjacky/claude-android-ninja
+  vendor/                 # submodules: addyosmani/agent-skills, mattpocock/skills,
+                          #   obra/superpowers, Drjacky/claude-android-ninja, unlazy, browser-harness
 ```
+
+---
+
+## Qual skill usar em cada momento
+
+Ver [`docs/SKILLS-PLAYBOOK.md`](docs/SKILLS-PLAYBOOK.md) — fluxo por fase
+(ideia → spec → antes do código → implementação → debug → review → fechamento),
+detalhe de cada skill (quando/como invocar), e fluxos prontos pra colar no chat.
 
 ---
 
@@ -305,6 +315,47 @@ D:\AGENTS/
 ```powershell
 git -C D:\AGENTS submodule update --remote
 ```
+
+### Skills de processo (Superpowers)
+
+[`obra/superpowers`](https://github.com/obra/superpowers) — metodologia de
+desenvolvimento. **Só um subconjunto** entra no hub: as skills que **não**
+colidem com o roteador base (`using-agent-skills`, do addyosmani) nem com as
+skills do Matt Pocock. Lista em `catalog/projects.json` → `superpowersSkills`:
+
+| Skill | Por que entra |
+|---|---|
+| `systematic-debugging` | disciplina de root-cause (camada acima do `debug-issue`/codegraph) |
+| `receiving-code-review` | como reagir a feedback de review com rigor — ângulo que as outras não cobrem |
+| `verification-before-completion` | "evidência antes de dizer que terminou" |
+| `dispatching-parallel-agents` | orquestrar subagents paralelos |
+| `using-git-worktrees` | isolamento por worktree |
+| `finishing-a-development-branch` | decisão de como integrar a branch |
+| `writing-skills` | TDD aplicado a skills (útil pra manter o próprio hub) |
+
+**Ficaram de fora** (redundantes com o que já está ativo):
+`using-superpowers` (roteador — conflita com `using-agent-skills`),
+`brainstorming` (usa-se `grilling`/`grill-me` do Matt Pocock),
+`test-driven-development` (usa-se `tdd` do Matt Pocock, mais enxuto),
+`writing-plans`/`executing-plans`/`subagent-driven-development`
+(usa-se `to-spec`/`to-tickets`/`implement` do Matt Pocock),
+`requesting-code-review` (usa-se `code-review-and-quality` + `code-review`).
+
+> Regra (ver `vendor/addyosmani-agent-skills/docs/comparison.md`): **um só
+> roteador de metodologia ativo**. Skills individuais podem ser combinadas à
+> la carte; dois meta-roteadores brigam por `/tdd`, roteamento e filosofia.
+
+O install baixa o submodule `vendor/superpowers` e cria junctions
+`skills/<nome>` → `vendor/superpowers/skills/<nome>` (gitignored, recriadas a
+cada `Install-AgentHub.ps1`). O hook/plugin oficial do Superpowers **não** é
+usado — só os `SKILL.md`, carregados sob demanda.
+
+> **Trocar a lista depois:** editar `superpowersSkills` (ou `mattPocockSkills`,
+> ou as `skills` de uma família) e rodar `Install-AgentHub.ps1` de novo. O
+> install cria as junctions novas **e remove** as que saíram do catálogo
+> (prune, igual ao que já fazia com MCP). Skills feitas à mão na pasta do
+> projeto (pasta real, ou junction apontando para fora de `D:\AGENTS\skills`)
+> não são tocadas.
 
 ---
 

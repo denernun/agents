@@ -9,6 +9,15 @@ skills/claude-android-ninja/
 skills/unlazy/
 skills/browser-harness/
 
+# Windows junctions into vendor/superpowers (recreated by Install-AgentHub.ps1)
+skills/systematic-debugging/
+skills/receiving-code-review/
+skills/verification-before-completion/
+skills/dispatching-parallel-agents/
+skills/using-git-worktrees/
+skills/finishing-a-development-branch/
+skills/writing-skills/
+
 # Windows junctions into vendor/mattpocock-skills (recreated by Install-AgentHub.ps1)
 skills/grilling/
 skills/grill-me/
@@ -23,6 +32,7 @@ skills/implement/
 skills/handoff/
 skills/wayfinder/
 skills/setup-matt-pocock-skills/
+skills/improve-codebase-architecture/
 
 # OS / editor
 Thumbs.db

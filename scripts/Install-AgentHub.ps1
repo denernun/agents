@@ -7,8 +7,10 @@
 .DESCRIPTION
   - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin)
   - Mirrors vendor skills into hub skills/ (addyosmani commonSkills;
-    mattpocock process skills from catalog.mattPocockSkills)
-  - Creates junctions from hub skills into each project
+    mattpocock process skills from catalog.mattPocockSkills;
+    obra/superpowers process skills from catalog.superpowersSkills)
+  - Creates junctions from hub skills into each project (and prunes stale
+    hub-managed skill junctions no longer assigned to the project)
   - Writes slim AGENTS.md (preserves ## Local section)
   - Generates MCP configs only for detected IDEs (common trio everywhere;
     mongodb + openapi on NestJS APIs that already have Swagger
@@ -346,6 +348,51 @@ function Ensure-VendorMattPocockSkillMirrors {
     $target = Get-MattPocockSkillPath -VendorRoot $vendor -SkillName $name
     if (-not $target) {
       Write-Warning "mattpocock skill missing: $name (looked under $vendor\skills\*\$name)"
+      continue
+    }
+    New-JunctionOrCopy -LinkPath (Join-Path $HubPath "skills\$name") -TargetPath $target -DryRun:$DryRun
+  }
+}
+
+function Ensure-VendorSuperpowersSkillMirrors {
+  # Clone or init the obra/superpowers submodule and junction each
+  # catalog.superpowersSkills entry from hub skills/<name> into the vendor
+  # clone. superpowers stores skills flat at skills/<name>/SKILL.md (same
+  # layout as addyosmani, unlike mattpocock's skills/<category>/<name>).
+  # Hub-side junctions are gitignored; this is what makes them usable.
+  param([string]$HubPath, [string[]]$SkillNames, [switch]$DryRun)
+  if (-not $SkillNames -or $SkillNames.Count -eq 0) { return }
+  $vendor = Join-Path $HubPath 'vendor\superpowers'
+  $url = 'https://github.com/obra/superpowers.git'
+  if (-not (Test-Path (Join-Path $vendor 'skills'))) {
+    if ($DryRun) {
+      Write-Host "  [dry] clone $url -> $vendor"
+      foreach ($name in $SkillNames) { Write-Host "  [dry] junction $(Join-Path $HubPath "skills\$name") -> $vendor\skills\$name" }
+      return
+    }
+    $parent = Split-Path -Parent $vendor
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    Push-Location $HubPath
+    try {
+      if (Test-Path (Join-Path $HubPath '.gitmodules')) {
+        git submodule update --init --recursive -- vendor/superpowers 2>$null | Out-Null
+      }
+    } finally {
+      Pop-Location
+    }
+    if (-not (Test-Path (Join-Path $vendor 'skills'))) {
+      Write-Host "Cloning $url -> $vendor"
+      git clone --depth 1 $url $vendor
+    }
+  }
+  if (-not (Test-Path (Join-Path $vendor 'skills'))) {
+    Write-Warning "obra/superpowers unavailable: git submodule/clone failed for $url. superpowersSkills will be skipped."
+    return
+  }
+  foreach ($name in $SkillNames) {
+    $target = Join-Path $vendor "skills\$name"
+    if (-not (Test-Path (Join-Path $target 'SKILL.md'))) {
+      Write-Warning "superpowers skill missing: $name (looked under $vendor\skills\$name)"
       continue
     }
     New-JunctionOrCopy -LinkPath (Join-Path $HubPath "skills\$name") -TargetPath $target -DryRun:$DryRun
@@ -1365,6 +1412,60 @@ function Link-ProjectSkills {
       $link = Join-Path $root $skill
       New-JunctionOrCopy -LinkPath $link -TargetPath $target -DryRun:$DryRun
     }
+    Remove-StaleProjectSkills -SkillRoot $root -HubPath $HubPath -KeepNames $SkillNames -DryRun:$DryRun
+  }
+}
+
+function Remove-StaleProjectSkills {
+  # Prunes skill junctions the hub linked in a previous run but that are no
+  # longer assigned to this project (skill dropped from catalog.commonSkills /
+  # a family / mattPocockSkills / superpowersSkills, or renamed). Mirrors how
+  # Write-McpJsonMerged prunes stale MCP servers.
+  #
+  # Only removes an entry when it is hub-managed: either a junction whose
+  # target resolves under "<HubPath>\skills\", or a Copy-fallback directory
+  # carrying the ".agenthub-managed" marker. A hand-made junction pointing
+  # somewhere else, or a real user skill folder, is left untouched.
+  param(
+    [string]$SkillRoot,
+    [string]$HubPath,
+    [string[]]$KeepNames,
+    [switch]$DryRun
+  )
+  if (-not (Test-Path $SkillRoot)) { return }
+  $hubSkills = (Join-Path $HubPath 'skills').TrimEnd('\')
+  $keep = @{}
+  foreach ($n in $KeepNames) { $keep[$n] = $true }
+
+  foreach ($entry in Get-ChildItem -LiteralPath $SkillRoot -Directory -Force -ErrorAction SilentlyContinue) {
+    if ($keep.ContainsKey($entry.Name)) { continue }
+
+    $isReparse = [bool]($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)
+    $isHubManaged = $false
+    if ($isReparse) {
+      $tgt = $null
+      try { $tgt = (Get-Item -LiteralPath $entry.FullName -Force).Target } catch { $tgt = $null }
+      if ($tgt) {
+        $tgtResolved = $tgt
+        try { $tgtResolved = (Resolve-Path -LiteralPath $tgt -ErrorAction Stop).Path } catch { }
+        if ($tgtResolved -like "$hubSkills\*") { $isHubManaged = $true }
+      }
+    } elseif (Test-Path (Join-Path $entry.FullName '.agenthub-managed')) {
+      $isHubManaged = $true
+    }
+    if (-not $isHubManaged) { continue }
+
+    if ($DryRun) { Write-Host "  [dry] prune stale skill $($entry.FullName)"; continue }
+    if ($isReparse) {
+      cmd /c "rmdir `"$($entry.FullName)`"" | Out-Null
+    } else {
+      Remove-Item -LiteralPath $entry.FullName -Recurse -Force
+    }
+    if (Test-Path $entry.FullName) {
+      Write-Warning "Failed to prune stale skill $($entry.FullName)"
+    } else {
+      Write-Host "  pruned stale skill $($entry.Name)"
+    }
   }
 }
 
@@ -1509,6 +1610,10 @@ $mattPocockSkills = @()
 if ($catalog.PSObject.Properties.Name -contains 'mattPocockSkills') {
   $mattPocockSkills = @($catalog.mattPocockSkills)
 }
+$superpowersSkills = @()
+if ($catalog.PSObject.Properties.Name -contains 'superpowersSkills') {
+  $superpowersSkills = @($catalog.superpowersSkills)
+}
 
 # Guard: verify every native hub skill (skills/<name>/SKILL.md, not the
 # vendor-mirrored ones) has real content before linking anything into
@@ -1536,6 +1641,7 @@ if ($emptySkills.Count -gt 0) {
 
 Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $commonSkills -DryRun:$DryRun
 Ensure-VendorMattPocockSkillMirrors -HubPath $HubPath -SkillNames $mattPocockSkills -DryRun:$DryRun
+Ensure-VendorSuperpowersSkillMirrors -HubPath $HubPath -SkillNames $superpowersSkills -DryRun:$DryRun
 if ($allSkillNamesInUse.Contains('claude-android-ninja')) {
   Ensure-VendorStandaloneSkill `
     -HubPath $HubPath `
@@ -1640,7 +1746,7 @@ foreach ($root in $Roots) {
     Write-Host "`n=== $($proj.Name) [$family] ==="
     $stats.projects++
 
-    $skillNames = @($commonSkills) + @($cfg.skills) + @($mattPocockSkills)
+    $skillNames = @($commonSkills) + @($cfg.skills) + @($mattPocockSkills) + @($superpowersSkills)
     Link-ProjectSkills -RepoPath $proj.FullName -HubPath $HubPath -SkillNames $skillNames -Ides $detected -DryRun:$DryRun
     $hubRefs = Join-Path $HubPath 'references'
     if (Test-Path $hubRefs) {

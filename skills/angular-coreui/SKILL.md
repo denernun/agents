@@ -88,11 +88,23 @@ The project is structured under `src/app/` adhering to Clean Architecture princi
 
 ---
 
-## UI & Styling (CoreUI)
+## UI & Styling (CoreUI + Tailwind)
 
-The visual layer is based on **CoreUI for Bootstrap**. All UI work must align with the official framework — do not invent separate styling systems.
+The application uses a layered visual system:
 
-For detailed UI guidance, read `.cursor/skills/coreui-styling/SKILL.md`.
+- **CoreUI/Bootstrap** is the structural foundation for the application shell:
+  sidebar, header, footer, navigation, shell containers, responsive behavior,
+  and color mode.
+- **Tailwind CSS** is allowed and preferred for page content and visual
+  composition: grids, cards, panels, spacing, typography, surfaces, highlights,
+  gradients, badges, metrics, and page-level states.
+- **The project design system (`ds-*`)** is used for existing shared components
+  and established patterns such as forms, tables, alerts, loading, and empty
+  states.
+
+Do not use Tailwind to reimplement or replace the CoreUI shell. Do not create a
+second shell system. For detailed boundaries and page-level styling guidance,
+read `.cursor/skills/coreui-styling/SKILL.md`.
 
 ### Authoritative sources
 
@@ -103,13 +115,26 @@ For detailed UI guidance, read `.cursor/skills/coreui-styling/SKILL.md`.
 
 ### Rules
 
-- Use only classes, components, and utilities from the CoreUI documentation and `styles.css`.
-- Do not create new standalone styles beyond those sources and existing project SCSS conventions.
-- Prefer CoreUI/Bootstrap utility classes over custom CSS.
-- Use `@coreui/angular` components for layout shell (sidebar, header, container, footer) — follow `src/app/layout/`.
-- Use Font Awesome (`fas`/`fa`/`fab`) for all icons — navigation, shell, and page content.
-- Before adding custom CSS, search `styles.css` and the CoreUI docs; reuse patterns from existing pages (`src/app/pages/`).
-- Custom CSS belongs in component `.scss` or `src/styles/_custom.scss` / `_theme.scss` — avoid inline styles for static layout.
+- Use `@coreui/angular` components for the layout shell (sidebar, header,
+  container, footer) — follow `src/app/layout/`.
+- Use CoreUI/Bootstrap classes and utilities for shell structure and
+  framework-compatible behavior.
+- Use Tailwind for new page-level content when the project has Tailwind
+  configured. Prefer it for visual composition that needs richer hierarchy,
+  color, spacing, emphasis, or responsive arrangement.
+- Reuse `ds-*` classes and `layout/shared` components when an established
+  shared component already covers the need.
+- Do not use Tailwind to replace CoreUI shell components or to restyle the
+  entire application shell without an explicit requirement.
+- Do not combine Tailwind, Bootstrap, and `ds-*` classes to control the same
+  visual property on the same element unless there is a documented reason.
+- Before adding custom CSS, search `styles.css`, the project design tokens, and
+  existing page patterns. Custom CSS is a fallback for cases that the approved
+  systems cannot express cleanly.
+- Use Font Awesome (`fas`/`fa`/`fab`) for all icons — navigation, shell, and
+  page content.
+- Custom CSS belongs in component `.scss` or `src/styles/_custom.scss` /
+  `_theme.scss` — avoid inline styles for static layout.
 
 ---
 

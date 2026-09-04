@@ -1,49 +1,90 @@
 ---
 name: coreui-styling
 description: >-
-  Applies CoreUI + erpclass-dash design system (ds-* classes, layout/shared components)
-  for layouts, pages, forms, and tables. Use when creating or adjusting UI in this project.
+  Applies the layered Angular design system: CoreUI for the application shell,
+  Tailwind CSS for page content, and ds-* plus layout/shared components for
+  established shared patterns. Use when creating or adjusting Angular UI.
 ---
 
-# CoreUI + Design System (erpclass-dash)
+# CoreUI Shell + Tailwind Content Design System
 
-The UI stacks **CoreUI/Bootstrap** (structure, grid, behavior) with a project design system (`ds-*` SCSS + `layout/shared` Angular components).
+The UI uses a layered design system:
+
+- **CoreUI/Bootstrap** provides the application shell, structure, navigation,
+  responsive behavior, and framework-compatible components.
+- **Tailwind CSS** provides page-level composition and visual detail: grids,
+  cards, panels, spacing, typography, color, surfaces, gradients, emphasis,
+  metrics, badges, and states.
+- **`ds-*` classes and `layout/shared` components** provide established,
+  reusable project patterns such as forms, tables, alerts, empty states, and
+  loading states.
+
+## Styling boundaries
+
+Use the following boundaries consistently:
+
+1. Use CoreUI and `@coreui/angular` for the shell: sidebar, header, footer,
+   navigation, shell containers, color mode, and structural layout behavior.
+2. Use Tailwind for new page content when Tailwind is configured in the target
+   project. Prefer it for visual composition that needs richer hierarchy,
+   colors, spacing, highlights, or responsive layouts.
+3. Use `ds-*` and `layout/shared` when an existing shared component or
+   established project pattern covers the requirement.
+4. Do not use Tailwind to reimplement the CoreUI shell.
+5. Do not use Bootstrap, Tailwind, and `ds-*` simultaneously for the same
+   visual property on one element unless the combination is intentional and
+   documented.
 
 ## Authoritative sources (priority order)
 
 1. **CoreUI docs**: https://coreui.io/bootstrap/docs/getting-started/introduction/
-2. **Project design system**: `docs/design_ui.md` (única referência de layout / DS)
+2. **Project tokens and shared styles**:
+   `src/styles/_tokens.scss`, `_ds-components.scss`, `_ds-forms.scss`
+3. **Theme and shell**: `src/styles/_theme.scss`, `src/app/layout/`
+4. **Existing reference screen**: Dashboard de Vendas
+   (`src/app/pages/dashboard/dashboard-sales/`)
+5. **Existing component and page patterns** in the target project
 
-3. **Global SCSS**: `src/styles/_tokens.scss`, `_ds-components.scss`, `_ds-forms.scss`
-4. **Theme/layout**: `src/styles/_theme.scss`, `src/app/layout/`
-5. **Reference screen**: Dashboard de Vendas (`src/app/pages/dashboard/dashboard-sales/`)
+If `docs/design_ui.md` exists in the target project, use it as an additional
+project-specific reference. Do not assume that file exists in every repository.
 
 ## Mandatory rules
 
 - Use **`layout/shared` components** (`PageHeader`, `FilterBar`, `UiCard`, `StatCard`, `StatusBadge`, `EmptyState`, `UiSkeleton`) for new/migrated screens.
-- Use **`ds-*` classes** for forms and tables — do not style inputs one-by-one.
+- Use **`ds-*` classes** for forms and tables when the shared classes exist —
+  do not style repeated controls one-by-one.
 - **CoreUI shell** stays: sidebar escura, `c-header`, `c-container`, `ColorModeService`.
 - **Icons**: Font Awesome (`fas`, `fab`).
-- **Custom CSS** only in `src/styles/custom/_<feature>.scss`, imported via `_custom.scss`.
+- **Custom CSS** only in `src/styles/custom/_<feature>.scss`, imported via
+  `_custom.scss`, when CoreUI, Tailwind, or existing `ds-*` patterns cannot
+  express the requirement cleanly.
 - **No** loose global SCSS under `src/app/` (except truly local component styles that cannot be shared).
 
 ## Page template pattern
 
 ```html
-<div class="container-fluid px-0">
+<div class="space-y-6">
   <app-page-header title="..." subtitle="...">
-    <button pageHeaderActions class="btn btn-primary" type="button">...</button>
+    <button
+      pageHeaderActions
+      class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40"
+      type="button"
+    >
+      ...
+    </button>
   </app-page-header>
 
   <app-filter-bar label="Filtros">
-    <div class="col-md-4">
-      <label class="form-label fw-semibold" for="...">...</label>
-      <input class="form-control ds-form-control" id="..." />
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div>
+        <label class="mb-1 block text-sm font-semibold text-body" for="...">...</label>
+        <input class="form-control ds-form-control" id="..." />
+      </div>
     </div>
   </app-filter-bar>
 
   @if (errorMessage()) {
-    <div class="ds-alert ds-alert--danger mb-4" role="alert">
+    <div class="ds-alert ds-alert--danger" role="alert">
       <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
       <span>{{ errorMessage() }}</span>
     </div>
@@ -82,7 +123,9 @@ The UI stacks **CoreUI/Bootstrap** (structure, grid, behavior) with a project de
 - Legacy classes: `dashboard-kpi-*`, `dashboard-panel`, `dashboard-table-card`
 - `ngx-skeleton-loader` / `ngx-loading` — use `UiSkeletonComponent`
 - `ngx-pagination` — use manual pagination with `ds-panel__footer--pagination`
-- Inventing parallel color/spacing systems outside `--ds-*` tokens
+- Inventing a second design-token system outside the existing project tokens
+- Replacing the CoreUI shell with custom Tailwind markup
+- Mixing utility systems indiscriminately on the same element
 
 ## Workflow checklist
 
@@ -92,6 +135,10 @@ The UI stacks **CoreUI/Bootstrap** (structure, grid, behavior) with a project de
 - [ ] Tables use ds-table inside UiCard / UiDataTable
 - [ ] Error state uses ds-alert
 - [ ] Empty/loading use EmptyState / UiSkeleton
+- [ ] CoreUI is used for the shell and Tailwind for new page-level composition
+- [ ] Tailwind, Bootstrap, and ds-* are not redundantly styling the same property
+- [ ] Visual hierarchy includes clear primary actions, highlights, and content grouping
+- [ ] Hover, focus, loading, error, responsive, and dark-mode states were considered
 - [ ] Custom CSS in src/styles/custom/ if needed
 - [ ] Dark mode checked (body.c-dark-theme)
 ```

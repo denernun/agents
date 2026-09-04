@@ -1639,7 +1639,15 @@ if ($emptySkills.Count -gt 0) {
   throw "Native hub skill folder(s) are empty (0 bytes of content): $($emptySkills -join ', '). Refusing to link empty skills into every project. Restore content first, e.g.: git -C `"$HubPath`" checkout -- $(($emptySkills | ForEach-Object { "skills/$_" }) -join ' ')"
 }
 
-Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $commonSkills -DryRun:$DryRun
+# These skills are standalone vendors and do not live under
+# vendor/addyosmani-agent-skills/skills. Keep them in $commonSkills so they
+# are linked into projects, but do not ask the Addy Osmani mirror to resolve
+# them (which would produce a misleading "Vendor skill missing" warning).
+$standaloneVendorSkills = @('claude-android-ninja', 'unlazy', 'browser-harness')
+$addyosmaniCommonSkills = @($commonSkills | Where-Object {
+  $standaloneVendorSkills -notcontains $_
+})
+Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $addyosmaniCommonSkills -DryRun:$DryRun
 Ensure-VendorMattPocockSkillMirrors -HubPath $HubPath -SkillNames $mattPocockSkills -DryRun:$DryRun
 Ensure-VendorSuperpowersSkillMirrors -HubPath $HubPath -SkillNames $superpowersSkills -DryRun:$DryRun
 if ($allSkillNamesInUse.Contains('claude-android-ninja')) {

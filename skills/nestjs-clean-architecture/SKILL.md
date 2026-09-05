@@ -262,6 +262,8 @@ Checklist, template TypeScript e auditoria de **erpclass-kb** / **erpclass-bot**
 
 ## 3. Fluxo para Criar uma Nova Feature
 
+> ⚠️ **Nenhuma feature está completa sem Swagger.** Mesmo que o pedido do usuário mencione só "cria o controller de X" ou "adiciona a rota Y", o passo 5 abaixo **inclui** `@ApiTags`/`@ApiOperation`/`@ApiResponse`/`@ApiBearerAuth` — não é um extra opcional a acrescentar depois. Antes de considerar a feature pronta, confira o checklist de [swagger.md](swagger.md).
+
 Ordem **de dentro para fora** (domínio → infraestrutura → aplicação → apresentação):
 
 1. **Entidade** (`src/domain/entities/<name>/`)
@@ -300,7 +302,7 @@ Ordem **de dentro para fora** (domínio → infraestrutura → aplicação → a
    - `index.ts`.
    - Registre em `src/controllers/controllers.module.ts`.
 
-6. **Verificação:** rode `npm run lint` e `npm run build`. Erros de circular import geralmente indicam violação do fluxo de camadas (ex: Application importando Repository direto).
+6. **Verificação:** confirme que **todo** método do controller tem `@ApiOperation` + `@ApiResponse` (e `@ApiBearerAuth`/`@ApiSecurity` se autenticado) — `lint`/`build` **não** acusam a ausência disso, é uma checagem manual obrigatória. Depois rode `npm run lint` e `npm run build`. Erros de circular import geralmente indicam violação do fluxo de camadas (ex: Application importando Repository direto).
 
 ---
 

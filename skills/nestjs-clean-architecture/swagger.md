@@ -1,24 +1,41 @@
 ---
 name: swagger-openapi
-description: Padrão obrigatório de Swagger/OpenAPI para APIs NestJS ERPCLASS (kb, bot e demais). Use ao criar ou revisar controllers, DTOs, DocumentBuilder ou nest-cli.json.
+description: Padrão obrigatório de Swagger/OpenAPI para **toda API NestJS** da família ERPCLASS/NFECLASS/MOBICLASS. Use ao criar ou revisar controllers, DTOs, DocumentBuilder ou nest-cli.json.
 ---
 
 # Swagger / OpenAPI — padrão ERPCLASS
 
 **Rota nova já nasce documentada.** Sem OpenAPI a rota não está pronta. Summaries e tags em **português**; identificadores e JSDoc em inglês.
 
-UI: `/swagger` · spec JSON: `/swagger/json` (`jsonDocumentUrl: 'swagger/json'`).
+**Todo projeto NestJS da família deve expor OpenAPI e documentar 100% dos endpoints de produto** (`/api/v1/...`). Health, metrics e raiz ficam fora da spec (`@ApiExcludeController`). Rotas de ops sem contrato de produto não contam como gap.
 
-## Referência viva (kb e bot)
+UI: `/swagger` · spec JSON: `/swagger/json` (`jsonDocumentUrl: 'swagger/json'`). Exceção legada: `erpclass-auth` usa `/docs` + `/docs-json` — não migrar.
+
+## Referência viva
 
 | App | Título | Esquemas no DocumentBuilder | Path |
 |---|---|---|---|
+| `erpclass-dash-api` | ERPClass Dash API | _(rotas públicas; JWT opcional repassado)_ | `/swagger` (dev) |
 | `erpclass-kb` | ERPClass KB API | `apiKey` (`x-api-key`) | `/swagger` |
 | `erpclass-bot` | ERPClass Bot API | `apikey` + `apiKey` (`x-api-key`) | `/swagger` |
+| `erpclass-auth` | ERPClass Auth API | `JWT` Bearer | `/docs` (dev) |
 
 Plugin CLI (`nest-cli.json`): `classValidatorShim`, `introspectComments`, `dtoFileNameSuffix`: `.dto.ts`, `.entity.ts`, `.request.ts`, `.response.ts`. Sem isso o schema sai vazio.
 
 ## Auditoria atual
+
+### erpclass-dash-api
+
+| Escopo | Auth real | Swagger | Notas |
+|---|---|---|---|
+| `POST /api/v1/financeiro/*` (7 rotas) | público | `@ApiTags('Financeiro')` + `@ApiDashboardPost` | Body genérico até DTOs dedicados |
+| `POST /api/v1/vendas/*` (17 rotas) | público | `@ApiTags('Vendas')` + `@ApiDashboardPost` | Idem |
+| `POST /api/v1/receber/*`, `pagar/*` | público | tags Contas a receber/pagar | Idem |
+| `POST /api/v1/vendasExternas/*` | público + JWT opcional | `@ApiHeader authorization` opcional | `VendasExternasRequest` tipado |
+| `POST /api/v1/agent/ask` | público + JWT opcional | `AgentAskRequest` tipado | Idem |
+| `GET /health`, `GET /metrics`, `/` | ops | `@ApiExcludeController` | Intencional |
+
+Helper compartilhado: `src/controllers/shared/swagger/dashboard-swagger.decorators.ts` (`ApiDashboardPost`).
 
 ### erpclass-kb
 

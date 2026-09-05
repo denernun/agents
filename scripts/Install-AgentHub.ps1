@@ -1002,7 +1002,14 @@ function Write-McpConfigs {
       'Claude' {
         # Claude Code project MCP is <repo>\.mcp.json (code.claude.com/docs/en/mcp).
         $path = Join-Path $RepoPath '.mcp.json'
-        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
+        if ($Ides -contains 'Cursor') {
+          # Cursor reads .mcp.json too, causing duplicates with .cursor/mcp.json.
+          # Only remove stale hub servers; don't write new ones (Cursor provides them).
+          $empty = @{}
+          Write-McpJsonMerged -Path $path -HubServers $empty -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
+        } else {
+          Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
+        }
       }
       'Devin' {
         # Devin CLI (v3000.3+) reads .devin\mcp_config.json (docs.devin.ai
@@ -1717,7 +1724,8 @@ $managedMcpServers = Get-ManagedMcpServerNames -Catalog $catalog -Families $fami
 # entries (written by older script versions) from every project's mcp.json
 # even though they're no longer in catalog/projects.json.
 #  - memorix: dead placeholder, superseded by ai-memory (global, not per-project)
-$retiredMcpServers = @('memorix')
+#  - coreui-docs: renamed to coreui (2026-09-05)
+$retiredMcpServers = @('memorix', 'coreui-docs')
 $managedMcpServers = @($managedMcpServers) + @($retiredMcpServers | Where-Object { $managedMcpServers -notcontains $_ })
 $mcpSkipIdes = $null
 if ($catalog.mcp) { $mcpSkipIdes = $catalog.mcp.skipIdes }

@@ -70,7 +70,8 @@
         "review-changes"
       ],
       "mcp": [
-        "playwright"
+        "playwright",
+        "coreui"
       ],
       "agentsTemplate": "angular.md",
       "cursorRule": "stack-pointer-angular.mdc",
@@ -165,7 +166,7 @@
   "ides": [
     "Cursor",
     "Claude",
-    "OpenCode",
+    "OpenCode"
   ],
   "excludeIdes":[
     "VSCode",

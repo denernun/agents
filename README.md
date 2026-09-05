@@ -157,7 +157,7 @@ Definidos em `catalog/projects.json`:
 |---------|----------|------|
 | **Todos** | `*` | `codegraph`, `context7`, `filesystem` |
 | **NestJS** | `*-api`, `*-auth`, `*-sync`, `*-hook`, `*-cob-api` | + `mongodb` (read-only), `openapi` (se Swagger detectado) |
-| **Angular** | `*-admin`, `*-dash`, `*-app`, `*-cob` | + `playwright` |
+| **Angular** | `*-admin`, `*-dash`, `*-app`, `*-cob` | + `playwright`, `coreui` |
 | **Android** | `mobiclass-apk`, `mobiclass-leitor`, `mobiclass-comanda` | só os comuns |
 | **Sites** | `*-www`, `*-ajuda` | + `playwright` |
 | **Delphi** | `*-erp` | só os comuns |
@@ -206,6 +206,12 @@ ou
 ### Teste context7
 
 > "Busque a documentação do NestJS sobre Guards usando o context7"
+
+### Teste CoreUI
+
+> "Busque a documentação do CoreUI sobre cAlert — mostre props e eventos disponíveis"
+
+> "Liste os componentes CoreUI disponíveis para Angular"
 
 ---
 

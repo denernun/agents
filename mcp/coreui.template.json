@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "coreui": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@coreui/docs-mcp", "--framework", "angular"],
+      "type": "stdio"
+    }
+  }
+}

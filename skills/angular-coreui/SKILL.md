@@ -88,53 +88,62 @@ The project is structured under `src/app/` adhering to Clean Architecture princi
 
 ---
 
-## UI & Styling (CoreUI + Tailwind)
+## UI & Styling (CoreUI + Bootstrap 5 + `ds-*`)
 
-The application uses a layered visual system:
+The application uses one layered visual system, shared by every CLASS Angular
+app, defined by the **`coreui-styling`** skill (canonical spec + reference
+SCSS). **Tailwind is not part of it** — it was removed. Do not add it, do not
+use its utility classes.
 
-- **CoreUI/Bootstrap** is the structural foundation for the application shell:
-  sidebar, header, footer, navigation, shell containers, responsive behavior,
-  and color mode.
-- **Tailwind CSS** is allowed and preferred for page content and visual
-  composition: grids, cards, panels, spacing, typography, surfaces, highlights,
-  gradients, badges, metrics, and page-level states.
-- **The project design system (`ds-*`)** is used for existing shared components
-  and established patterns such as forms, tables, alerts, loading, and empty
-  states.
+- **CoreUI (`@coreui/angular` + `@coreui/coreui`)** is the structural
+  foundation for the application shell: sidebar, header, footer, navigation,
+  shell containers, responsive behavior, and color mode.
+- **Bootstrap 5** (grid, utilities, form controls) is the layout and spacing
+  layer for page content.
+- **Tokens `--ds-*`** (`src/styles/_tokens.scss`) are the single source of
+  every color, surface, border, radius, shadow, and font — nothing visual is
+  hardcoded.
+- **`ds-*` classes** (`_ds-components.scss`, `_ds-forms.scss`) and
+  **`layout/shared` components** provide the established patterns: cards,
+  panels, KPI cards, grids, tables, forms, badges, alerts, loading, empty
+  states, modals.
 
-Do not use Tailwind to reimplement or replace the CoreUI shell. Do not create a
-second shell system. For detailed boundaries and page-level styling guidance,
-read `.cursor/skills/coreui-styling/SKILL.md`.
+For the full element-level spec (tokens, sizes, component APIs, `ds-*`
+inventory, dark-mode contract) load the **`coreui-styling`** skill and read its
+bundled `design-system.md`.
 
 ### Authoritative sources
 
-1. **Documentation**: https://coreui.io/bootstrap/docs/getting-started/introduction/
-2. **Compiled CSS**: `src/assets/css/styles.css` (framework SCSS already compiled)
-3. **Template reference**: https://coreui.io/demos/bootstrap/latest/free/?theme=dark — baseline for layouts, pages, and component structure
-4. **Project overrides**: `src/styles/_theme.scss`, `src/styles/_custom.scss`, and existing component `.scss` files
+1. **`coreui-styling` skill** → `design-system.md` (the written spec) and
+   `reference/styles/` (canonical `_tokens.scss` / `_ds-components.scss` /
+   `_ds-forms.scss` / `_theme.scss` — a project's four files must match these)
+2. **CoreUI docs**: https://coreui.io/bootstrap/docs/getting-started/introduction/
+3. **Project overrides**: `src/styles/custom/_<feature>.scss`, and
+   `docs/design_ui.md` (pointer + documented exceptions only)
 
 ### Rules
 
 - Use `@coreui/angular` components for the layout shell (sidebar, header,
   container, footer) — follow `src/app/layout/`.
-- Use CoreUI/Bootstrap classes and utilities for shell structure and
-  framework-compatible behavior.
-- Use Tailwind for new page-level content when the project has Tailwind
-  configured. Prefer it for visual composition that needs richer hierarchy,
-  color, spacing, emphasis, or responsive arrangement.
-- Reuse `ds-*` classes and `layout/shared` components when an established
-  shared component already covers the need.
-- Do not use Tailwind to replace CoreUI shell components or to restyle the
-  entire application shell without an explicit requirement.
-- Do not combine Tailwind, Bootstrap, and `ds-*` classes to control the same
-  visual property on the same element unless there is a documented reason.
-- Before adding custom CSS, search `styles.css`, the project design tokens, and
-  existing page patterns. Custom CSS is a fallback for cases that the approved
-  systems cannot express cleanly.
-- Use Font Awesome (`fas`/`fa`/`fab`) for all icons — navigation, shell, and
-  page content.
-- Custom CSS belongs in component `.scss` or `src/styles/_custom.scss` /
-  `_theme.scss` — avoid inline styles for static layout.
+- Use Bootstrap grid + utilities + `ds-*` for page composition, per the
+  `coreui-styling` spec. Never Tailwind, never a second utility system.
+- Reuse `layout/shared` components (`PageHeader`, `FilterBar`, `UiCard`,
+  `StatCard`, `ChartCard`, `StatusBadge`, `EmptyState`, `UiSkeleton`, …) and
+  `ds-*` classes before writing anything new.
+- All colors, surfaces, borders, radii, shadows and fonts come from `--ds-*`
+  tokens. No hardcoded `#fff` / `#111` / `black` / `white` / `.text-dark` /
+  `.text-white`, no per-component `font-family` or px `font-size` override.
+- Do not combine Bootstrap and `ds-*` to control the same visual property on
+  the same element without a documented reason.
+- Keep `_tokens.scss` / `_ds-components.scss` / `_ds-forms.scss` / `_theme.scss`
+  byte-identical to `coreui-styling/reference/styles/`; change them there, then
+  sync — never fork the palette per project.
+- Use Font Awesome (`fas` / `fab`) for all icons — navigation, shell, and page
+  content. No Lucide / Tabler.
+- Charts: ApexCharts via the shared wrapper (see `design-system.md` §22).
+- Custom CSS belongs in `src/styles/custom/_<feature>.scss` (via `_custom.scss`)
+  or `_theme.scss` — never loose global SCSS under `src/app/`, avoid inline
+  styles for static layout.
 
 ---
 

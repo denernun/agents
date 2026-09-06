@@ -24,10 +24,17 @@
 | `nestjs-clean-architecture` | 21 | NestJS |
 | `delphi-erpclass` | 16 | Delphi |
 | `angular-coreui` | 10 | Angular |
-| `coreui-styling` | 6 | Angular |
+| `coreui-styling` | 14 + `design-system.md` 52 | Angular |
 | `claude-android-ninja` | vendor | Android (junction → `vendor/claude-android-ninja`) |
 | `codegraph` | 2 | nestjs/angular/android/minimal |
 | `debug-issue` / `explore-codebase` / `refactor-safely` / `review-changes` | ~1 | processo |
+
+> `coreui-styling/design-system.md` é a especificação escrita completa do design
+> system (as 51 seções, antes garfadas em `docs/design_ui.md` de cada projeto).
+> É **arquivo de referência**, aberto sob demanda pelo agente a partir do
+> `SKILL.md` — não entra no contexto quando a skill só dispara. Fonte única:
+> editar aqui no hub; chega a todos os projetos pelo junction da pasta da skill.
+> Projetos **não** devem manter cópia própria nem apontar para `erpclass-dash`.
 
 ## Fonte canônica
 

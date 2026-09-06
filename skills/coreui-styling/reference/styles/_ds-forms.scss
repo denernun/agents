@@ -1,0 +1,319 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Design System — Form controls (use these classes, do not style one-by-one)
+//
+// .ds-form-control   → inputs, textareas (Bootstrap form-control + theme)
+// .ds-select         → ng-select wrapper (container + tags + uppercase)
+// .ds-select-panel   → ng-select panelClass (dropdown list)
+// .ds-search-field   → header/search bar with icon + shortcut
+// .ds-header-account → header company selector
+// .ds-kbd            → keyboard shortcut badge (Ctrl+K, etc.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Text inputs ─────────────────────────────────────────────────────────────
+$ds-control-font-size: 1rem;
+$ds-control-line-height: 1.5;
+$ds-control-padding-y: 0.375rem;
+$ds-control-height: calc(#{$ds-control-font-size} * #{$ds-control-line-height} + #{$ds-control-padding-y} * 2 + 2px);
+$ds-select-font-size: 0.875rem;
+
+.ds-form-control.form-control,
+.ds-form-control.form-select {
+  background-color: var(--ds-input-bg);
+  border-color: var(--ds-border);
+  color: var(--ds-input-text);
+  border-radius: var(--ds-radius-input);
+  font-size: $ds-control-font-size;
+
+  &::placeholder {
+    color: var(--ds-input-placeholder);
+    opacity: 1;
+  }
+
+  &:focus {
+    background-color: var(--ds-input-bg);
+    border-color: var(--ds-primary);
+    color: var(--ds-input-text);
+    box-shadow: 0 0 0 0.2rem rgb(99 102 241 / 0.2);
+  }
+
+  &:disabled {
+    background-color: var(--ds-surface-muted);
+    color: var(--ds-text-muted);
+    opacity: 0.85;
+  }
+}
+
+// ── ng-select combo ─────────────────────────────────────────────────────────
+.ds-select.ng-select {
+  width: 100%;
+  font-size: $ds-select-font-size;
+
+  .ng-select-container {
+    background-color: var(--ds-input-bg) !important;
+    border-color: var(--ds-border) !important;
+    color: var(--ds-input-text) !important;
+    border-radius: var(--ds-radius-input) !important;
+    min-height: $ds-control-height;
+    height: $ds-control-height;
+  }
+
+  .ng-value-container {
+    padding-top: 0;
+    padding-bottom: 0;
+    color: var(--ds-input-text) !important;
+    align-items: center;
+  }
+
+  .ng-placeholder {
+    color: var(--ds-input-placeholder) !important;
+    text-transform: uppercase;
+    font-size: $ds-select-font-size;
+    letter-spacing: 0.02em;
+    line-height: $ds-control-line-height;
+  }
+
+  .ng-input > input {
+    color: var(--ds-input-text) !important;
+    text-transform: uppercase;
+    font-size: $ds-select-font-size;
+    line-height: $ds-control-line-height;
+  }
+
+  &.ng-select-multiple .ng-select-container .ng-value-container .ng-value {
+    max-width: calc(100% - 2.5rem);
+  }
+
+  // Override ng-select default.theme.css (color:#333 on .ng-value)
+  &.ng-select-multiple .ng-select-container .ng-value-container .ng-value,
+  .ng-value {
+    color: var(--ds-input-text) !important;
+    background-color: var(--ds-tag-bg) !important;
+    border: 1px solid var(--ds-tag-border) !important;
+    border-radius: 0.25rem !important;
+    margin-top: 0;
+    margin-bottom: 0;
+    line-height: 1.25;
+    padding: 0.125rem 0.375rem;
+
+    .ng-value-label,
+    .ds-select__tag-label,
+    span {
+      color: var(--ds-input-text) !important;
+      text-transform: uppercase;
+      font-size: $ds-select-font-size;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      line-height: 1.25;
+    }
+
+    .ds-select__tag-label {
+      max-width: calc(100% - 0.5rem);
+    }
+
+    .ng-value-label {
+      padding: 1px 2px;
+    }
+
+    .ng-value-icon {
+      border-color: var(--ds-tag-border) !important;
+      color: var(--ds-input-placeholder) !important;
+
+      &:hover {
+        background-color: var(--ds-surface-muted) !important;
+        color: var(--ds-input-text) !important;
+      }
+    }
+  }
+
+  .ng-arrow-wrapper .ng-arrow {
+    border-color: var(--ds-input-placeholder) transparent transparent !important;
+  }
+
+  .ng-clear-wrapper {
+    color: var(--ds-input-placeholder) !important;
+
+    &:hover .ng-clear {
+      color: var(--ds-input-text) !important;
+    }
+  }
+
+  &.ng-select-focused:not(.ng-select-opened) .ng-select-container {
+    border-color: var(--ds-primary) !important;
+    box-shadow: 0 0 0 0.2rem rgb(99 102 241 / 0.2) !important;
+  }
+
+  &.ng-select-opened > .ng-select-container {
+    background-color: var(--ds-input-bg) !important;
+    border-color: var(--ds-border) !important;
+  }
+
+  &.ng-select-disabled .ng-select-container {
+    background-color: var(--ds-surface-muted) !important;
+    opacity: 0.85;
+  }
+}
+
+// Dropdown panel (use panelClass="ds-select-panel" + appendTo="body")
+.ds-select-panel.ng-dropdown-panel {
+  z-index: 2100 !important;
+  background-color: var(--ds-surface) !important;
+  border: 1px solid var(--ds-border) !important;
+  box-shadow: var(--ds-shadow-card-hover) !important;
+  border-radius: var(--ds-radius-input) !important;
+
+  .ng-dropdown-panel-items {
+    .ng-option {
+      color: var(--ds-input-text) !important;
+      background-color: var(--ds-surface) !important;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      padding: 0.5rem 0.75rem;
+
+      .ng-option-label {
+        color: var(--ds-input-text) !important;
+      }
+
+      &.ng-option-marked,
+      &:hover {
+        background-color: var(--ds-surface-muted) !important;
+        color: var(--ds-input-text) !important;
+      }
+
+      &.ng-option-selected,
+      &.ng-option-selected.ng-option-marked {
+        background-color: var(--ds-primary-soft) !important;
+        color: var(--ds-input-text) !important;
+
+        .ng-option-label {
+          color: var(--ds-input-text) !important;
+        }
+      }
+
+      &.ng-option-disabled {
+        color: var(--ds-text-muted) !important;
+        opacity: 0.6;
+      }
+    }
+  }
+
+  .ng-dropdown-header {
+    border-bottom-color: var(--ds-border) !important;
+    color: var(--ds-text-muted);
+    text-transform: uppercase;
+    font-size: 0.6875rem;
+    letter-spacing: 0.05em;
+  }
+}
+
+// ── Header company selector ─────────────────────────────────────────────────
+.ds-header-account {
+  position: relative;
+  width: 100%;
+
+  &__icon {
+    position: absolute;
+    left: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    color: var(--ds-text-muted);
+    pointer-events: none;
+    font-size: 0.875rem;
+  }
+
+  .ds-select.ng-select .ng-select-container {
+    padding-left: 1.75rem;
+  }
+}
+
+// ── Search field (header) ───────────────────────────────────────────────────
+.ds-search-field {
+  position: relative;
+  width: 100%;
+
+  &__icon {
+    position: absolute;
+    left: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    color: var(--ds-text-muted);
+    pointer-events: none;
+    font-size: 0.875rem;
+  }
+
+  &__input.form-control {
+    padding-left: 2.5rem;
+    padding-right: 4.75rem;
+    background-color: var(--ds-input-bg);
+    border-color: var(--ds-border);
+    color: var(--ds-input-text);
+    border-radius: var(--ds-radius-button);
+
+    &::placeholder {
+      color: var(--ds-input-placeholder);
+    }
+
+    &:focus {
+      background-color: var(--ds-input-bg);
+      border-color: var(--ds-primary);
+      color: var(--ds-input-text);
+      box-shadow: 0 0 0 0.2rem rgb(99 102 241 / 0.2);
+    }
+  }
+
+  &__kbd {
+    position: absolute;
+    right: 0.625rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }
+}
+
+// ── Input group (search prefix icon) ────────────────────────────────────────
+.ds-input-group {
+  .input-group-text {
+    background-color: var(--ds-input-bg);
+    border-color: var(--ds-border);
+    color: var(--ds-text-muted);
+  }
+
+  .form-control.ds-form-control {
+    border-left: 0;
+  }
+}
+
+// ── Keyboard shortcut badge ─────────────────────────────────────────────────
+.ds-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  padding: 0.2rem 0.45rem;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: var(--ds-kbd-text);
+  background-color: var(--ds-kbd-bg);
+  border: 1px solid var(--ds-kbd-border);
+  border-radius: 0.25rem;
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.08);
+  white-space: nowrap;
+}
+
+// ── Panel footer helper (pagination bar) ────────────────────────────────────
+.ds-panel__footer--pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--ds-border);
+  background: var(--ds-surface-header, var(--ds-surface-muted));
+}

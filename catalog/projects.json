@@ -4,7 +4,7 @@
     "NFECLASS",
     "MOBICLASS",
     "SHOPCLASS",
-	  "CRMCLASS"
+	"CRMCLASS"
   ],
   "mcp": {
     "common": [
@@ -29,10 +29,12 @@
     "nestjs": {
       "match": [
         "*-api",
+        "*-app",
         "*-auth",
         "*-sync",
         "*-hook",
-        "*-cob-api"
+        "*-bot",
+        "*-kb"
       ],
       "skills": [
         "nestjs-clean-architecture",
@@ -57,7 +59,11 @@
         "*-admin",
         "*-dash",
         "*-app",
-        "*-cob"
+        "*-cob",
+        "*-connect",
+        "*-cota",
+        "*-mkt",
+        "*-suporte"
       ],
       "skills": [
         "angular-coreui",
@@ -166,14 +172,14 @@
   "ides": [
     "Cursor",
     "Claude",
-    "OpenCode"
+    "OpenCode",
+    "Antigravity"
   ],
   "excludeIdes":[
     "VSCode",
     "Codex",
     "Devin",
-    "Kiro",
-    "Antigravity"
+    "Kiro"
   ],
   "excludeProjectNames": [
     "node_modules",

@@ -205,7 +205,7 @@ O MCP `openapi` (`@ivotoby/openapi-mcp-server`, modo `dynamic`) lê a spec em `/
 
 **Se o projeto já tem Swagger** (ex: `erpclass-auth` em `/docs`): siga o path, o nome do Bearer e o idioma das tags que já existem. Não migre path.
 
-**Se ainda não tem**, instale `@nestjs/swagger` (e `swagger-ui-express` se o Nest do repo ainda pedir) e configure no `main.ts` **antes** de `listen`:
+**Se ainda não tem**, instale `@nestjs/swagger` (e `swagger-ui-express` se o Nest do repo ainda pedir) e configure no `main.ts` **antes** de `listen`, **dentro do guard `if (configService.getConfig.env === 'development')`** (a spec nunca sobe em produção — ver §2.10 passo 9):
 
 - Título `{Produto} {App} API` (ex: `ERPClass Cob API`); versão lida de `package.json`.
 - UI em `/swagger`; spec JSON em `/swagger/json` (`jsonDocumentUrl: 'swagger/json'`).
@@ -257,6 +257,51 @@ export class TitulosController {
 Ao pedir para “adicionar Swagger” num repo: só setup + decorators + plugin CLI. Ao criar endpoint: os decorators vão no mesmo PR da rota. Confirme UI em `/swagger` (ou o path do projeto) e JSON válido no endpoint da spec.
 
 Checklist, template TypeScript e auditoria de **erpclass-kb** / **erpclass-bot**: [swagger.md](swagger.md). Auth (JWT, `x-api-key`, `apikey`): [autenticacao.md](autenticacao.md). Métricas: [metricas.md](metricas.md) e `D:\AGENTS\docs\metricas\`. Connect+Bot: [bot-connect-setup.md](bot-connect-setup.md) (operacional completo em `erpclass-bot/docs/bot-connect-setup.md`).
+
+### 2.10 Bootstrap — `src/main.ts` (estrutura padrão da família)
+
+**Referência canônica: `erpclass-dash-api/src/main.ts`** (o mais completo, com RMQ). Para um serviço **sem fila**, o template mais próximo é `erpclass-kb/src/main.ts`. `erpclass-api`, `erpclass-auth`, `erpclass-bot`, `erpclass-cob-api`, `erpclass-cota-api`, `erpclass-hook`, `erpclass-sync`, `nfeclass-api`, `mobiclass-api`, `crmclass-api` e `erpclass-connect-api` seguem todos o mesmo conceito. Todo serviço NestJS novo **deve** partir dessa estrutura.
+
+Ordem obrigatória dentro de `main.ts`:
+
+1. **OpenTelemetry antes de qualquer import do Nest** (apenas fora de `development`):
+   ```ts
+   if (!isDevelopmentEnvironment()) {
+     await startPyroscope();
+     await startTracing();
+   }
+   ```
+   `startPyroscope`/`startTracing` vêm de `src/metrics/` (`metrics.pyroscope.ts`, `metrics.tracing.ts`), lendo `metrics.pyroscope` / `metrics.tracing` do config (no-op quando `serverAddress`/`otlpUrl` vazios). `instrumentations` = `HttpInstrumentation` + `NestInstrumentation` + `PgInstrumentation` (+ `MongoDBInstrumentation`/`RedisInstrumentation` só onde o serviço usa Mongo/Redis).
+2. **Import lazy de `NestFactory` e `AppModule` dentro de `bootstrap()`**: `const { NestFactory } = await import('@nestjs/core'); const { AppModule } = await import('./app.module');` — para o SDK do OTel instrumentar os módulos no load. **Nunca** importe `AppModule`/`NestFactory` no topo do arquivo.
+3. **SSL de desenvolvimento** via `getSslConfig()` — lê `certs/localhost.key|crt` + `rootCA.pem` em dev, `{}` em prod.
+4. **`NestFactory.create<NestExpressApplication>(AppModule, { ...sslConfig })`** — **proibido `cors: true`**: ele registra um handler de CORS permissivo que responde o preflight (OPTIONS) **antes** e ganha do `enableCors` da allowlist, furando a política. Passe só `{ ...sslConfig }` (mais `rawBody: true` onde houver verificação de assinatura de webhook, como `cota-api`). `bufferLogs: true` é opcional (só `erpclass-auth` usa, para não perder log antes do `useLogger`).
+5. **Logger Winston** via `createLogger(configService)` + `app.useLogger(...)`:
+   - `development`: console colorido + arquivo `file.log`.
+   - `production`: **um único transporte JSON** no stdout (Loki via Promtail).
+   - `flattenJsonMessage` (achata `message` JSON do `LoggerService` para indexação no Loki) é obrigatório. `injectOtelContext` (injeta `trace_id`/`span_id` para correlação Loki↔Tempo) está nos serviços maiores (`dash`, `api`, `auth`, `sync`, `cob`, `cota`); `kb`/`bot`/`connect` omitem — adicione se o serviço passar a ter volume de trace relevante.
+6. **`configureApp(app, configService)`** — Helmet (CSP + HSTS), `enableCors` com `ALLOWED_ORIGINS` (regex das famílias `*.{erpclass,nfeclass,mobiclass,shopclass}.com.br`) + `localhost` só em dev, `compression()`, limites de body via `process.env.BODY_LIMIT` com default explícito (o menor default seguro por serviço; `dash`/`cob`/`cota` usam `'20mb'` por payloads de sync, `kb`/`connect` usam `'1mb'`).
+7. **`configurePipes(app)`** — `new ParamsPipe()` e depois `ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: false, transformOptions: { enableImplicitConversion: true } })` (ou `AppValidationPipe` onde já existir).
+8. **`app.useLogger(createLogger(configService))`**.
+9. **Swagger só em `development` — regra dura**:
+   ```ts
+   if (configService.getConfig.env === 'development') {
+     configureSwagger(app);
+     Logger.log('Swagger docs available at /<path> (OpenAPI JSON: /<path>-json)', 'Bootstrap');
+   }
+   ```
+   A spec OpenAPI **nunca** é exposta em produção (§2.9). Nenhuma exceção na família.
+10. **Microserviço híbrido** (quando o serviço consome fila): `connect<Feature>Rmq(app, configService)` + `await app.startAllMicroservices()` **antes** do `listen`. Fila quorum, `noAck: false`, `prefetchCount: 5`.
+11. **`app.set('trust proxy', 1)`** (atrás do Nginx).
+12. **`await app.listen(configService.getConfig.api.port)`** + `logStartupInfo(configService, url)` + banner `******` com `<APP> API started on port: <port>`.
+13. **`void bootstrap().catch(handleBootstrapError)`** — `handleBootstrapError` loga `error.stack ?? error.message`.
+
+**JSDoc em toda função de `main.ts`** explicando o porquê (SSL só em dev, CORS explícito, body limit, formato do logger). **`PACKAGE_VERSION`** lido de `package.json` no topo, ou `readPackageVersion()` com fallback `__dirname/../package.json` → `process.cwd()/package.json` para deploy PM2.
+
+**Prettier**: serviços com RMQ pesado (`dash`, `api`, `cob`, `sync`) usam `.prettierrc` (`printWidth: 160`); os demais (`kb`, `bot`, `auth`, `connect`) usam `prettier.config.js` (`printWidth: 120`). Ambos `singleQuote: true`. Nunca deixe um repo sem config de Prettier (o default são aspas duplas).
+
+> **Testes de `main.ts`**: a família **não** testa o bootstrap — `src/main.ts` é excluído do coverage em todo `vitest.config.mts` e não há spec. `main.ts` é composition root: a garantia de não-regressão é `npm run build` + subir a app. Não crie `main.spec.ts`.
+
+> Estado: `erpclass-connect-api` foi alinhado ao padrão (OTel + Winston + CORS explícito + Swagger dev-gate + Prettier compartilhado). `cors: true` foi removido de `api`/`bot`/`cob-api`/`cota-api`/`hook`/`kb`/`crmclass-api`; Swagger passou a dev-gate em `bot`/`cob-api`/`cota-api`/`kb`/`crmclass-api`; `auth` passou a import lazy.
 
 ---
 
@@ -441,5 +486,6 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 - [ ] Cache invalidado explicitamente após writes.
 - [ ] Exceções de negócio como classes derivadas de `BaseException`, mensagens em português.
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).
+- [ ] `src/main.ts` segue a estrutura padrão da família (§2.10): OTel antes dos imports do Nest, import lazy de `NestFactory`/`AppModule`, logger Winston + `app.useLogger`, CORS explícito (sem `cors: true`), Swagger só em `development`, `trust proxy`. Referência: `erpclass-dash-api/src/main.ts`.
 - [ ] Swagger: checklist em [swagger.md](swagger.md) — `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer/`apiKey` no DocumentBuilder. Plugin CLI com `dtoFileNameSuffix` completo. Sem `@ApiProperty` nos DTOs (exceto gaps do plugin).
 - [ ] `npm run lint` e `npm run build` sem erros.

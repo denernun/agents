@@ -1,0 +1,150 @@
+// Design tokens — aligned with CoreUI theme variables
+
+:root {
+  --ds-background: var(--cui-tertiary-bg, #f0f4f8);
+  --ds-surface: var(--cui-body-bg, #ffffff);
+  --ds-surface-muted: var(--cui-tertiary-bg, #f1f5f9);
+  --ds-surface-header: var(--cui-secondary-bg, #f8fafc);
+  --ds-border: var(--cui-border-color, #e2e8f0);
+  --ds-text: var(--cui-body-color, #1e293b);
+  --ds-text-muted: var(--cui-secondary-color, #64748b);
+  --ds-primary: #6366f1;
+  --ds-primary-hover: #4f46e5;
+  --ds-primary-soft: rgb(99 102 241 / 0.12);
+  --ds-success: #10b981;
+  --ds-info: #3b82f6;
+  --ds-warning: #f59e0b;
+  --ds-danger: #ef4444;
+  --ds-radius-card: 0.75rem;
+  --ds-radius-button: 0.5rem;
+  --ds-radius-input: 0.375rem;
+  --ds-shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.08);
+  --ds-shadow-card-hover: 0 4px 12px 0 rgb(15 23 42 / 0.1);
+  --ds-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --ds-input-bg: #eef2f7;
+  --ds-input-text: #1e293b;
+  --ds-input-placeholder: #64748b;
+  --ds-field-text: #1e293b;
+  --ds-kbd-bg: #dbe3ee;
+  --ds-kbd-text: #334155;
+  --ds-kbd-border: #c5d0de;
+  --ds-tag-bg: #e2e8f4;
+  --ds-tag-text: #1e293b;
+  --ds-tag-border: #c8d3e0;
+
+  // ── Color tints (soft backgrounds for cards/badges) ───────────────────────
+  --ds-primary-50: #eef2ff;
+  --ds-primary-100: #e0e7ff;
+  --ds-primary-200: #c7d2fe;
+  --ds-success-50: #ecfdf5;
+  --ds-success-100: #d1fae5;
+  --ds-success-200: #a7f3d0;
+  --ds-info-50: #eff6ff;
+  --ds-info-100: #dbeafe;
+  --ds-info-200: #bfdbfe;
+  --ds-warning-50: #fffbeb;
+  --ds-warning-100: #fef3c7;
+  --ds-warning-200: #fde68a;
+  --ds-danger-50: #fef2f2;
+  --ds-danger-100: #fee2e2;
+  --ds-danger-200: #fecaca;
+
+  // ── Gradients (card backgrounds) ─────────────────────────────────────────
+  --ds-gradient-primary: linear-gradient(135deg, #eef2ff 0%, #ffffff 100%);
+  --ds-gradient-success: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
+  --ds-gradient-info: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+  --ds-gradient-warning: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+  --ds-gradient-danger: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+
+  // ── Gradient header (for chart/panel headers) ────────────────────────────
+  --ds-gradient-header-primary: linear-gradient(135deg, rgb(99 102 241 / 0.08) 0%, rgb(99 102 241 / 0.02) 100%);
+  --ds-gradient-header-success: linear-gradient(135deg, rgb(16 185 129 / 0.08) 0%, rgb(16 185 129 / 0.02) 100%);
+  --ds-gradient-header-info: linear-gradient(135deg, rgb(59 130 246 / 0.08) 0%, rgb(59 130 246 / 0.02) 100%);
+  --ds-gradient-header-warning: linear-gradient(135deg, rgb(245 158 11 / 0.08) 0%, rgb(245 158 11 / 0.02) 100%);
+  --ds-gradient-header-danger: linear-gradient(135deg, rgb(239 68 68 / 0.08) 0%, rgb(239 68 68 / 0.02) 100%);
+
+  // ── Ranking colors ───────────────────────────────────────────────────────
+  --ds-rank-gold: #f59e0b;
+  --ds-rank-gold-bg: #fef3c7;
+  --ds-rank-silver: #6b7280;
+  --ds-rank-silver-bg: #f3f4f6;
+  --ds-rank-bronze: #d97706;
+  --ds-rank-bronze-bg: #fde68a;
+
+  // ── Enhanced shadows ─────────────────────────────────────────────────────
+  --ds-shadow-card-colored: 0 4px 14px -2px rgb(99 102 241 / 0.12);
+  --ds-shadow-success: 0 4px 14px -2px rgb(16 185 129 / 0.15);
+  --ds-shadow-info: 0 4px 14px -2px rgb(59 130 246 / 0.15);
+  --ds-shadow-warning: 0 4px 14px -2px rgb(245 158 11 / 0.15);
+  --ds-shadow-danger: 0 4px 14px -2px rgb(239 68 68 / 0.15);
+}
+
+html[data-coreui-theme='dark'],
+body.c-dark-theme {
+  --ds-background: var(--cui-tertiary-bg, #1a1d24);
+  --ds-surface: var(--cui-body-bg, #212631);
+  --ds-surface-muted: var(--cui-tertiary-bg, #2a303c);
+  --ds-surface-header: var(--cui-secondary-bg, #2c313a);
+  --ds-border: var(--cui-border-color, #3c4b64);
+  --ds-text: var(--cui-body-color, #e2e8f0);
+  --ds-text-muted: var(--cui-secondary-color, #9da5b1);
+  --ds-primary-soft: rgb(99 102 241 / 0.2);
+  --ds-shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.35);
+  --ds-shadow-card-hover: 0 4px 16px 0 rgb(0 0 0 / 0.4);
+  --ds-input-bg: #2c313a;
+  --ds-input-text: #e2e8f0;
+  --ds-input-placeholder: #9da5b1;
+  --ds-field-text: #e2e8f0;
+  --ds-kbd-bg: #3c4b64;
+  --ds-kbd-text: #e2e8f0;
+  --ds-kbd-border: #4f5d73;
+  --ds-tag-bg: #3c4b64;
+  --ds-tag-text: #e2e8f0;
+  --ds-tag-border: #4f5d73;
+
+  // ── Color tints (dark mode — richer, lower opacity) ───────────────────────
+  --ds-primary-50: rgb(99 102 241 / 0.08);
+  --ds-primary-100: rgb(99 102 241 / 0.14);
+  --ds-primary-200: rgb(99 102 241 / 0.22);
+  --ds-success-50: rgb(16 185 129 / 0.08);
+  --ds-success-100: rgb(16 185 129 / 0.14);
+  --ds-success-200: rgb(16 185 129 / 0.22);
+  --ds-info-50: rgb(59 130 246 / 0.08);
+  --ds-info-100: rgb(59 130 246 / 0.14);
+  --ds-info-200: rgb(59 130 246 / 0.22);
+  --ds-warning-50: rgb(245 158 11 / 0.08);
+  --ds-warning-100: rgb(245 158 11 / 0.14);
+  --ds-warning-200: rgb(245 158 11 / 0.22);
+  --ds-danger-50: rgb(239 68 68 / 0.08);
+  --ds-danger-100: rgb(239 68 68 / 0.14);
+  --ds-danger-200: rgb(239 68 68 / 0.22);
+
+  // ── Gradients (dark mode) ─────────────────────────────────────────────────
+  --ds-gradient-primary: linear-gradient(135deg, rgb(99 102 241 / 0.1) 0%, var(--ds-surface) 100%);
+  --ds-gradient-success: linear-gradient(135deg, rgb(16 185 129 / 0.1) 0%, var(--ds-surface) 100%);
+  --ds-gradient-info: linear-gradient(135deg, rgb(59 130 246 / 0.1) 0%, var(--ds-surface) 100%);
+  --ds-gradient-warning: linear-gradient(135deg, rgb(245 158 11 / 0.1) 0%, var(--ds-surface) 100%);
+  --ds-gradient-danger: linear-gradient(135deg, rgb(239 68 68 / 0.1) 0%, var(--ds-surface) 100%);
+
+  // ── Gradient header (dark mode) ──────────────────────────────────────────
+  --ds-gradient-header-primary: linear-gradient(135deg, rgb(99 102 241 / 0.12) 0%, rgb(99 102 241 / 0.03) 100%);
+  --ds-gradient-header-success: linear-gradient(135deg, rgb(16 185 129 / 0.12) 0%, rgb(16 185 129 / 0.03) 100%);
+  --ds-gradient-header-info: linear-gradient(135deg, rgb(59 130 246 / 0.12) 0%, rgb(59 130 246 / 0.03) 100%);
+  --ds-gradient-header-warning: linear-gradient(135deg, rgb(245 158 11 / 0.12) 0%, rgb(245 158 11 / 0.03) 100%);
+  --ds-gradient-header-danger: linear-gradient(135deg, rgb(239 68 68 / 0.12) 0%, rgb(239 68 68 / 0.03) 100%);
+
+  // ── Ranking colors (dark mode) ───────────────────────────────────────────
+  --ds-rank-gold: #fbbf24;
+  --ds-rank-gold-bg: rgb(251 191 36 / 0.15);
+  --ds-rank-silver: #9ca3af;
+  --ds-rank-silver-bg: rgb(156 163 175 / 0.12);
+  --ds-rank-bronze: #f59e0b;
+  --ds-rank-bronze-bg: rgb(245 158 11 / 0.12);
+
+  // ── Enhanced shadows (dark mode) ─────────────────────────────────────────
+  --ds-shadow-card-colored: 0 4px 14px -2px rgb(99 102 241 / 0.2);
+  --ds-shadow-success: 0 4px 14px -2px rgb(16 185 129 / 0.2);
+  --ds-shadow-info: 0 4px 14px -2px rgb(59 130 246 / 0.2);
+  --ds-shadow-warning: 0 4px 14px -2px rgb(245 158 11 / 0.2);
+  --ds-shadow-danger: 0 4px 14px -2px rgb(239 68 68 / 0.2);
+}

@@ -62,6 +62,7 @@ param(
   [switch]$ForceAgents,
   [switch]$MigrateLegacyPaths,
   [switch]$SkipCodegraphInit,
+  [switch]$SkipMattPocockSetup,
   [switch]$SkipAiMemory,
   [switch]$WriteAiMemoryToml
 )
@@ -174,7 +175,9 @@ function Get-DetectedIdes {
   if (Test-Path (Join-Path $userHome '.kiro')) { [void]$found.Add('Kiro') }
   if ((Test-Path (Join-Path $userHome '.antigravity')) -or
       (Test-Path (Join-Path $env:APPDATA 'Antigravity')) -or
-      (Test-Path (Join-Path $userHome '.gemini'))) {
+      (Test-Path (Join-Path $userHome '.gemini')) -or
+      (Get-Command agy -ErrorAction SilentlyContinue) -or
+      (Get-Command antigravity -ErrorAction SilentlyContinue)) {
     [void]$found.Add('Antigravity')
   }
   if ($IncludeQoder -and (Test-Path (Join-Path $userHome '.qoder'))) { [void]$found.Add('Qoder') }
@@ -556,6 +559,140 @@ function Write-AgentsFile {
   }
   Set-Content -Path $dest -Value $content -Encoding UTF8
   Write-Host "  wrote AGENTS.md"
+}
+
+function Get-RepoOriginUrl {
+  param([string]$RepoPath)
+  # Some managed folders (for example static help sites) are not Git clones.
+  # Avoid invoking git there: with ErrorActionPreference=Stop its stderr would
+  # abort the whole installer before the local-tracker fallback can run.
+  if (-not (Test-Path -LiteralPath (Join-Path $RepoPath '.git'))) { return '' }
+  $result = @(git -C $RepoPath remote get-url origin 2>$null)
+  if ($LASTEXITCODE -ne 0 -or $result.Count -eq 0) { return '' }
+  return [string]$result[0]
+}
+
+function Set-FileFromTemplateIfMissing {
+  param(
+    [string]$Destination,
+    [string]$Template,
+    [switch]$DryRun
+  )
+  if (Test-Path -LiteralPath $Destination) { return $false }
+  if (-not (Test-Path -LiteralPath $Template)) {
+    throw "Matt Pocock setup template not found: $Template"
+  }
+  if ($DryRun) {
+    Write-Host "  [dry] setup Matt Pocock: write $Destination"
+    return $true
+  }
+  Set-Content -LiteralPath $Destination -Value (Get-Content -LiteralPath $Template -Raw -Encoding UTF8) -Encoding UTF8
+  return $true
+}
+
+function Update-MattPocockAgentSkillsBlock {
+  param([string]$RepoPath, [switch]$TriageInstalled, [switch]$DryRun)
+  $agentsPath = Join-Path $RepoPath 'AGENTS.md'
+  if (-not (Test-Path -LiteralPath $agentsPath)) {
+    Write-Warning "  Matt Pocock setup: AGENTS.md is missing in $RepoPath; docs were configured but the pointer block was not written. Re-run with -WriteAgents."
+    return $false
+  }
+
+  $triageSection = ''
+  if ($TriageInstalled) {
+    $triageSection = @"
+
+### Triage labels
+
+Uses the default Matt Pocock label vocabulary. See `docs/agents/triage-labels.md`.
+"@
+  }
+  $block = @"
+## Agent skills
+
+### Issue tracker
+
+Issues and specs use the configured tracker. See `docs/agents/issue-tracker.md`.
+$triageSection
+
+### Domain docs
+
+Single-context layout at the repository root. See `docs/agents/domain.md`.
+"@.TrimEnd()
+
+  $raw = Get-Content -LiteralPath $agentsPath -Raw -Encoding UTF8
+  $pattern = '(?ms)^## Agent skills\s*\r?\n.*?(?=^##\s|\z)'
+  if ([regex]::IsMatch($raw, $pattern)) {
+    $updated = [regex]::Replace($raw, $pattern, $block + "`r`n`r`n", 1)
+  } else {
+    $updated = $raw.TrimEnd() + "`r`n`r`n" + $block + "`r`n"
+  }
+  if ($updated -eq $raw) { return $false }
+  if ($DryRun) {
+    Write-Host '  [dry] setup Matt Pocock: update AGENTS.md Agent skills block'
+    return $true
+  }
+  Set-Content -LiteralPath $agentsPath -Value $updated -Encoding UTF8
+  return $true
+}
+
+function Ensure-MattPocockRepoSetup {
+  # Non-interactive, idempotent equivalent of the local part of
+  # /setup-matt-pocock-skills. Existing files are never overwritten.
+  # GitHub labels themselves remain an explicit remote operation.
+  param(
+    [string]$RepoPath,
+    [string]$HubPath,
+    [switch]$TriageInstalled,
+    [switch]$DryRun
+  )
+  $skillRoot = Get-MattPocockSkillPath -VendorRoot (Join-Path $HubPath 'vendor\mattpocock-skills') -SkillName 'setup-matt-pocock-skills'
+  if (-not $skillRoot) {
+    Write-Warning '  Matt Pocock setup skill is unavailable; skipping repository setup.'
+    return
+  }
+
+  $docsAgents = Join-Path $RepoPath 'docs\agents'
+  $adrDir = Join-Path $RepoPath 'docs\adr'
+  $origin = Get-RepoOriginUrl -RepoPath $RepoPath
+  $issueTemplate = if ($origin -match 'github\.com[:/]') { 'issue-tracker-github.md' } else { 'issue-tracker-local.md' }
+  $changed = $false
+
+  foreach ($directory in @($docsAgents, $adrDir)) {
+    if (Test-Path -LiteralPath $directory) { continue }
+    if ($DryRun) {
+      Write-Host "  [dry] setup Matt Pocock: create $directory"
+    } else {
+      New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+    $changed = $true
+  }
+
+  if (Set-FileFromTemplateIfMissing -Destination (Join-Path $docsAgents 'issue-tracker.md') -Template (Join-Path $skillRoot $issueTemplate) -DryRun:$DryRun) { $changed = $true }
+  if (Set-FileFromTemplateIfMissing -Destination (Join-Path $docsAgents 'domain.md') -Template (Join-Path $skillRoot 'domain.md') -DryRun:$DryRun) { $changed = $true }
+  if ($TriageInstalled -and (Set-FileFromTemplateIfMissing -Destination (Join-Path $docsAgents 'triage-labels.md') -Template (Join-Path $skillRoot 'triage-labels.md') -DryRun:$DryRun)) { $changed = $true }
+
+  $contextPath = Join-Path $RepoPath 'CONTEXT.md'
+  if (-not (Test-Path -LiteralPath $contextPath)) {
+    if ($DryRun) {
+      Write-Host "  [dry] setup Matt Pocock: write $contextPath"
+    } else {
+      Set-Content -LiteralPath $contextPath -Encoding UTF8 -Value @"
+# Domain Context
+
+This document is the project's evolving glossary and domain context. Add terms and decisions through the `domain-modeling` skill when they are resolved.
+"@
+    }
+    $changed = $true
+  }
+  if (Update-MattPocockAgentSkillsBlock -RepoPath $RepoPath -TriageInstalled:$TriageInstalled -DryRun:$DryRun) { $changed = $true }
+
+  if ($changed) {
+    $tracker = if ($issueTemplate -eq 'issue-tracker-github.md') { 'GitHub' } else { 'local Markdown' }
+    Write-Host "  configured Matt Pocock skills (tracker: $tracker)"
+  } else {
+    Write-Host '  Matt Pocock skills already configured'
+  }
 }
 
 function ConvertTo-TomlBasicString {
@@ -1525,7 +1662,7 @@ function Ensure-AiMemory {
   }
 
   # Detected-IDE name -> ai-memory --client / --agent slug
-  $slugs = @{ Cursor = 'cursor'; Claude = 'claude-code'; OpenCode = 'opencode'; Codex = 'codex'; Devin = 'devin' }
+  $slugs = @{ Cursor = 'cursor'; Claude = 'claude-code'; OpenCode = 'opencode'; Codex = 'codex'; Devin = 'devin'; Antigravity = 'antigravity-cli' }
   $targets = @($Ides | ForEach-Object { $slugs[$_] } | Where-Object { $_ } | Select-Object -Unique)
   if ($targets.Count -eq 0) {
     Write-Warning "ai-memory: none of the detected IDEs ($($Ides -join ', ')) map to a supported agent. Skipping."
@@ -1549,6 +1686,21 @@ function Ensure-AiMemory {
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-mcp failed for $slug (exit $LASTEXITCODE)" }
     & $exe @hookArgs
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-hooks failed for $slug (exit $LASTEXITCODE)" }
+    if ($slug -eq 'antigravity-cli') {
+      # On Windows, ai-memory install-hooks outputs escaped quotes around paths
+      # which breaks cmd.exe /c string parsing in agy. Sanitize ~/.gemini/config/hooks.json.
+      $hooksPath = Join-Path $env:USERPROFILE '.gemini\config\hooks.json'
+      if (Test-Path $hooksPath) {
+        $hooksRaw = Get-Content $hooksPath -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+        if ($hooksRaw) {
+          $esc = [string][char]92 + [string][char]34
+          $hooksFixed = $hooksRaw.Replace($esc, '')
+          if ($hooksRaw -ne $hooksFixed) {
+            Set-Content -Path $hooksPath -Value $hooksFixed -Encoding UTF8
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1808,6 +1960,10 @@ foreach ($root in $Roots) {
       $tpl = Join-Path $HubPath "templates\agents\$($cfg.agentsTemplate)"
       Write-AgentsFile -RepoPath $proj.FullName -ProjectName $proj.Name -TemplatePath $tpl -Force:$ForceAgents -DryRun:$DryRun
       Write-SlimStubs -RepoPath $proj.FullName -Ides $detected -DryRun:$DryRun
+    }
+
+    if (-not $SkipMattPocockSetup) {
+      Ensure-MattPocockRepoSetup -RepoPath $proj.FullName -HubPath $HubPath -TriageInstalled:($mattPocockSkills -contains 'triage') -DryRun:$DryRun
     }
 
     if ($RemoveUnusedIdeFolders) {

@@ -84,6 +84,8 @@ FECHAMENTO
 | **grilling** | auto (nas frases "grill", "stress-test") | quer testar o próprio raciocínio | O primitivo de interrogação por trás dos dois acima. |
 | **domain-modeling** | auto | discutindo terminologia, editando `CONTEXT.md`, gravando ADR | Constrói/afia o modelo de domínio do projeto. |
 | **to-spec** | **você pede** | a conversa já tem o suficiente pra virar spec | Sintetiza o que já foi discutido numa spec e publica no issue tracker. Sem entrevista. |
+| **triage** | **você pede** | chegou issue/PR externo ainda mal definido | Qualifica a solicitação e aplica os estados `needs-*` / `ready-for-agent`. Requer o setup local do tracker. |
+| **setup-matt-pocock-skills** | **você pede** | primeira instalação em um repositório | Configura o tracker, a taxonomia de triagem e a estrutura de docs do domínio. O instalador do hub faz esse setup local automaticamente quando ele ainda não existe. |
 
 ### Planejamento
 

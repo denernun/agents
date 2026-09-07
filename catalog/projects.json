@@ -157,6 +157,7 @@
     "implement",
     "handoff",
     "wayfinder",
+    "triage",
     "setup-matt-pocock-skills",
     "improve-codebase-architecture"
   ],
@@ -172,12 +173,12 @@
   "ides": [
     "Cursor",
     "Claude",
+    "Codex",
     "OpenCode",
     "Antigravity"
   ],
   "excludeIdes":[
     "VSCode",
-    "Codex",
     "Devin",
     "Kiro"
   ],

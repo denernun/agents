@@ -1704,6 +1704,67 @@ function Ensure-AiMemory {
   }
 }
 
+function Get-CodexHome {
+  $h = [Environment]::GetEnvironmentVariable('CODEX_HOME', 'Process')
+  if ($h -and $h.Trim()) { return $h.Trim() }
+  return (Join-Path $HOME '.codex')
+}
+
+function Ensure-CodexMcp {
+  # Codex reads MCP servers ONLY from the global $CODEX_HOME/config.toml
+  # ([mcp_servers.*]); there is no project-level MCP config (Codex CLI 0.153),
+  # unlike every other agent this hub targets. That's why the per-project
+  # Write-McpConfigs switch has no 'Codex' arm - instead we register here,
+  # once per run, the servers that behave identically from any repo:
+  #   - codegraph: "codegraph serve --mcp" resolves the nearest .codegraph/ from
+  #     the process working dir, which Codex sets to the repo it launches in, so
+  #     one global entry covers every indexed project. Without this, the
+  #     codegraph / explore-codebase / debug-issue / refactor-safely /
+  #     review-changes skills load in Codex but codegraph_explore is missing.
+  #   - context7: stateless docs lookup, no per-project config.
+  # Path/connection-specific servers (filesystem, mongodb, openapi, playwright)
+  # can't be expressed as one global entry and are intentionally not wired for
+  # Codex - use another agent in those repos, or add them by hand.
+  # "codex mcp add" overwrites an existing entry, so this is idempotent.
+  param(
+    [string[]]$Ides,
+    [string]$CodegraphExe,
+    [string]$Context7ApiKey,
+    [switch]$DryRun
+  )
+  if ($Ides -notcontains 'Codex') { return }
+
+  $codex = Get-Command codex -ErrorAction SilentlyContinue
+  if (-not $codex) {
+    Write-Warning "Codex detected but the 'codex' CLI is not on PATH; skipping Codex MCP wiring. Run 'codex mcp add codegraph -- cmd /c codegraph serve --mcp' yourself."
+    return
+  }
+
+  # name -> launch vector (everything after the "codex mcp add <name> --")
+  $servers = [ordered]@{}
+  if ($CodegraphExe) {
+    $servers['codegraph'] = @('cmd', '/c', 'codegraph', 'serve', '--mcp')
+  } else {
+    Write-Warning "  codegraph binary not found; skipping Codex codegraph MCP (npm i -g @colbymchenry/codegraph)."
+  }
+  $c7 = @('cmd', '/c', 'npx', '-y', '@upstash/context7-mcp')
+  if ($Context7ApiKey -and $Context7ApiKey.Trim()) { $c7 += @('--api-key', $Context7ApiKey.Trim()) }
+  $servers['context7'] = $c7
+
+  Write-Host "Codex MCP (global $((Get-CodexHome))\config.toml): $($servers.Keys -join ', ')"
+  foreach ($name in $servers.Keys) {
+    $vec = @($servers[$name])
+    if ($DryRun) {
+      Write-Host "  [dry] codex mcp add $name -- $($vec -join ' ')"
+      continue
+    }
+    $addArgs = @('mcp', 'add', $name, '--') + $vec
+    & $codex.Source @addArgs *> $null
+    if ($LASTEXITCODE -ne 0) { Write-Warning "  codex mcp add $name failed (exit $LASTEXITCODE)" }
+    else { Write-Host "  wired $name" }
+  }
+}
+
 function Write-AiMemoryProjectConfig {
   # Optional (-WriteAiMemoryToml): pin the ai-memory project slug for a repo.
   # Normally unnecessary - the server derives the project from the git root -
@@ -1861,6 +1922,7 @@ if (-not ($mongoLaunch -and $mongoLaunch.PSObject.Properties['Node'])) {
 $codegraphExe = Ensure-CodegraphCli -DryRun:$DryRun
 if ($codegraphExe) { Write-Host "codegraph: $codegraphExe" }
 if (-not $SkipAiMemory) { Ensure-AiMemory -Ides $detected -DryRun:$DryRun }
+Ensure-CodexMcp -Ides $detected -CodegraphExe $codegraphExe -Context7ApiKey $context7ApiKey -DryRun:$DryRun
 Warn-GlobalCursorMongodbDuplicate
 $mcpBaseVars = @{
   HUB = $HubPath

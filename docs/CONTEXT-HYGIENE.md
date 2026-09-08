@@ -133,11 +133,10 @@ com os caminhos nativos atuais:
 | Ferramenta | Detecção | Skills | MCP |
 |---|---|---|---|
 | Claude Code | `~/.claude` ou comando `claude` | `.claude\skills` | `.mcp.json` (raiz; `mcpServers`) |
-| Codex | `~/.codex` ou comando `codex` | `.codex\skills` | `.codex\config.toml` **por projeto** (não `~/.codex/config.toml`) |
+| Codex | `~/.codex` ou comando `codex` | `.codex\skills` | **global** `~/.codex/config.toml` (`[mcp_servers.*]`) — ver Revisão 2026-09-07 |
 | Devin | `~/.devin`, `%APPDATA%\devin` ou comando `devin` | `.devin\skills` | `.devin\mcp_config.json` |
 
-Não gravar CLAUDE.md extra: o Claude Code já lê `AGENTS.md`. O Codex só aplica
-`.codex/config.toml` em projetos **trusted**.
+Não gravar CLAUDE.md extra: o Claude Code já lê `AGENTS.md`.
 
 ## Revisão 2026-08-21 — MCP por família
 
@@ -201,4 +200,25 @@ No Windows, `cmd /c npx mongodb-mcp-server` deixa cadeias `npx → cmd → conho
 - URI continua só em `env` (`MDB_MCP_CONNECTION_STRING`), não em `args`.
 - O install aplica o mesmo payload a **todas** as IDEs do `Write-McpConfigs` (incluindo Antigravity em `.agents/mcp_config.json`).
 - Plugin Cursor: MCP vazio, skills ok. Não duplicar `mongodb` em `~/.cursor/mcp.json`.
+
+## Revisão 2026-09-07 — Codex MCP (codegraph)
+
+O install detectava o Codex e copiava as skills pra `.codex/skills/`, mas **nunca
+escrevia config de MCP** pro Codex — `Write-McpConfigs` não tinha braço `Codex`, e a
+suposição antiga de `.codex/config.toml` por projeto estava errada: o Codex CLI (0.153)
+lê MCP só do **global** `~/.codex/config.toml` (`[mcp_servers.*]`; `codex mcp add`
+grava lá). Resultado: no Codex as skills `codegraph` / `explore-codebase` /
+`debug-issue` / `refactor-safely` / `review-changes` carregavam mas `codegraph_explore`
+não existia na sessão.
+
+- Nova função `Ensure-CodexMcp` (roda uma vez por install, ao lado de `Ensure-AiMemory`):
+  quando `Codex` está entre as IDEs detectadas, registra global via
+  `codex mcp add <name> -- cmd /c …` (idempotente — `add` sobrescreve):
+  - `codegraph` → `cmd /c codegraph serve --mcp` (**sem `--path`**: resolve o
+    `.codegraph/` mais próximo pelo cwd, que o Codex aponta pro repo em que sobe).
+  - `context7` → `cmd /c npx -y @upstash/context7-mcp` (+ `--api-key` se houver).
+- `filesystem` / `mongodb` / `openapi` / `playwright` **não** vão pro Codex: presos a
+  caminho/URL/conexão do projeto, não dá pra representar numa entrada global.
+- Sem braço `Codex` em `Write-McpConfigs` — a config do Codex é global, não por repo.
+- Fix manual avulso: `codex mcp add codegraph -- cmd /c codegraph serve --mcp`.
 

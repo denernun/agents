@@ -383,6 +383,21 @@ MCPs **per-project** (`codegraph`, `context7`, `filesystem`, `openapi`, `mongodb
 
 Se um MCP aparecer com erro na config global mas funcionar por projeto, **remova-o da config global** — a de projeto tem prioridade.
 
+#### Codex é exceção — MCP só global
+
+O Codex CLI (0.153) **não tem config de MCP por projeto**: lê só de `~/.codex/config.toml`
+(`[mcp_servers.*]`). Por isso o install não escreve `.codex/mcp.json` — em vez disso
+`Ensure-CodexMcp` registra globalmente, uma vez, os servers que funcionam de qualquer
+repo: **`codegraph`** (`codegraph serve --mcp` acha o `.codegraph/` mais próximo pelo
+diretório de trabalho, que o Codex aponta pro repo) e **`context7`**. Os servers presos
+a caminho/conexão (`filesystem`, `mongodb`, `openapi`, `playwright`) não são wired pro
+Codex — use outro agente nesses repos.
+
+Sintoma de estar sem isso: no Codex, as skills `codegraph` / `explore-codebase` /
+`debug-issue` / `refactor-safely` / `review-changes` carregam mas a tool
+`codegraph_explore` não existe na sessão. Fix manual:
+`codex mcp add codegraph -- cmd /c codegraph serve --mcp`.
+
 ---
 
 ## Memória compartilhada (ai-memory)

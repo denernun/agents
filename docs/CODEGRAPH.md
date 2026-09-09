@@ -44,12 +44,17 @@ Os benchmarks upstream não certificam desempenho nos produtos do HUB.
 ## Verificação em 2026-09-09
 
 - CLI e handshake MCP: versão 1.6.0, ferramenta `codegraph_explore` disponível.
-- Consulta em `erpclass-admin`: código e relações retornados.
+- Consultas em `erpclass-admin` e `erpclass-api`: código e relações retornados.
 - Piloto Delphi: 2 arquivos, ligação do evento DFM ao método Pascal reconhecida.
 - Worktree isolada: consulta retornou o método exclusivo da branch de teste.
 - ERP Delphi completo: 7.003 arquivos, 435.798 nós e 627.933 relações;
   consulta MCP a `source/Login.pas` retornou símbolos e código do arquivo.
-- Distribuição direcionada: 31 projetos; configurações existentes atualizadas,
+- Distribuição direcionada: 32 projetos; configurações existentes atualizadas,
   demais servidores preservados. ERP Delphi recebeu a configuração CodeGraph.
 - Telemetria local desligada; templates e fallback global usam DO_NOT_TRACK=1.
 - Testes de configuração e integração executados; sem benchmark A/B de tokens.
+
+A auditoria final encontrou 33 configurações Cursor com CodeGraph e confirmou
+DO_NOT_TRACK=1 em todas, incluindo configurações já corretas antes desta execução.
+O banco Delphi foi incluído no .gitignore do ERP.
+

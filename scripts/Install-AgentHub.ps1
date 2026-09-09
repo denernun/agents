@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Links D:\AGENTS skills into the repos under the D:\SISTEMAS family folders
   listed in catalog/projects.json "roots" (ERPCLASS / NFECLASS / MOBICLASS /
@@ -64,11 +64,14 @@ param(
   [switch]$SkipCodegraphInit,
   [switch]$SkipMattPocockSetup,
   [switch]$SkipAiMemory,
-  [switch]$WriteAiMemoryToml
+  [switch]$WriteAiMemoryToml,
+  [switch]$GlobalSkills,
+  [switch]$AdoptLegacyConfigs
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'AgentHub.Common.ps1')
 
 function Resolve-HubPath {
   param([string]$Path)
@@ -403,13 +406,31 @@ function Ensure-VendorSuperpowersSkillMirrors {
 }
 
 function Get-ProjectFamily {
-  param([string]$Name, [hashtable]$Families)
-  $order = @('nestjs', 'angular', 'delphi', 'android')
-  foreach ($key in $order) {
-    if (-not $Families.ContainsKey($key)) { continue }
-    foreach ($pattern in $Families[$key].match) {
-      if ($Name -like $pattern) { return $key }
+  param([string]$Name, [hashtable]$Families, [string]$RepoPath, [object]$Overrides)
+  if ($Overrides) {
+    $entry = $Overrides.PSObject.Properties[$Name]
+    if ($entry) {
+      if (-not $Families.ContainsKey([string]$entry.Value)) { throw "Unknown family override for $Name" }
+      return [string]$entry.Value
     }
+  }
+  if ($RepoPath) {
+    if (Test-Path (Join-Path $RepoPath 'angular.json')) { return 'angular' }
+    $package = Join-Path $RepoPath 'package.json'
+    if (Test-Path $package) {
+      $json = Get-Content $package -Raw | ConvertFrom-Json
+      foreach ($field in @('dependencies', 'devDependencies')) {
+        $deps = $json.PSObject.Properties[$field]
+        if ($deps -and $deps.Value.PSObject.Properties['@angular/core']) { return 'angular' }
+      }
+      foreach ($field in @('dependencies', 'devDependencies')) {
+        $deps = $json.PSObject.Properties[$field]
+        if ($deps -and $deps.Value.PSObject.Properties['@nestjs/core']) { return 'nestjs' }
+      }
+    }
+  }
+  foreach ($key in @('nestjs', 'angular', 'delphi', 'android')) {
+    foreach ($pattern in $Families[$key].match) { if ($Name -like $pattern) { return $key } }
   }
   return 'minimal'
 }
@@ -449,8 +470,10 @@ function New-JunctionOrCopy {
     $item = Get-Item $LinkPath -Force
     $isReparse = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
     if ($isReparse) {
+      if (@($item.Target) -contains $TargetPath) { return }
+      if (-not (Test-HubOwnedLink -Path $LinkPath -HubPath $HubPath)) { Write-Warning "Preserved external link: $LinkPath"; return }
       if (-not $DryRun) {
-        cmd /c "rmdir `"$LinkPath`"" | Out-Null
+        Remove-HubLink -Path $LinkPath -Root $parent -HubPath $HubPath
         if (Test-Path $LinkPath) {
           Write-Warning "Failed to remove existing junction at $LinkPath - skipping."
           return
@@ -464,7 +487,7 @@ function New-JunctionOrCopy {
         Write-Warning "Existing directory at $LinkPath is not hub-managed (no .agenthub-managed marker). Skipping to avoid data loss. Remove manually if unneeded."
         return
       }
-      if (-not $DryRun) { Remove-Item $LinkPath -Recurse -Force }
+      if (-not $DryRun) { Remove-HubLink -Path $LinkPath -Root $parent -HubPath $HubPath }
     }
   }
   if ($DryRun) {
@@ -472,8 +495,8 @@ function New-JunctionOrCopy {
     return
   }
   $ok = $true
-  cmd /c "mklink /J `"$LinkPath`" `"$TargetPath`"" | Out-Null
-  if ($LASTEXITCODE -ne 0) {
+  try { New-Item -ItemType Junction -Path $LinkPath -Target $TargetPath -ErrorAction Stop | Out-Null }
+  catch {
     Write-Warning "Junction failed for $LinkPath - copying instead."
     Copy-Item $TargetPath $LinkPath -Recurse -Force
     # Write marker so future runs know this copy belongs to the hub
@@ -557,7 +580,7 @@ function Write-AgentsFile {
     Write-Host ('  [dry] write AGENTS.md sizeKb=' + $kb)
     return
   }
-  Set-Content -Path $dest -Value $content -Encoding UTF8
+  Write-HubText -Path $dest -Content $content -DryRun:$DryRun
   Write-Host "  wrote AGENTS.md"
 }
 
@@ -835,7 +858,10 @@ function Expand-McpTemplate {
     if ($val -match '^[A-Z]:\\') {
       $val = $val.Replace('\', '/')
     }
-    if ($JsonEscape) { $val = $val.Replace('\', '\\').Replace('"', '\"') }
+    if ($JsonEscape) {
+      $encoded = ConvertTo-Json -InputObject ([string]$val) -Compress
+      $val = $encoded.Substring(1, $encoded.Length - 2)
+    }
     $Content = $Content.Replace("{{$k}}", $val)
   }
   return $Content
@@ -979,43 +1005,13 @@ function Merge-McpJsonTemplates {
     try {
       $obj = $expanded | ConvertFrom-Json
     } catch {
-      throw "Failed to parse MCP template $name.template.json: $_`n$expanded"
+      throw "Failed to parse MCP template $name.template.json (expanded values omitted to protect credentials)."
     }
     foreach ($prop in $obj.mcpServers.PSObject.Properties) {
       $merged[$prop.Name] = $prop.Value
     }
   }
   return $merged
-}
-
-function ConvertTo-TomlMcp {
-  param([System.Collections.IDictionary]$Servers, [string[]]$SkipProperties = @())
-  $skip = @($SkipProperties) + @('env')
-  $lines = [System.Collections.Generic.List[string]]::new()
-  foreach ($name in $Servers.Keys | Sort-Object) {
-    [void]$lines.Add("[mcp_servers.$name]")
-    $server = $Servers[$name]
-    foreach ($prop in $server.PSObject.Properties | Sort-Object Name) {
-      if ($skip -contains $prop.Name) { continue }
-      $val = $prop.Value
-      if ($val -is [array] -or ($val -is [System.Collections.IEnumerable] -and $val -isnot [string])) {
-        $parts = @($val | ForEach-Object { "`"$(ConvertTo-TomlBasicString $_)`"" })
-        [void]$lines.Add("$($prop.Name) = [$($parts -join ', ')]")
-      } else {
-        [void]$lines.Add("$($prop.Name) = `"$(ConvertTo-TomlBasicString $val)`"")
-      }
-    }
-    $envProp = $server.PSObject.Properties['env']
-    if ($envProp -and $envProp.Value) {
-      [void]$lines.Add('')
-      [void]$lines.Add("[mcp_servers.$name.env]")
-      foreach ($e in $envProp.Value.PSObject.Properties | Sort-Object Name) {
-        [void]$lines.Add("$($e.Name) = `"$(ConvertTo-TomlBasicString ([string]$e.Value))`"")
-      }
-    }
-    [void]$lines.Add('')
-  }
-  return ($lines -join "`r`n").TrimEnd()
 }
 
 function ConvertTo-OpenCodeMcpServers {
@@ -1049,27 +1045,8 @@ function ConvertTo-OpenCodeMcpServers {
 }
 
 function Write-OpenCodeConfig {
-  # OpenCode reads project config from <repo>\opencode.json (project root),
-  # not from a ".opencode" subfolder. Merge into any existing file instead
-  # of overwriting it, so hand-edited settings (model, agent, plugin, ...)
-  # survive re-runs of this script.
-  param([string]$RepoPath, [System.Collections.Specialized.OrderedDictionary]$McpServers, [switch]$DryRun)
-  $path = Join-Path $RepoPath 'opencode.json'
-  $obj = [ordered]@{}
-  if (Test-Path $path) {
-    try {
-      $existing = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
-      foreach ($prop in $existing.PSObject.Properties) { $obj[$prop.Name] = $prop.Value }
-    } catch {
-      Write-Warning "Existing opencode.json at $path is invalid JSON; it will be replaced."
-    }
-  }
-  if (-not $obj.Contains('$schema')) { $obj['$schema'] = 'https://opencode.ai/config.json' }
-  $obj['mcp'] = $McpServers
-  $json = $obj | ConvertTo-Json -Depth 10
-  if ($DryRun) { Write-Host "  [dry] write $path"; return }
-  Set-Content -Path $path -Value $json -Encoding UTF8
-  Write-Host "  wrote $path"
+  param([string]$RepoPath, [System.Collections.Specialized.OrderedDictionary]$McpServers, [string[]]$ManagedServers, [switch]$DryRun)
+  Invoke-HubConfig @{path=(Join-Path $RepoPath 'opencode.json'); servers=$McpServers; property='mcp'; managed=$ManagedServers; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun}
 }
 
 function Write-McpConfigs {
@@ -1127,7 +1104,7 @@ function Write-McpConfigs {
         # Project config lives at <repo>\opencode.json (opencode.ai/docs/config),
         # and "mcp" is a flat map of servers (opencode.ai/docs/mcp-servers).
         $ocServers = ConvertTo-OpenCodeMcpServers -Servers $plain
-        Write-OpenCodeConfig -RepoPath $RepoPath -McpServers $ocServers -DryRun:$DryRun
+        Write-OpenCodeConfig -RepoPath $RepoPath -McpServers $ocServers -ManagedServers $ManagedServers -DryRun:$DryRun
       }
       'Antigravity' {
         # Antigravity (IDE/CLI) reads workspace MCP config from .agents\mcp_config.json
@@ -1139,14 +1116,10 @@ function Write-McpConfigs {
       'Claude' {
         # Claude Code project MCP is <repo>\.mcp.json (code.claude.com/docs/en/mcp).
         $path = Join-Path $RepoPath '.mcp.json'
-        if ($Ides -contains 'Cursor') {
-          # Cursor reads .mcp.json too, causing duplicates with .cursor/mcp.json.
-          # Only remove stale hub servers; don't write new ones (Cursor provides them).
-          $empty = @{}
-          Write-McpJsonMerged -Path $path -HubServers $empty -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-        } else {
-          Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-        }
+        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
+      }
+      'Codex' {
+        Invoke-HubConfig @{path=(Join-Path $RepoPath '.codex/config.toml'); format='toml'; servers=$plain; dry=[bool]$DryRun}
       }
       'Devin' {
         # Devin CLI (v3000.3+) reads .devin\mcp_config.json (docs.devin.ai
@@ -1171,63 +1144,8 @@ function Write-TextFile {
 }
 
 function Write-McpJsonMerged {
-  # Merges hub-managed MCP servers into an existing JSON config file.
-  # - Preserves ALL top-level properties (inputs, globalSettings, etc.)
-  # - Preserves user-added servers not managed by the hub
-  # - Removes stale hub servers no longer assigned to this project
-  # $ManagedServerNames is the full hub catalog so we can prune leftovers.
-  param(
-    [string]$Path,
-    [hashtable]$HubServers,
-    [string]$ServersProperty,  # 'mcpServers' or 'servers'
-    [string[]]$ManagedServerNames,
-    [switch]$DryRun
-  )
-  $dir = Split-Path -Parent $Path
-  if ($DryRun) { Write-Host "  [dry] write $Path"; return }
-  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-
-  # Read existing file preserving all top-level keys
-  $topLevel = [ordered]@{}
-  $existingServers = [ordered]@{}
-  if (Test-Path $Path) {
-    try {
-      $existing = Get-Content $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-      foreach ($prop in $existing.PSObject.Properties) {
-        if ($prop.Name -eq $ServersProperty) {
-          if ($prop.Value) {
-            foreach ($sp in $prop.Value.PSObject.Properties) {
-              $existingServers[$sp.Name] = $sp.Value
-            }
-          }
-        } else {
-          $topLevel[$prop.Name] = $prop.Value
-        }
-      }
-    } catch {
-      Write-Warning "Existing $Path is invalid JSON; hub servers will replace it."
-    }
-  }
-
-  # Remove stale hub-managed servers (in the catalog but not in this project's set)
-  if ($ManagedServerNames) {
-    foreach ($name in $ManagedServerNames) {
-      if ($existingServers.Contains($name) -and -not $HubServers.ContainsKey($name)) {
-        $existingServers.Remove($name)
-      }
-    }
-  }
-
-  # Upsert current hub servers
-  foreach ($k in $HubServers.Keys) { $existingServers[$k] = $HubServers[$k] }
-
-  # Rebuild the full object with original top-level props preserved
-  $output = [ordered]@{}
-  foreach ($k in $topLevel.Keys) { $output[$k] = $topLevel[$k] }
-  $output[$ServersProperty] = $existingServers
-  $json = $output | ConvertTo-Json -Depth 10
-  Set-Content -Path $Path -Value $json -Encoding UTF8
-  Write-Host "  wrote $Path (merged)"
+  param([string]$Path, [hashtable]$HubServers, [string]$ServersProperty, [string[]]$ManagedServerNames, [switch]$DryRun)
+  Invoke-HubConfig @{path=$Path; servers=$HubServers; property=$ServersProperty; managed=$ManagedServerNames; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun}
 }
 
 function Write-PointerRules {
@@ -1247,7 +1165,7 @@ function Write-PointerRules {
       if ($DryRun) { Write-Host "  [dry] rule $($FamilyCfg.cursorRule)" }
       else {
         if (-not (Test-Path $rulesDir)) { New-Item -ItemType Directory -Force -Path $rulesDir | Out-Null }
-        Copy-Item $src $dest -Force
+        Write-HubText -Path $dest -Content (Get-Content $src -Raw -Encoding UTF8) -DryRun:$DryRun
         Write-Host "  rule $($FamilyCfg.cursorRule)"
       }
     }
@@ -1260,7 +1178,7 @@ function Write-PointerRules {
       if ($DryRun) { Write-Host "  [dry] rule $extra" }
       else {
         if (-not (Test-Path $rulesDir)) { New-Item -ItemType Directory -Force -Path $rulesDir | Out-Null }
-        Copy-Item $src $dest -Force
+        Write-HubText -Path $dest -Content (Get-Content $src -Raw -Encoding UTF8) -DryRun:$DryRun
         Write-Host "  rule $extra"
       }
     }
@@ -1288,7 +1206,7 @@ See **AGENTS.md**. Load stack skills from the linked `D:\AGENTS` instead of dupl
     if ($DryRun) { Write-Host "  [dry] stub $(Split-Path $t -Leaf)"; continue }
     $dir = Split-Path -Parent $t
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    Set-Content -Path $t -Value $stub -Encoding UTF8
+    Write-HubText -Path $t -Content $stub -DryRun:$DryRun
     Write-Host "  stub $(Split-Path $t -Leaf)"
   }
 }
@@ -1309,7 +1227,7 @@ function Write-CopilotPointer {
   if ($DryRun) { Write-Host "  [dry] copilot-instructions.md"; return }
   $dir = Split-Path -Parent $dest
   if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-  Set-Content -Path $dest -Value $content -Encoding UTF8
+  Write-HubText -Path $dest -Content $content -DryRun:$DryRun
   Write-Host "  wrote .github/copilot-instructions.md"
 }
 
@@ -1331,7 +1249,7 @@ function Write-AntigravityPointer {
   $content = Get-Content $src -Raw -Encoding UTF8
   if ($DryRun) { Write-Host "  [dry] .agents/rules/stack-pointer.md"; return }
   if (-not (Test-Path $agDir)) { New-Item -ItemType Directory -Force -Path $agDir | Out-Null }
-  Set-Content -Path $dest -Value $content -Encoding UTF8
+  Write-HubText -Path $dest -Content $content -DryRun:$DryRun
   Write-Host "  wrote .agents/rules/stack-pointer.md"
 }
 
@@ -1362,7 +1280,7 @@ instead of duplicating guides here.
 "@
   if ($DryRun) { Write-Host "  [dry] .kiro/steering/stack-pointer.md"; return }
   if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-  Set-Content -Path $dest -Value $content -Encoding UTF8
+  Write-HubText -Path $dest -Content $content -DryRun:$DryRun
   Write-Host "  wrote .kiro/steering/stack-pointer.md"
 }
 
@@ -1373,10 +1291,8 @@ function Remove-FatAlwaysOnRules {
     (Join-Path $RepoPath '.cursor\rules\cursor.mdc'),
     (Join-Path $RepoPath '.cursor\rules\.cursorrules.mdc')
   )
-  # Only remove files that were originally generated by the hub or contain
-  # known hub/legacy content markers. This avoids deleting project-specific
-  # rules that happen to share the same filename.
-  $hubMarkers = @('AgentHub', 'Install-AgentHub', 'alwaysApply:', 'nestjs-clean-architecture', 'D:\AGENTS')
+  # Markers identify candidates; tracked ownership is checked before removal.
+  $hubMarkers = @('AgentHub', 'Install-AgentHub', 'nestjs-clean-architecture', 'D:\AGENTS')
   foreach ($fr in $fatRules) {
     if (-not (Test-Path $fr)) { continue }
     $content = Get-Content $fr -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
@@ -1389,123 +1305,25 @@ function Remove-FatAlwaysOnRules {
       continue
     }
     if ($DryRun) { Write-Host "  [dry] remove fat rule $(Split-Path $fr -Leaf)"; continue }
-    Remove-Item $fr -Force
+    Invoke-HubConfig @{path=$fr; format='text'; remove=$true; dry=[bool]$DryRun}
     Write-Host "  removed fat rule $(Split-Path $fr -Leaf)"
   }
 }
 
 function Remove-LegacyAgentPaths {
-  # Cleans up artifacts written by older versions of this script or by
-  # non-integrated IDEs (Gemini CLI, Windsurf). Opt-in via -MigrateLegacyPaths
-  # because it deletes files (reversible: this script regenerates the
-  # integrated-IDE equivalents). Adds .gemini/skills, .gemini/hooks,
-  # .windsurfrules and CLAUDE.md because the hub now uses .agents/skills,
-  # AGENTS.md, MCP and Cursor/PowerShell hooks managed by Fix-CursorHooks.ps1.
-  param([string]$RepoPath, [switch]$DryRun)
-  $legacy = @(
-    (Join-Path $RepoPath '.antigravity\mcp.json'),
-    (Join-Path $RepoPath '.antigravity\.antigravityrules'),
-    (Join-Path $RepoPath '.antigravity\skills'),
-    (Join-Path $RepoPath '.opencode\opencode.json'),
-    (Join-Path $RepoPath '.devin\mcp.json'),
-    (Join-Path $RepoPath '.gemini\GEMINI.md'),
-    (Join-Path $RepoPath '.gemini\skills'),
-    (Join-Path $RepoPath '.gemini\hooks'),
-    (Join-Path $RepoPath '.windsurfrules'),
-    (Join-Path $RepoPath 'CLAUDE.md')
-  )
-  foreach ($p in $legacy) {
-    if (-not (Test-Path $p)) { continue }
-    if ($DryRun) { Write-Host "  [dry] remove legacy $p"; continue }
-    Remove-Item $p -Recurse -Force
-    Write-Host "  removed legacy $p"
-  }
-  # Remove now-empty legacy parent folders (.antigravity, .gemini) but leave
-  # anything the user may have added by hand.
-  foreach ($parent in @((Join-Path $RepoPath '.antigravity'), (Join-Path $RepoPath '.gemini'))) {
-    if ((Test-Path $parent) -and -not $DryRun) {
-      $remaining = Get-ChildItem $parent -Force -ErrorAction SilentlyContinue
-      if (-not $remaining) { Remove-Item $parent -Force }
-    }
-  }
+  param([string]$RepoPath, [string[]]$Folders, [switch]$DryRun)
+  Write-Warning "Legacy folders preserved in $RepoPath. Only tracked AgentHub artifacts are removed by IDE exclusion or uninstall."
 }
 
 function Remove-UnusedIdeFolders {
   param([string]$RepoPath, [string[]]$Folders, [switch]$DryRun)
-  foreach ($name in $Folders) {
-    $path = Join-Path $RepoPath $name
-    if (-not (Test-Path $path)) { continue }
-    if ($DryRun) { Write-Host "  [dry] remove $name"; continue }
-    Remove-Item $path -Recurse -Force
-    Write-Host "  removed $name"
-  }
-}
-
-function Get-IdeManagedPaths {
-  # Single map of hub-owned folders and files per IDE. excludeIdes removes
-  # every path listed here (skills, MCP, pointers). Keep in sync with
-  # Link-ProjectSkills, Write-McpConfigs, Write-CopilotPointer, Write-SlimStubs.
-  param([string]$Ide)
-  switch ($Ide) {
-    'Cursor' {
-      return @{ Folders = @('.cursor'); Files = @('.cursorrules') }
-    }
-    'VSCode' {
-      return @{
-        Folders = @('.vscode', '.github\skills')
-        Files   = @('.github\copilot-instructions.md')
-      }
-    }
-    'Kiro' {
-      return @{ Folders = @('.kiro'); Files = @() }
-    }
-    'OpenCode' {
-      return @{ Folders = @('.opencode'); Files = @('opencode.json') }
-    }
-    'Antigravity' {
-      return @{ Folders = @('.agents'); Files = @() }
-    }
-    'Claude' {
-      return @{ Folders = @('.claude'); Files = @('.mcp.json', 'CLAUDE.md') }
-    }
-    'Codex' {
-      return @{ Folders = @('.codex'); Files = @() }
-    }
-    'Devin' {
-      return @{ Folders = @('.devin'); Files = @() }
-    }
-    'Qoder' {
-      return @{ Folders = @('.qoder'); Files = @() }
-    }
-    default {
-      return @{ Folders = @(); Files = @() }
-    }
-  }
+  Write-Warning "Legacy folders preserved in $RepoPath. Only tracked AgentHub artifacts are removed by IDE exclusion or uninstall."
 }
 
 function Remove-ExcludedIdeFolders {
-  # Removes every hub-managed folder and file for IDEs in catalog.excludeIdes.
-  # Safe to re-run: putting the IDE back in catalog.ides recreates the files.
   param([string]$RepoPath, [string[]]$ExcludeIdes, [switch]$DryRun)
-  if (-not $ExcludeIdes -or $ExcludeIdes.Count -eq 0) { return }
   foreach ($ide in $ExcludeIdes) {
-    $paths = Get-IdeManagedPaths -Ide $ide
-    foreach ($rel in @($paths.Folders)) {
-      if (-not $rel) { continue }
-      $path = Join-Path $RepoPath $rel
-      if (-not (Test-Path $path)) { continue }
-      if ($DryRun) { Write-Host "  [dry] remove excluded IDE folder $rel ($ide)"; continue }
-      Remove-Item $path -Recurse -Force
-      Write-Host "  removed excluded IDE folder $rel ($ide)"
-    }
-    foreach ($rel in @($paths.Files)) {
-      if (-not $rel) { continue }
-      $path = Join-Path $RepoPath $rel
-      if (-not (Test-Path $path)) { continue }
-      if ($DryRun) { Write-Host "  [dry] remove excluded IDE file $rel ($ide)"; continue }
-      Remove-Item $path -Force
-      Write-Host "  removed excluded IDE file $rel ($ide)"
-    }
+    Remove-HubIdeArtifacts -RepoPath $RepoPath -Ide $ide -ActiveIdes $detected -DryRun:$DryRun
   }
 }
 
@@ -1524,8 +1342,8 @@ function Link-ProjectSkills {
     # .github\skills\<name>\SKILL.md
     [void]$skillRoots.Add((Join-Path $RepoPath '.github\skills'))
   }
-  if ($Ides -contains 'Antigravity') {
-    # Antigravity workspace skills live under .agents\skills (see
+  if ($Ides -contains 'Antigravity' -or $Ides -contains 'Codex') {
+    # Shared discovery directory for Codex and Antigravity. workspace skills live under .agents\skills (see
     # codelabs.developers.google.com/autonomous-ai-developer-pipelines-antigravity).
     [void]$skillRoots.Add((Join-Path $RepoPath '.agents\skills'))
   }
@@ -1541,10 +1359,6 @@ function Link-ProjectSkills {
     # Claude Code discovers project skills at .claude\skills\<name>\SKILL.md
     [void]$skillRoots.Add((Join-Path $RepoPath '.claude\skills'))
   }
-  if ($Ides -contains 'Codex') {
-    # Codex discovers project skills at .codex\skills\<name>\SKILL.md
-    [void]$skillRoots.Add((Join-Path $RepoPath '.codex\skills'))
-  }
   if ($Ides -contains 'Devin') {
     # Devin discovers SKILL.md under .devin\skills (docs.devin.ai/product-guides/skills).
     [void]$skillRoots.Add((Join-Path $RepoPath '.devin\skills'))
@@ -1554,6 +1368,7 @@ function Link-ProjectSkills {
     foreach ($skill in $SkillNames) {
       $target = Join-Path $HubPath "skills\$skill"
       $link = Join-Path $root $skill
+      if (-not (Test-HubSkill $target)) { throw "Invalid SKILL.md: $target" }
       New-JunctionOrCopy -LinkPath $link -TargetPath $target -DryRun:$DryRun
     }
     Remove-StaleProjectSkills -SkillRoot $root -HubPath $HubPath -KeepNames $SkillNames -DryRun:$DryRun
@@ -1600,11 +1415,7 @@ function Remove-StaleProjectSkills {
     if (-not $isHubManaged) { continue }
 
     if ($DryRun) { Write-Host "  [dry] prune stale skill $($entry.FullName)"; continue }
-    if ($isReparse) {
-      cmd /c "rmdir `"$($entry.FullName)`"" | Out-Null
-    } else {
-      Remove-Item -LiteralPath $entry.FullName -Recurse -Force
-    }
+    Remove-HubLink -Path $entry.FullName -Root $SkillRoot -HubPath $HubPath
     if (Test-Path $entry.FullName) {
       Write-Warning "Failed to prune stale skill $($entry.FullName)"
     } else {
@@ -1678,29 +1489,15 @@ function Ensure-AiMemory {
       $hookArgs += @('--auth-token', $token)
     }
     if ($DryRun) {
-      Write-Host "  [dry] ai-memory $($mcpArgs -join ' ')"
-      Write-Host "  [dry] ai-memory $($hookArgs -join ' ')"
+      Write-Host "  [dry] ai-memory install-mcp --client $slug (credentials omitted)"
+      Write-Host "  [dry] ai-memory install-hooks --agent $slug (credentials omitted)"
       continue
     }
     & $exe @mcpArgs
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-mcp failed for $slug (exit $LASTEXITCODE)" }
     & $exe @hookArgs
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-hooks failed for $slug (exit $LASTEXITCODE)" }
-    if ($slug -eq 'antigravity-cli') {
-      # On Windows, ai-memory install-hooks outputs escaped quotes around paths
-      # which breaks cmd.exe /c string parsing in agy. Sanitize ~/.gemini/config/hooks.json.
-      $hooksPath = Join-Path $env:USERPROFILE '.gemini\config\hooks.json'
-      if (Test-Path $hooksPath) {
-        $hooksRaw = Get-Content $hooksPath -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
-        if ($hooksRaw) {
-          $esc = [string][char]92 + [string][char]34
-          $hooksFixed = $hooksRaw.Replace($esc, '')
-          if ($hooksRaw -ne $hooksFixed) {
-            Set-Content -Path $hooksPath -Value $hooksFixed -Encoding UTF8
-          }
-        }
-      }
-    }
+
   }
 }
 
@@ -1708,61 +1505,6 @@ function Get-CodexHome {
   $h = [Environment]::GetEnvironmentVariable('CODEX_HOME', 'Process')
   if ($h -and $h.Trim()) { return $h.Trim() }
   return (Join-Path $HOME '.codex')
-}
-
-function Ensure-CodexMcp {
-  # Codex reads MCP servers ONLY from the global $CODEX_HOME/config.toml
-  # ([mcp_servers.*]); there is no project-level MCP config (Codex CLI 0.153),
-  # unlike every other agent this hub targets. That's why the per-project
-  # Write-McpConfigs switch has no 'Codex' arm - instead we register here,
-  # once per run, the servers that behave identically from any repo:
-  #   - codegraph: "codegraph serve --mcp" resolves the nearest .codegraph/ from
-  #     the process working dir, which Codex sets to the repo it launches in, so
-  #     one global entry covers every indexed project. Without this, the
-  #     codegraph / explore-codebase / debug-issue / refactor-safely /
-  #     review-changes skills load in Codex but codegraph_explore is missing.
-  #   - context7: stateless docs lookup, no per-project config.
-  # Path/connection-specific servers (filesystem, mongodb, openapi, playwright)
-  # can't be expressed as one global entry and are intentionally not wired for
-  # Codex - use another agent in those repos, or add them by hand.
-  # "codex mcp add" overwrites an existing entry, so this is idempotent.
-  param(
-    [string[]]$Ides,
-    [string]$CodegraphExe,
-    [string]$Context7ApiKey,
-    [switch]$DryRun
-  )
-  if ($Ides -notcontains 'Codex') { return }
-
-  $codex = Get-Command codex -ErrorAction SilentlyContinue
-  if (-not $codex) {
-    Write-Warning "Codex detected but the 'codex' CLI is not on PATH; skipping Codex MCP wiring. Run 'codex mcp add codegraph -- cmd /c codegraph serve --mcp' yourself."
-    return
-  }
-
-  # name -> launch vector (everything after the "codex mcp add <name> --")
-  $servers = [ordered]@{}
-  if ($CodegraphExe) {
-    $servers['codegraph'] = @('cmd', '/c', 'codegraph', 'serve', '--mcp')
-  } else {
-    Write-Warning "  codegraph binary not found; skipping Codex codegraph MCP (npm i -g @colbymchenry/codegraph)."
-  }
-  $c7 = @('cmd', '/c', 'npx', '-y', '@upstash/context7-mcp')
-  if ($Context7ApiKey -and $Context7ApiKey.Trim()) { $c7 += @('--api-key', $Context7ApiKey.Trim()) }
-  $servers['context7'] = $c7
-
-  Write-Host "Codex MCP (global $((Get-CodexHome))\config.toml): $($servers.Keys -join ', ')"
-  foreach ($name in $servers.Keys) {
-    $vec = @($servers[$name])
-    if ($DryRun) {
-      Write-Host "  [dry] codex mcp add $name -- $($vec -join ' ')"
-      continue
-    }
-    $addArgs = @('mcp', 'add', $name, '--') + $vec
-    & $codex.Source @addArgs *> $null
-    if ($LASTEXITCODE -ne 0) { Write-Warning "  codex mcp add $name failed (exit $LASTEXITCODE)" }
-    else { Write-Host "  wired $name" }
-  }
 }
 
 function Write-AiMemoryProjectConfig {
@@ -1778,12 +1520,14 @@ function Write-AiMemoryProjectConfig {
   $dest = Join-Path $RepoPath '.ai-memory.toml'
   if (Test-Path $dest) { return }
   if ($DryRun) { Write-Host "  [dry] write .ai-memory.toml (project = `"$ProjectName`")"; return }
-  Set-Content -Path $dest -Value "project = `"$ProjectName`"`r`n" -Encoding UTF8
+  Write-HubText -Path $dest -Content "project = `"$ProjectName`"`r`n" -DryRun:$DryRun
   Write-Host "  wrote .ai-memory.toml"
 }
 
 # --- main ---
 $HubPath = Resolve-HubPath -Path $HubPath
+& python -c "import tomllib" 2>$null
+if ($LASTEXITCODE -ne 0) { throw 'AgentHub requires Python 3.11+ (tomllib) for safe TOML validation.' }
 $loadedDotEnv = Import-HubDotEnv -HubPath $HubPath
 if ($loadedDotEnv) { Write-Host "Loaded $HubPath\.env" }
 else { Write-Warning "No $HubPath\.env — using catalog ides/excludeIdes. Copy .env.example to .env for this machine." }
@@ -1835,7 +1579,7 @@ if ($catalog.PSObject.Properties.Name -contains 'superpowersSkills') {
   $superpowersSkills = @($catalog.superpowersSkills)
 }
 
-# Guard: verify every native hub skill (skills/<name>/SKILL.md, not the
+# Guard: verify metadata and body for every native hub skill (not the
 # vendor-mirrored ones) has real content before linking anything into
 # projects. Junctions faithfully propagate an empty source directory to all
 # 24+ repos with no error, so a corrupted/emptied skill here would silently
@@ -1853,10 +1597,10 @@ foreach ($name in $allSkillNamesInUse) {
   $item = Get-Item $skillDir -Force
   $isReparse = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
   if ($isReparse) { continue } # vendor mirror; validated by Test-SkillTargetHasContent when re-linked below
-  if (-not (Test-SkillTargetHasContent -TargetPath $skillDir)) { $emptySkills += $name }
+  if (-not (Test-HubSkill -Path $skillDir)) { $emptySkills += $name }
 }
 if ($emptySkills.Count -gt 0) {
-  throw "Native hub skill folder(s) are empty (0 bytes of content): $($emptySkills -join ', '). Refusing to link empty skills into every project. Restore content first, e.g.: git -C `"$HubPath`" checkout -- $(($emptySkills | ForEach-Object { "skills/$_" }) -join ' ')"
+  throw "Native hub skill folder(s) have missing or invalid SKILL.md metadata/body: $($emptySkills -join ', '). Refusing to link empty skills into every project. Restore content first, e.g.: git -C `"$HubPath`" checkout -- $(($emptySkills | ForEach-Object { "skills/$_" }) -join ' ')"
 }
 
 # These skills are standalone vendors and do not live under
@@ -1922,7 +1666,7 @@ if (-not ($mongoLaunch -and $mongoLaunch.PSObject.Properties['Node'])) {
 $codegraphExe = Ensure-CodegraphCli -DryRun:$DryRun
 if ($codegraphExe) { Write-Host "codegraph: $codegraphExe" }
 if (-not $SkipAiMemory) { Ensure-AiMemory -Ides $detected -DryRun:$DryRun }
-Ensure-CodexMcp -Ides $detected -CodegraphExe $codegraphExe -Context7ApiKey $context7ApiKey -DryRun:$DryRun
+
 Warn-GlobalCursorMongodbDuplicate
 $mcpBaseVars = @{
   HUB = $HubPath
@@ -1947,6 +1691,14 @@ if ($catalog.mcp) { $mcpSkipIdes = $catalog.mcp.skipIdes }
 Write-Host "Hub: $HubPath"
 Write-Host "IDEs: $($detected -join ', ')"
 Write-Host "Roots: $($Roots -join ', ')"
+if ($GlobalSkills -and $detected -contains 'Codex') {
+  foreach ($name in @($commonSkills + $mattPocockSkills + $superpowersSkills | Select-Object -Unique)) {
+    $target = Join-Path $HubPath "skills/$name"
+    if (-not (Test-HubSkill $target)) { throw "Invalid global skill: $name" }
+    New-JunctionOrCopy -LinkPath (Join-Path $env:USERPROFILE ".agents/skills/$name") -TargetPath $target -DryRun:$DryRun
+  }
+}
+
 if ($DryRun) { Write-Host 'DRY RUN - no changes' }
 
 $exclude = @($catalog.excludeProjectNames)
@@ -1956,7 +1708,7 @@ foreach ($root in $Roots) {
   Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
     $proj = $_
     if ($exclude -contains $proj.Name) { return }
-    $family = Get-ProjectFamily -Name $proj.Name -Families $families
+    $family = Get-ProjectFamily -Name $proj.Name -Families $families -RepoPath $proj.FullName -Overrides (Get-JsonProperty $catalog 'projectFamilies')
     # skip non-repos without AGENTS and without src/source (Android Gradle
     # trees and the android family are included even when the git root is
     # only a wrapper around src/ or Android Studio metadata).
@@ -1978,6 +1730,11 @@ foreach ($root in $Roots) {
 
     $skillNames = @($commonSkills) + @($cfg.skills) + @($mattPocockSkills) + @($superpowersSkills)
     Link-ProjectSkills -RepoPath $proj.FullName -HubPath $HubPath -SkillNames $skillNames -Ides $detected -DryRun:$DryRun
+    if ($detected -contains 'Codex') {
+      foreach ($old in Get-ChildItem (Join-Path $proj.FullName '.codex/skills') -Directory -ErrorAction SilentlyContinue) {
+        Remove-HubLink -Path $old.FullName -Root $proj.FullName -HubPath $HubPath -DryRun:$DryRun
+      }
+    }
     $hubRefs = Join-Path $HubPath 'references'
     if (Test-Path $hubRefs) {
       New-JunctionOrCopy -LinkPath (Join-Path $proj.FullName 'references') -TargetPath $hubRefs -DryRun:$DryRun

@@ -47,3 +47,8 @@ Desktop.ini
 *.pem
 *.pfx
 credentials.json
+
+# Local ownership manifests and backups may contain credentials.
+.agenthub-state/
+__pycache__/
+.audit-output/

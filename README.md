@@ -26,6 +26,7 @@ Fonte única de skills, templates e scripts para agentes de IA nos produtos **ER
 |-----------|---------|------------|
 | **Git** | Clone do hub + submodules | `winget install Git.Git` |
 | **PowerShell 7+** | Scripts usam sintaxe PS7 | `winget install Microsoft.PowerShell` |
+| **Python 3.11+** | Validação TOML e merge com backups | `winget install Python.Python.3.14` |
 | **Node.js 18+** | MCPs (npx) + pacotes globais (`mongodb-mcp-server`, `codegraph`) | `winget install OpenJS.NodeJS.LTS` |
 | **codegraph** | Grafo de conhecimento do código (MCP) | O `Install-AgentHub.ps1` faz `npm i -g @colbymchenry/codegraph` se faltar |
 | **Docker** _(opcional)_ | MongoDB local | Já instalado se usa containers |
@@ -108,10 +109,10 @@ Cópia inicial: `copy .env.example .env`
 | **Antigravity** | `~\.gemini` | `.agents\skills\` | `.agents\mcp_config.json` |
 | **VS Code** | `~\.vscode` | `.github\skills\` | `.vscode\mcp.json` |
 | **Claude** | `~\.claude` | `.claude\skills\` | `.mcp.json` |
-| **Codex** | `~\.codex` | `.codex\skills\` | `.codex\` |
+| **Codex** | `~\.codex` | `.agents\skills\` | `.codex\config.toml` |
 | **Devin** | `~\.devin` | `.devin\skills\` | `.devin\mcp_config.json` |
 
-Quem estiver em `AGENTHUB_EXCLUDE_IDES` (ou `excludeIdes` do catálogo) **não** recebe skills/MCP e o install **apaga** as configs do hub dessa IDE. O mapa está em `Get-IdeManagedPaths`.
+Quem estiver em `AGENTHUB_EXCLUDE_IDES` (ou `excludeIdes` do catálogo) **não** recebe skills/MCP e o install remove somente artefatos registrados e inalterados do hub dessa IDE. Pastas, servidores e arquivos manuais são preservados. `.agents/skills` é compartilhado entre Codex e Antigravity e permanece enquanto algum deles estiver ativo.
 
 `AGENTHUB_IDES=auto` (ou vazio) = todas as IDEs detectadas, menos o exclude.
 
@@ -132,7 +133,7 @@ Quem estiver em `AGENTHUB_EXCLUDE_IDES` (ou `excludeIdes` do catálogo) **não**
 .\Install-AgentHub.ps1 -RemoveUnusedIdeFolders
 ```
 
-O `-RemoveUnusedIdeFolders` remove pastas configuradas em `catalog/projects.json` → `unusedIdeFolders` (hoje: `.qoder`, `.codebuddy`).
+`-RemoveUnusedIdeFolders` e `-MigrateLegacyPaths` agora apenas avisam sobre pastas legadas. A limpeza automática de pastas inteiras foi desativada para preservar configurações manuais; exclusão de IDE e uninstall removem somente artefatos comprovadamente gerenciados.
 
 Para remoção completa de tudo que o hub gerou:
 
@@ -148,6 +149,46 @@ Para remoção completa de tudo que o hub gerou:
 ```
 
 ---
+
+## Instalação segura e diagnóstico
+
+Migração de uma instalação anterior (execute na raiz do hub):
+
+```powershell
+./scripts/Install-AgentHub.ps1 -AdoptLegacyConfigs -GlobalSkills -SkipAiMemory -SkipCodegraphInit -SkipMattPocockSetup
+./scripts/Test-AgentHub.ps1
+```
+
+- `-AdoptLegacyConfigs` permite adotar entradas antigas de MCP reconhecidas pelo comando/pacote, além dos nomes do catálogo. Revise o dry-run antes de usar em outra máquina. Conflitos não reconhecidos são preservados.
+- `-GlobalSkills` disponibiliza skills comuns e de processo ao Codex em `~/.agents/skills`, inclusive ao trabalhar no próprio hub. As skills de stack continuam locais. Sobreposição de escopos pode produzir nomes repetidos no seletor.
+- Codex e Antigravity usam `.agents/skills`. Os antigos links gerenciados em `.codex/skills` são removidos após a criação dos links corretos.
+- Codex recebe `.codex/config.toml` por projeto; Claude recebe `.mcp.json` mesmo quando Cursor também está ativo. O projeto precisa ser confiável no Codex.
+- A família é determinada por `projectFamilies` (exceções explícitas), depois por `angular.json` e dependências Angular/NestJS, depois pelos padrões de nome. Um erro de JSON interrompe a classificação.
+- Escritas de MCP são validadas antes da substituição, usam substituição atômica e criam backup. O manifesto e os backups ficam em `.agenthub-state/` (gitignored; podem conter credenciais). Não publique essa pasta. Preserve-a para que o uninstall reconheça a propriedade dos artefatos.
+- Uma configuração manual não é substituída só porque usa o mesmo nome. Alterações manuais posteriores em entradas gerenciadas também são preservadas. Um bloco TOML gerenciado modificado interrompe a atualização para revisão.
+- `-DryRun` não grava configurações nem exibe tokens de ai-memory ou context7.
+
+Para remover as duas entradas globais criadas pelo instalador antigo, **depois** de instalar os MCPs por projeto:
+
+```powershell
+# Raiz vazia para executar somente a limpeza global:
+./scripts/Uninstall-AgentHub.ps1 -Roots @() -RemoveLegacyCodexMcp -GlobalOnly
+```
+
+A limpeza global reconhece apenas os vetores antigos exatos de codegraph/context7; entradas personalizadas e ai-memory permanecem. `-Full` remove entradas de MCP registradas (inclusive OpenCode e TOML), ponteiros inalterados e links do hub. `-GlobalSkills` no uninstall remove apenas links pessoais apontando para este hub. AGENTS.md e integrações globais ai-memory são preservados.
+
+`Test-AgentHub.ps1 -Json` produz diagnóstico sem credenciais, com skills ausentes/inválidas, sintaxe, MCPs esperados ausentes e flags explícitas de desativação. Descoberta na IDE, aprovação e conectividade são marcadas como **não observadas**, nunca inferidas da existência do arquivo. O inventário inclui todas as raízes do catálogo, inclusive CRMCLASS, e configurações TOML.
+
+No Cursor, abra **Customize → MCPs**, aprove as conexões e compare abrir uma pasta isoladamente com abrir a workspace. O hub não altera aprovações internas. No Codex e Claude, use `/mcp`; reabra a sessão para atualizar a descoberta de skills. Se um servidor voltar a ficar disabled sem mudar o arquivo, examine os logs da IDE.
+
+Validação do desenvolvimento:
+
+```powershell
+python -m unittest discover -s scripts/tests -v
+./scripts/tests/Test-Integration.ps1
+```
+
+Referências: [Codex skills](https://learn.chatgpt.com/docs/build-skills), [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), [Claude MCP](https://code.claude.com/docs/en/mcp), [Cursor segurança](https://prod.cursor.com/docs/agent/security).
 
 ## MCPs por família
 
@@ -383,22 +424,9 @@ MCPs **per-project** (`codegraph`, `context7`, `filesystem`, `openapi`, `mongodb
 
 Se um MCP aparecer com erro na config global mas funcionar por projeto, **remova-o da config global** — a de projeto tem prioridade.
 
-#### Codex é exceção — MCP só global
+#### Codex: configuração por projeto
 
-O Codex CLI (0.153) **não tem config de MCP por projeto**: lê só de `~/.codex/config.toml`
-(`[mcp_servers.*]`). Por isso o install não escreve `.codex/mcp.json` — em vez disso
-`Ensure-CodexMcp` registra globalmente, uma vez, os servers que funcionam de qualquer
-repo: **`codegraph`** (`codegraph serve --mcp` acha o `.codegraph/` mais próximo pelo
-diretório de trabalho, que o Codex aponta pro repo) e **`context7`**. Os servers presos
-a caminho/conexão (`filesystem`, `mongodb`, `openapi`, `playwright`) não são wired pro
-Codex — use outro agente nesses repos.
-
-Sintoma de estar sem isso: no Codex, as skills `codegraph` / `explore-codebase` /
-`debug-issue` / `refactor-safely` / `review-changes` carregam mas a tool
-`codegraph_explore` não existe na sessão. Fix manual:
-`codex mcp add codegraph -- cmd /c codegraph serve --mcp`.
-
----
+O hub gera `.codex/config.toml` com os servidores da família. Skills locais usam `.agents/skills`. O Codex carrega configurações locais somente em projetos confiáveis. A instalação global antiga de codegraph/context7 pode ser removida com `Uninstall-AgentHub.ps1 -GlobalOnly -RemoveLegacyCodexMcp`, após validar a migração.
 
 ## Memória compartilhada (ai-memory)
 
@@ -449,5 +477,4 @@ Mapeamento IDE detectada → agente: `Cursor→cursor`, `Claude→claude-code`,
 
 ### Desinstalar
 
-`.\Uninstall-AgentHub.ps1 -Full` roda `ai-memory uninstall --apply` (global, **todos os
-agentes da máquina**) e remove o `.ai-memory.toml` gerado pelo hub.
+`Uninstall-AgentHub.ps1 -Full` preserva ai-memory global e seus hooks. Essa integração pode atender projetos fora do hub; sua remoção deve ser solicitada explicitamente ao CLI ai-memory.

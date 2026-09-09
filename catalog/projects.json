@@ -4,7 +4,7 @@
     "NFECLASS",
     "MOBICLASS",
     "SHOPCLASS",
-	"CRMCLASS"
+    "CRMCLASS"
   ],
   "mcp": {
     "common": [
@@ -29,7 +29,6 @@
     "nestjs": {
       "match": [
         "*-api",
-        "*-app",
         "*-auth",
         "*-sync",
         "*-hook",
@@ -177,7 +176,7 @@
     "OpenCode",
     "Antigravity"
   ],
-  "excludeIdes":[
+  "excludeIdes": [
     "VSCode",
     "Devin",
     "Kiro"
@@ -194,5 +193,6 @@
     ".qoder",
     ".codebuddy"
   ],
-  "qoderOptIn": false
+  "qoderOptIn": false,
+  "projectFamilies": {}
 }

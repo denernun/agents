@@ -1,256 +1,57 @@
-﻿<#
+<#
 .SYNOPSIS
-  Removes junctions and generated files created by Install-AgentHub.ps1
-  (does not delete the hub itself).
-
+Remove unchanged AgentHub artifacts, preserving manual content.
 .DESCRIPTION
-  By default only removes skill junctions (safe, reversible: re-run Install
-  to relink). Pass -Full to also remove generated MCP configs, AGENTS.md,
-  slim stubs, Cursor rules, Copilot/Antigravity/Kiro pointers, the
-  hub-generated .ai-memory.toml, and (via `ai-memory uninstall`) the global
-  ai-memory MCP + lifecycle hooks - i.e. a complete, symmetric uninstall of
-  everything Install-AgentHub.ps1 writes. Note the ai-memory step is global
-  (all agents on the machine), matching how Install wires it.
-
-.EXAMPLE
-  .\Uninstall-AgentHub.ps1 -DryRun
-
-.EXAMPLE
-  .\Uninstall-AgentHub.ps1 -Full
+-Full removes tracked MCPs and pointers. AGENTS.md is retained.
+Global ai-memory hooks are retained because other projects may use them.
 #>
 [CmdletBinding()]
 param(
-  [string]$HubPath = '',
+  [string]$HubPath = (Split-Path -Parent $PSScriptRoot),
   [string[]]$Roots = @(),
   [switch]$Full,
+  [switch]$GlobalSkills,
+  [switch]$RemoveLegacyCodexMcp,
+  [switch]$GlobalOnly,
   [switch]$DryRun
 )
-
-function Remove-PathIfExists {
-  param([string]$Path, [switch]$DryRun)
-  if (-not (Test-Path $Path)) { return }
-  if ($DryRun) { Write-Host "[dry] remove $Path"; return }
-  Remove-Item $Path -Recurse -Force
-  Write-Host "removed $Path"
-}
-
-function Remove-HubServersFromMcpJson {
-  # Surgically removes only hub-managed servers from an MCP JSON config file,
-  # preserving user-added servers and all other top-level properties.
-  # Deletes the file only if no servers remain and no other properties exist.
-  param(
-    [string]$Path,
-    [string]$ServersProperty,  # 'mcpServers' or 'servers'
-    [string[]]$HubServerNames,
-    [switch]$DryRun
-  )
-  if (-not (Test-Path $Path)) { return }
-  $content = Get-Content $Path -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
-  if (-not $content) { return }
-
-  try {
-    $obj = $content | ConvertFrom-Json
-  } catch {
-    Write-Warning "Cannot parse $Path as JSON — skipping (remove manually if unneeded)."
-    return
-  }
-
-  $servers = $obj.$ServersProperty
-  if (-not $servers) {
-    # File has no servers property — nothing hub-managed here
-    return
-  }
-
-  $remaining = [ordered]@{}
-  $removedAny = $false
-  foreach ($prop in $servers.PSObject.Properties) {
-    if ($HubServerNames -contains $prop.Name) {
-      $removedAny = $true
-    } else {
-      $remaining[$prop.Name] = $prop.Value
-    }
-  }
-
-  if (-not $removedAny) { return }
-
-  # Check if anything meaningful remains
-  $otherProps = @($obj.PSObject.Properties | Where-Object { $_.Name -ne $ServersProperty })
-  $hasUserServers = ($remaining.Count -gt 0)
-  $hasOtherContent = ($otherProps.Count -gt 0)
-
-  if (-not $hasUserServers -and -not $hasOtherContent) {
-    # Nothing left — remove the file entirely
-    if ($DryRun) { Write-Host "[dry] remove $Path (no user content remains)"; return }
-    Remove-Item $Path -Force
-    Write-Host "removed $Path (no user content remains)"
-  } else {
-    # Rewrite with only user servers + preserved properties
-    if ($DryRun) { Write-Host "[dry] strip hub servers from $Path"; return }
-    $output = [ordered]@{}
-    foreach ($p in $otherProps) { $output[$p.Name] = $p.Value }
-    if ($hasUserServers) { $output[$ServersProperty] = $remaining }
-    $json = $output | ConvertTo-Json -Depth 10
-    Set-Content -Path $Path -Value $json -Encoding UTF8
-    Write-Host "stripped hub servers from $Path (user servers preserved)"
-  }
-}
-
-if (-not $HubPath) {
-  $scriptParent = Split-Path -Parent $PSScriptRoot
-  if (Test-Path (Join-Path $scriptParent 'catalog\projects.json')) {
-    $HubPath = $scriptParent
-  } elseif (Test-Path 'D:\AGENTS\catalog\projects.json') {
-    $HubPath = 'D:\AGENTS'
-  } else {
-    $HubPath = 'D:\AGENTS'
-  }
-}
-
-$defaultSistemas = 'D:\SISTEMAS'
-if ($Roots.Count -eq 0) {
-  $catalogPath = Join-Path $HubPath 'catalog\projects.json'
-  if (Test-Path $catalogPath) {
-    $catalog = Get-Content $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($catalog.roots -and $catalog.roots.Count -gt 0) {
-      $Roots = @($catalog.roots | ForEach-Object { Join-Path $defaultSistemas $_ } | Where-Object { Test-Path $_ })
-    }
-  }
-  if ($Roots.Count -eq 0) {
-    $Roots = @('ERPCLASS', 'NFECLASS', 'MOBICLASS', 'SHOPCLASS', 'CRMCLASS') |
-      ForEach-Object { Join-Path $defaultSistemas $_ } |
-      Where-Object { Test-Path $_ }
-  }
-}
-
-# Build the list of hub-managed MCP server names from catalog (for surgical MCP removal)
-$hubMcpServerNames = @()
-if ($Full) {
-  $catalogPath2 = Join-Path $HubPath 'catalog\projects.json'
-  if (Test-Path $catalogPath2) {
-    $cat = Get-Content $catalogPath2 -Raw -Encoding UTF8 | ConvertFrom-Json
-    $names = [System.Collections.Generic.List[string]]::new()
-    if ($cat.mcp -and $cat.mcp.common) { foreach ($s in @($cat.mcp.common)) { if ($s) { [void]$names.Add($s) } } }
-    if ($cat.families) {
-      foreach ($prop in $cat.families.PSObject.Properties) {
-        $fam = $prop.Value
-        if ($fam.mcp) { foreach ($s in @($fam.mcp)) { if ($s -and $names -notcontains $s) { [void]$names.Add($s) } } }
-      }
-    }
-    if ($cat.mcp -and $cat.mcp.extra) {
-      foreach ($extra in @($cat.mcp.extra)) { foreach ($s in @($extra.servers)) { if ($s -and $names -notcontains $s) { [void]$names.Add($s) } } }
-    }
-    $hubMcpServerNames = @($names)
-  }
-  if ($hubMcpServerNames.Count -eq 0) {
-    # Hardcoded fallback covering known hub servers
-    $hubMcpServerNames = @('context7', 'filesystem', 'memorix', 'mongodb', 'openapi', 'playwright', 'coreui')
-  }
-  # Retired servers no longer in the catalog but still present in older
-  # project mcp.json files (must stay listed so -Full cleans them up).
-  foreach ($retired in @('memorix', 'coreui-docs')) {
-    if ($hubMcpServerNames -notcontains $retired) { $hubMcpServerNames += $retired }
-  }
-}
-
-# Skill junctions (matches Link-ProjectSkills targets in Install-AgentHub.ps1)
-$skillDirs = @(
-  '.cursor\skills',
-  '.agents\skills',
-  '.kiro\skills',
-  '.opencode\skills',
-  '.claude\skills',
-  '.codex\skills',
-  '.devin\skills',
-  '.github\skills'
-)
-foreach ($root in $Roots) {
-  if (-not (Test-Path $root)) { continue }
-  Get-ChildItem $root -Directory | ForEach-Object {
-    $projPath = $_.FullName
-    foreach ($rel in $skillDirs) {
-      $skillsRoot = Join-Path $projPath $rel
-      if (-not (Test-Path $skillsRoot)) { continue }
-      Get-ChildItem $skillsRoot -Force -ErrorAction SilentlyContinue | ForEach-Object {
-        $item = $_
-        $isReparse = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
-        if (-not $isReparse) { return }
-        if ($DryRun) {
-          Write-Host "[dry] rmdir $($item.FullName)"
-        } else {
-          cmd /c "rmdir `"$($item.FullName)`"" | Out-Null
-          Write-Host "removed junction $($item.FullName)"
-        }
-      }
-    }
-
-    $refPath = Join-Path $projPath 'references'
-    if (Test-Path $refPath) {
-      $item = Get-Item $refPath -Force
-      $isReparse = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
-      if ($isReparse) {
-        if ($DryRun) { Write-Host "[dry] rmdir $refPath" }
-        else {
-          cmd /c "rmdir `"$refPath`"" | Out-Null
-          Write-Host "removed junction $refPath"
-        }
-      }
-    }
-
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'AgentHub.Common.ps1')
+$cat = Get-Content (Join-Path $HubPath 'catalog/projects.json') -Raw | ConvertFrom-Json
+if (-not $Roots.Count) { $Roots = @($cat.roots | ForEach-Object { Join-Path 'D:/SISTEMAS' $_ } | Where-Object { Test-Path $_ }) }
+$Roots = @($Roots | ForEach-Object {
+  $root = $_
+  $children = @($cat.roots | ForEach-Object { Join-Path $root $_ } | Where-Object { Test-Path $_ })
+  if ($children.Count) { $children } else { $root }
+} | Select-Object -Unique)
+foreach ($root in $(if ($GlobalOnly) { @() } else { $Roots })) {
+  foreach ($project in Get-ChildItem -LiteralPath $root -Directory) {
+    if ($cat.excludeProjectNames -contains $project.Name) { continue }
     if ($Full) {
-      # MCP configs — surgically remove only hub-managed servers, preserving user additions
-      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.cursor\mcp.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
-      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.vscode\mcp.json') -ServersProperty 'servers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
-      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.kiro\settings\mcp.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
-      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.qoder\mcp.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
-      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.agents\mcp_config.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
-      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.mcp.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
-      Remove-HubServersFromMcpJson -Path (Join-Path $projPath '.devin\mcp_config.json') -ServersProperty 'mcpServers' -HubServerNames $hubMcpServerNames -DryRun:$DryRun
-
-      # Rules / pointers / stubs - only remove files this hub is known to
-      # write, never the whole .cursor\rules directory (it may contain
-      # rules the user added by hand or via the Cursor marketplace).
-      foreach ($rule in @('stack-pointer-nestjs.mdc', 'stack-pointer-angular.mdc', 'stack-pointer-delphi.mdc', 'stack-pointer-android.mdc', 'decorator-placement.mdc')) {
-        Remove-PathIfExists -Path (Join-Path $projPath ".cursor\rules\$rule") -DryRun:$DryRun
+      foreach ($ide in @('Cursor','Claude','Codex','Antigravity','OpenCode','VSCode','Kiro','Devin','Qoder')) {
+        Remove-HubIdeArtifacts -RepoPath $project.FullName -Ide $ide -DryRun:$DryRun
       }
-      Remove-PathIfExists -Path (Join-Path $projPath '.cursorrules') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.github\copilot-instructions.md') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.agents\rules\stack-pointer.md') -DryRun:$DryRun
-      Remove-PathIfExists -Path (Join-Path $projPath '.kiro\steering\stack-pointer.md') -DryRun:$DryRun
-
-      # .ai-memory.toml: only remove the exact hub-generated one-liner; a
-      # hand-edited file (monorepo / capture rules) is left in place.
-      $aiToml = Join-Path $projPath '.ai-memory.toml'
-      if (Test-Path $aiToml) {
-        $tomlText = (Get-Content $aiToml -Raw -Encoding UTF8 -ErrorAction SilentlyContinue).Trim()
-        if ($tomlText -match '^project\s*=\s*"[^"]*"$') {
-          Remove-PathIfExists -Path $aiToml -DryRun:$DryRun
-        } else {
-          Write-Host "kept $aiToml (hand-edited; remove manually if unneeded)"
+      $aiConfig = Join-Path $project.FullName '.ai-memory.toml'
+      if (Test-Path $aiConfig) { Invoke-HubConfig @{path=$aiConfig; format='text'; remove=$true; dry=[bool]$DryRun} }
+    } else {
+      foreach ($rel in @('.cursor/skills','.claude/skills','.codex/skills','.agents/skills','.opencode/skills','.github/skills','.kiro/skills','.devin/skills')) {
+        foreach ($item in Get-ChildItem -LiteralPath (Join-Path $project.FullName $rel) -Directory -Force -ErrorAction SilentlyContinue) {
+          Remove-HubLink -Path $item.FullName -Root $project.FullName -HubPath $HubPath -DryRun:$DryRun
         }
       }
-
-      # AGENTS.md is intentionally NOT removed by default (it may contain a
-      # hand-edited "## Local" section). Remove manually if truly needed.
     }
+    Remove-HubLink -Path (Join-Path $project.FullName 'references') -Root $project.FullName -HubPath $HubPath -DryRun:$DryRun
   }
 }
-
-if ($Full) {
-  # ai-memory registers GLOBAL per-agent MCP + hooks (not per-project), so its
-  # own installer is the only clean way to undo Ensure-AiMemory. This affects
-  # every project on this machine, not just hub repos.
-  $aiMem = Get-Command ai-memory -ErrorAction SilentlyContinue
-  if (-not $aiMem) { $aiMem = Get-Command ai-memory.exe -ErrorAction SilentlyContinue }
-  if ($aiMem) {
-    if ($DryRun) {
-      Write-Host "[dry] ai-memory uninstall --apply  (removes global MCP + hooks for ALL agents)"
-    } else {
-      Write-Host "`nRemoving ai-memory global MCP + lifecycle hooks (all agents on this machine)..."
-      & $aiMem.Source uninstall --apply
-      if ($LASTEXITCODE -ne 0) { Write-Warning "ai-memory uninstall exited $LASTEXITCODE" }
-    }
+if ($GlobalSkills) {
+  foreach ($item in Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.agents/skills') -Directory -Force -ErrorAction SilentlyContinue) {
+    Remove-HubLink -Path $item.FullName -Root $env:USERPROFILE -HubPath $HubPath -DryRun:$DryRun
   }
-
-  Write-Host "`nNote: AGENTS.md and opencode.json were left in place (they may contain project-specific / hand-edited content)."
-  Write-Host "Remove them manually per repo if you no longer want AgentHub-managed files there."
 }
+if ($RemoveLegacyCodexMcp) {
+  $codexRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+  $path = Join-Path $codexRoot 'config.toml'
+  if (Test-Path $path) { Invoke-HubConfig @{path=$path; format='toml'; legacy_global=$true; remove=$true; dry=[bool]$DryRun} }
+}
+Write-Host 'Done. Manual content, AGENTS.md, backups and global ai-memory integration preserved.'

@@ -1,12 +1,17 @@
-﻿<#
+<#
 .SYNOPSIS
   Inventory of agent instruction files and MCP configs under the product roots.
 #>
 [CmdletBinding()]
 param(
-  [string[]]$Roots = @('D:\SISTEMAS\ERPCLASS', 'D:\SISTEMAS\NFECLASS', 'D:\SISTEMAS\MOBICLASS', 'D:\SISTEMAS\SHOPCLASS')
+  [string[]]$Roots = @(),
+  [string]$HubPath = (Split-Path -Parent $PSScriptRoot)
 )
 
+if (-not $Roots.Count) {
+  $catalog = Get-Content (Join-Path $HubPath 'catalog/projects.json') -Raw | ConvertFrom-Json
+  $Roots = @($catalog.roots | ForEach-Object { Join-Path 'D:/SISTEMAS' $_ } | Where-Object { Test-Path $_ })
+}
 $rows = @()
 foreach ($root in $Roots) {
   if (-not (Test-Path $root)) { continue }
@@ -28,18 +33,10 @@ foreach ($root in $Roots) {
     }
     # MCP configs: project-root opencode.json / .mcp.json
     # plus mcp.json / mcp_config.json under any IDE folder
-    foreach ($rel in @('opencode.json', '.mcp.json')) {
+    foreach ($rel in @('opencode.json','.mcp.json','.codex/config.toml','.cursor/mcp.json','.vscode/mcp.json','.kiro/settings/mcp.json','.agents/mcp_config.json','.devin/mcp_config.json')) {
       $fp = Join-Path $p $rel
-      if (Test-Path $fp) {
-        $rows += [pscustomobject]@{ Project = $name; File = "mcp:$rel"; KB = [math]::Round((Get-Item $fp).Length / 1KB, 1) }
-      }
+      if (Test-Path $fp) { $rows += [pscustomobject]@{Project=$name;File="mcp:$rel";KB=[math]::Round((Get-Item $fp).Length / 1KB,1)} }
     }
-    Get-ChildItem $p -Recurse -Force -Include 'mcp.json', 'mcp_config.json' -ErrorAction SilentlyContinue |
-      Where-Object { $_.FullName -notmatch 'node_modules|\.git\\' } |
-      ForEach-Object {
-        $rel = $_.FullName.Substring($p.Length + 1)
-        $rows += [pscustomobject]@{ Project = $name; File = "mcp:$rel"; KB = [math]::Round($_.Length / 1KB, 1) }
-      }
   }
 }
 $rows | Format-Table -AutoSize

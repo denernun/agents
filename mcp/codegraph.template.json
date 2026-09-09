@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "codegraph": {
-      "command": "codegraph",
-      "args": ["serve", "--mcp", "--path", "{{REPO}}"],
+      "command": "cmd",
+      "args": ["/c", "codegraph", "serve", "--mcp", "--path", "{{REPO}}"],
       "cwd": "{{REPO}}",
       "type": "stdio"
     }

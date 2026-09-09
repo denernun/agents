@@ -186,7 +186,6 @@
     "node_modules",
     "dist",
     "trash",
-    "erpclass-erp",
     "erpclass-docs",
     "erpclass-misc"
   ],

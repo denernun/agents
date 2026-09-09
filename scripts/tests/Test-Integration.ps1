@@ -31,6 +31,7 @@ $refreshed=Get-Content (Join-Path $repo '.cursor/mcp.json') -Raw | ConvertFrom-J
 Assert (@($refreshed.mcpServers.PSObject.Properties).Count -eq 5) 'Targeted refresh removed other MCPs'
 Assert ($refreshed.mcpServers.codegraph.env.DO_NOT_TRACK -eq '1') 'CodeGraph telemetry not disabled'
 Assert (@($cat.families.delphi.skills) -contains 'codegraph') 'Delphi initialization not enabled'
+Assert (@($cat.excludeProjectNames) -notcontains 'erpclass-erp') 'Delphi ERP is still excluded from installation'
 # Shared skills survive excluding Antigravity while Codex remains active.
 $skill=Join-Path $HubPath 'skills/test';New-Item -ItemType Directory -Path $skill -Force | Out-Null
 Set-Content (Join-Path $skill 'SKILL.md') "---`nname: test`ndescription: Test skill.`n---`nBody."

@@ -520,7 +520,7 @@ function Ensure-CodegraphInit {
   )
   if ($Skills -notcontains 'codegraph') { return }
   $graphDir = Join-Path $RepoPath '.codegraph'
-  if ((Test-Path $graphDir) -and -not $Force) { return }
+  if ((Test-Path (Join-Path $graphDir 'codegraph.db')) -and -not $Force) { return }
   if ($DryRun) {
     Write-Host "  [dry] codegraph init `"$RepoPath`""
     return
@@ -531,9 +531,16 @@ function Ensure-CodegraphInit {
     return
   }
   Write-Host "  initializing codegraph index for $RepoPath ..."
-  & $codegraphExe init $RepoPath
-  if ($LASTEXITCODE -ne 0) {
-    Write-Warning "  codegraph init failed for $RepoPath (exit $LASTEXITCODE)"
+  $previousDoNotTrack = [Environment]::GetEnvironmentVariable('DO_NOT_TRACK', 'Process')
+  try {
+    $env:DO_NOT_TRACK = '1'
+    & $codegraphExe init $RepoPath --yes
+    $initExit = $LASTEXITCODE
+  } finally {
+    [Environment]::SetEnvironmentVariable('DO_NOT_TRACK', $previousDoNotTrack, 'Process')
+  }
+  if ($initExit -ne 0) {
+    Write-Warning "  codegraph init failed for $RepoPath (exit $initExit)"
     return
   }
   $gitignore = Join-Path $RepoPath '.gitignore'
@@ -1692,6 +1699,7 @@ Write-Host "Hub: $HubPath"
 Write-Host "IDEs: $($detected -join ', ')"
 Write-Host "Roots: $($Roots -join ', ')"
 if ($GlobalSkills -and $detected -contains 'Codex') {
+  & (Join-Path $PSScriptRoot 'Sync-Codegraph.ps1') -HubPath $HubPath -Global -AdoptLegacySkills:$AdoptLegacyConfigs -DryRun:$DryRun
   foreach ($name in @($commonSkills + $mattPocockSkills + $superpowersSkills | Select-Object -Unique)) {
     $target = Join-Path $HubPath "skills/$name"
     if (-not (Test-HubSkill $target)) { throw "Invalid global skill: $name" }

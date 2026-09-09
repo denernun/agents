@@ -11,6 +11,20 @@ spec.loader.exec_module(config)
 
 
 class ConfigTests(unittest.TestCase):
+    def test_partial_refresh_preserves_other_owned_servers(self):
+        for fmt in ('json', 'toml'):
+            with self.subTest(format=fmt):
+                self.path = self.root / ('partial.' + fmt)
+                self.call(format=fmt, servers={'codegraph': {'command': 'old'}, 'other': {'command': 'keep'}})
+                self.call(format=fmt, partial=True, servers={'codegraph': {'command': 'new'}})
+                raw = self.path.read_text()
+                parsed = tomllib.loads(raw) if fmt == 'toml' else json.loads(raw)
+                servers = parsed['mcp_servers' if fmt == 'toml' else 'mcpServers']
+                self.assertEqual(servers['other']['command'], 'keep')
+                self.assertEqual(servers['codegraph']['command'], 'new')
+                self.call(format=fmt, partial=True, servers={'codegraph': {'command': 'new'}})
+                self.assertEqual(self.path.read_text(), raw)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -26,6 +26,11 @@ Assert (Test-Path (Join-Path $repo '.codex/config.toml')) 'Codex project config 
 $before=Get-FileHash (Join-Path $repo '.cursor/mcp.json')
 Write-McpConfigs -RepoPath $repo -Ides @('Cursor','Claude','Codex','OpenCode','Antigravity') -Vars $vars -ServerNames $names -ManagedServers $names -SkipIdes $null
 Assert ((Get-FileHash (Join-Path $repo '.cursor/mcp.json')).Hash -eq $before.Hash) 'Repeated install changes JSON'
+& (Join-Path $sourceHub 'scripts/Sync-Codegraph.ps1') -HubPath $HubPath -Projects @($repo)
+$refreshed=Get-Content (Join-Path $repo '.cursor/mcp.json') -Raw | ConvertFrom-Json
+Assert (@($refreshed.mcpServers.PSObject.Properties).Count -eq 5) 'Targeted refresh removed other MCPs'
+Assert ($refreshed.mcpServers.codegraph.env.DO_NOT_TRACK -eq '1') 'CodeGraph telemetry not disabled'
+Assert (@($cat.families.delphi.skills) -contains 'codegraph') 'Delphi initialization not enabled'
 # Shared skills survive excluding Antigravity while Codex remains active.
 $skill=Join-Path $HubPath 'skills/test';New-Item -ItemType Directory -Path $skill -Force | Out-Null
 Set-Content (Join-Path $skill 'SKILL.md') "---`nname: test`ndescription: Test skill.`n---`nBody."
@@ -43,4 +48,21 @@ Remove-HubIdeArtifacts -RepoPath $repo -Ide OpenCode
 $oc=Get-Content (Join-Path $repo 'opencode.json') -Raw | ConvertFrom-Json
 Assert (@($oc.mcp.PSObject.Properties).Count -eq 0) 'OpenCode uninstall incomplete'
 Assert (Test-HubSkill (Join-Path $sourceHub 'skills/delphi-erpclass')) 'Delphi metadata invalid'
+# An empty graph directory must not suppress initialization; a database must.
+$emptyProject=Join-Path $testRoot 'empty-index'
+New-Item -ItemType Directory (Join-Path $emptyProject '.codegraph') -Force | Out-Null
+$script:initCalls=0
+function Invoke-FakeCodegraph {
+  $script:initCalls++
+  Assert ($env:DO_NOT_TRACK -eq '1') 'Initialization leaked telemetry'
+  Assert ($args -contains '--yes') 'Initialization can prompt'
+  Set-Content (Join-Path $args[1] '.codegraph/codegraph.db') 'fixture'
+  $global:LASTEXITCODE=0
+}
+function Get-CodegraphExe { return 'Invoke-FakeCodegraph' }
+$prior=[Environment]::GetEnvironmentVariable('DO_NOT_TRACK','Process')
+Ensure-CodegraphInit -RepoPath $emptyProject -Skills @('codegraph')
+Ensure-CodegraphInit -RepoPath $emptyProject -Skills @('codegraph')
+Assert ($script:initCalls -eq 1) 'Empty index skipped or existing index rebuilt'
+Assert ([string][Environment]::GetEnvironmentVariable('DO_NOT_TRACK','Process') -eq [string]$prior) 'Initialization changed caller environment'
 Write-Host 'Integration checks passed. Fixtures retained under .audit-output for inspection.'

@@ -64,6 +64,9 @@ def update(request):
     state = json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {}
     old = path.read_text(encoding='utf-8-sig') if path.exists() else ''
     desired = request.get('servers', {})
+    if request.get('partial'):
+        # A targeted refresh must retain other owned servers and their ownership.
+        desired = {**state.get('servers', {}), **desired}
     remove = request.get('remove', False)
     managed = request.get('managed', [])
     adopt = request.get('adopt', False)

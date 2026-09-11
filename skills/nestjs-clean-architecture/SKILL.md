@@ -38,6 +38,16 @@ Gere código, correções e refatorações que sigam **rigorosamente** as diretr
 - **Regra de plural/singular do projeto** (importante):
   - **Plural** (`accounts.*`): controllers, applications, databases, modules — nomeados pela _feature_.
   - **Singular** (`account.*`): entities, repositories, providers — nomeados pelo _agregado_.
+- **Nome da feature/agregado em português quando o domínio já é português.** "Escreva identificadores em
+  inglês" (topo deste documento) vale para o vocabulário técnico genérico (`Request`, `Response`,
+  `Database`, `Repository`, `getById`, `create...`) — não para o substantivo de domínio em si. Se o
+  projeto já fala `cliente`, `pedido`, `comissao`, `vendedor` (em `vendedorId`/`vendedorCodigo`, por
+  exemplo) em todo o resto do código, a feature/agregado usa esse mesmo nome — nunca uma tradução
+  inglesa avulsa (`clients`, `orders`, `commissions`, `seller`). Um nome de feature em inglês onde toda
+  a vizinhança já é `clientes`/`pedidos`/`comissoes` é sinal de a feature ter sido copiada de outro
+  projeto sem alinhar ao vocabulário local — corrija (classe, token de injeção, diretório, `sellerAccount`
+  → `vendedorAccount` em qualquer request/response que carregue esse dado) em vez de conviver com os
+  dois nomes.
 - Prefixos verbais para booleanos: `isLoading`, `hasError`, `canDelete`, `businessChanged`.
 - Toda função começa com um verbo (`getAccountById`, `createAccount`, `invalidateAllAccountsCache`).
 - Evite abreviações, exceto as universais (`API`, `URL`, `DTO`, `TTL`) e as convenções curtas: `i`/`j` em loops, `err`, `ctx`, `req`/`res`/`next`.
@@ -185,6 +195,28 @@ Arquivos por agregado (singular): `src/domain/repositories/<name>/<name>.reposit
   ```ts
   { provide: 'POSTGRES_ACCOUNT', useFactory: (c: DataSource) => c.getRepository(AccountEntity), inject: ['POSTGRES_SOURCE'] }
   ```
+
+### 2.6.1 Variante — Repository Mongo somente-leitura (sem TypeORM)
+
+Nem toda feature tem uma entidade TypeORM por trás. Quando os dados vêm de uma coleção MongoDB
+sincronizada por um processo externo (ex: ERP → Mongo) e a API só **lê** — nunca faz upsert nem
+tem `DataSource`/`Repository<T>` do TypeORM —, a Database **não** deve montar a
+agregação/`find` do Mongo diretamente (isso colapsa Database+Repository numa camada só, quebrando
+a separação do §2 mesmo sem TypeORM no meio). Em vez disso:
+
+- `src/domain/repositories/<name>/<name>.repository.ts` (singular, pelo agregado) injeta
+  `ConnectionSync` (§6.1) via **construtor** — não `@Injectable()` + `@Inject` de propriedade — e
+  só executa o pipeline de agregação/`find`, devolvendo o documento cru (sem `@Entity`/`extends
+  RepositoryBase`, que são específicos de TypeORM).
+- `src/domain/database/<feature>/<feature>.database.ts` injeta esse Repository e faz só
+  orquestração + mapeamento para o formato de domínio (ex: `toClienteCadastro`, resolução de
+  vendedor por código). Nunca chama `connectionSync.getCollection(...)` diretamente depois que o
+  Repository existe.
+- Essas features **não** ganham `findWithCache`/`upsertNative`: não há cache de query TypeORM nem
+  upsert partindo da API para um Mongo somente-leitura.
+- Registre a decisão em um ADR curto (`docs/adr/000N-...md`) explicando por que a feature não
+  segue o par Postgres — evita que uma revisão futura leia isso como bug. Ver `mobiclass-api`
+  `docs/adr/0002-repository-mongo-por-agregado.md`.
 
 ### 2.7 Camada de Infraestrutura Compartilhada
 
@@ -393,6 +425,31 @@ Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CON
 - End-to-end tests por módulo de API (`*.e2e-spec.ts` quando o projeto já tiver o project `e2e` no Vitest).
 - Cada controller pode expor um método `admin/test` como smoke test.
 
+### 5.1 Testes de integração — Repository e Migrations
+
+- **Repository:** o teste unitário com `vi.fn()`/mocks de `Repository<T>`/`DataSource` cobre a
+  orquestração, mas **não substitui** um teste de integração contra um banco real de teste
+  (Postgres local/CI, ou o `ConnectionSync` de Mongo — §2.6.1) sempre que o repository tiver query
+  custom além do CRUD herdado de `RepositoryBase` (`invalidateCache`, `upsertNative`, agregação
+  Mongo por agregado). O teste de integração é quem garante que a query gerada bate com o schema
+  real — mock nenhum garante isso.
+- **Migrations:** toda migration nova (gerada via `migration:generate` ou escrita à mão) tem um
+  teste de integração que roda `migration:run` numa base de teste limpa, valida o schema resultante
+  (colunas, índices, constraints, defaults) e confirma que `migration:revert` desfaz sem erro.
+  `migration:generate` não ter dado erro não é evidência de que a migration está correta.
+
+### 5.2 Gate de testes por fase
+
+**Nenhuma fase ou PR é considerada concluída com testes automatizados ausentes ou falhando** —
+isso vale tanto para features novas quanto para correções/refactors, e é uma condição **anterior**
+ao `lint`/`build` do checklist (§7), não um substituto:
+
+- Unitários (`npm test`) cobrindo casos de uso/domínio (Application, Database) — já exigido acima.
+- Integração cobrindo Repository e Migration (§5.1) sempre que a mudança tocar
+  `src/domain/repositories/` ou `src/domain/migrations/`.
+- Rode a suíte (`npm test` / `npm run test:cov`) **antes** de dar a fase por entregue. Um `build`
+  verde com teste quebrado, pulado ou não escrito não é uma fase concluída.
+
 ---
 
 ---
@@ -416,6 +473,22 @@ export const connectionSource = [{
 - Config em `src/config/.<env>.json` sob `source.pgsql` (host, port, username, password, database, schema, logging).
 - Entities glob-loaded: `${currentDir}/../**/*.entity{.ts,.js}`.
 - Pool sizing PM2-aware.
+
+**`ConnectionSync` (Mongo) precisa do mesmo cuidado de compartilhamento.** É uma classe
+`@Injectable()` com seu próprio `MongoClient` (`onModuleInit` conecta, `onModuleDestroy` fecha) —
+listá-la diretamente no array `providers: [ConnectionSync, ...]` de cada feature (em vez de
+importar um módulo que a forneça) faz o Nest instanciar **um `MongoClient` por módulo que a
+lista**, não um único cliente compartilhado. Achado real em `mobiclass-api` (2026-09): 8 features
+(`clientes`, `produtos`, `precos`, `condicoes`, `comissoes`, `vendedores`, `localizacao`, e
+`pedido-comercial` dentro do módulo de `pedidos`) tinham cada uma o seu próprio
+`providers: [ConnectionSync, ...]`, abrindo 8 conexões Mongo independentes para o mesmo banco.
+
+Correção: `ConnectionSync` entra nos `providers`/`exports` de `ConnectionModule`
+(`src/domain/connection/connection.module.ts`), ao lado do `DataSource` do Postgres. Toda feature
+que precisa dela faz `imports: [ConnectionModule]` no próprio `*.module.ts` — mesmo padrão que os
+módulos de Repository Postgres já usam para o `DataSource`. `ConnectionModule` não precisa ser
+`@Global()`: por ser sempre a mesma classe de módulo, o Nest resolve um único provider
+compartilhado entre todos os importadores.
 
 ### 6.2 PgBouncer (Produção)
 
@@ -479,7 +552,11 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 
 - [ ] Camadas respeitadas: Controller → Application → Database → Repository. Sem "atalhos".
 - [ ] Interfaces + tokens em uso; nenhuma classe concreta injetada onde deveria ser interface.
-- [ ] Nomes de arquivos seguem `<name>.<artifact>.ts` com o plural/singular correto.
+- [ ] Nomes de arquivos seguem `<name>.<artifact>.ts` com o plural/singular correto, e o nome da
+      feature/agregado está em português quando o resto do domínio já é (§1.2) — nada de uma
+      feature `sellers` isolada entre `clientes`/`pedidos`/`comissoes`.
+- [ ] Se a feature usa Mongo via `ConnectionSync` (§2.6.1/§6.1): o módulo importa
+      `ConnectionModule`, nunca lista `ConnectionSync` no próprio `providers`.
 - [ ] JSDoc explicando **o porquê** em métodos públicos e em qualquer lógica de cache/fingerprint.
 - [ ] Nenhum `any`, nenhuma magic number, nenhum campo vazando via `Response` DTO.
 - [ ] Nenhuma relação eager em listas; `relations: [...]` só quando o dado é usado imediatamente.
@@ -488,4 +565,6 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).
 - [ ] `src/main.ts` segue a estrutura padrão da família (§2.10): OTel antes dos imports do Nest, import lazy de `NestFactory`/`AppModule`, logger Winston + `app.useLogger`, CORS explícito (sem `cors: true`), Swagger só em `development`, `trust proxy`. Referência: `erpclass-dash-api/src/main.ts`.
 - [ ] Swagger: checklist em [swagger.md](swagger.md) — `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer/`apiKey` no DocumentBuilder. Plugin CLI com `dtoFileNameSuffix` completo. Sem `@ApiProperty` nos DTOs (exceto gaps do plugin).
+- [ ] Testes (§5.1/§5.2): unitários de Application/Database, mais integração de Repository/Migration
+      se a mudança tocou essas camadas — suíte rodada e **passando**, não só escrita.
 - [ ] `npm run lint` e `npm run build` sem erros.

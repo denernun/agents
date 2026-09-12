@@ -66,7 +66,9 @@ param(
   [switch]$SkipAiMemory,
   [switch]$WriteAiMemoryToml,
   [switch]$GlobalSkills,
-  [switch]$AdoptLegacyConfigs
+  [switch]$AdoptLegacyConfigs,
+  [switch]$CheckVendorUpdates,
+  [switch]$UpdateVendors
 )
 
 Set-StrictMode -Version Latest
@@ -648,7 +650,8 @@ $triageSection
 ### Domain docs
 
 Single-context layout at the repository root. See `docs/agents/domain.md`.
-"@.TrimEnd()
+"@
+  $block = $block.TrimEnd()
 
   $raw = Get-Content -LiteralPath $agentsPath -Raw -Encoding UTF8
   $pattern = '(?ms)^## Agent skills\s*\r?\n.*?(?=^##\s|\z)'
@@ -1308,7 +1311,7 @@ function Remove-FatAlwaysOnRules {
       if ($content -and $content.Contains($marker)) { $isHubGenerated = $true; break }
     }
     if (-not $isHubGenerated) {
-      Write-Warning "Skipping removal of $(Split-Path $fr -Leaf) — does not appear hub-generated. Remove manually if unneeded."
+      Write-Warning ('Skipping removal of {0} - does not appear hub-generated. Remove manually if unneeded.' -f (Split-Path $fr -Leaf))
       continue
     }
     if ($DryRun) { Write-Host "  [dry] remove fat rule $(Split-Path $fr -Leaf)"; continue }
@@ -1475,7 +1478,7 @@ function Ensure-AiMemory {
 
   $exe = Get-AiMemoryExe
   if (-not $exe) {
-    Write-Warning "AI_MEMORY_ENABLED is set but 'ai-memory' CLI is not on PATH. Install it (see README 'Memoria compartilhada') or unset AI_MEMORY_ENABLED. Skipping ai-memory wiring."
+    Write-Warning "AI_MEMORY_ENABLED is set but the ai-memory CLI is not on PATH. Install it (see README Memoria compartilhada) or unset AI_MEMORY_ENABLED. Skipping ai-memory wiring."
     return
   }
 
@@ -1531,13 +1534,117 @@ function Write-AiMemoryProjectConfig {
   Write-Host "  wrote .ai-memory.toml"
 }
 
+function Get-AgentHubVendors {
+  param([string]$HubPath)
+  @(
+    @{ Name = 'addyosmani/agent-skills'; Path = (Join-Path $HubPath 'vendor\addyosmani-agent-skills') },
+    @{ Name = 'mattpocock/skills'; Path = (Join-Path $HubPath 'vendor\mattpocock-skills') },
+    @{ Name = 'obra/superpowers'; Path = (Join-Path $HubPath 'vendor\superpowers') },
+    @{ Name = 'Leonxlnx/unlazy'; Path = (Join-Path $HubPath 'vendor\unlazy') },
+    @{ Name = 'browser-use/browser-harness'; Path = (Join-Path $HubPath 'vendor\browser-harness') },
+    @{ Name = 'Drjacky/claude-android-ninja'; Path = (Join-Path $HubPath 'vendor\claude-android-ninja') }
+  )
+}
+
+function Get-AgentHubVendorRemote {
+  param([hashtable]$Vendor)
+  $remote = (& git -C $Vendor.Path symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>$null | Select-Object -Last 1)
+  if ($LASTEXITCODE -eq 0 -and $remote) { return $remote.Trim() }
+  foreach ($candidate in @('origin/main', 'origin/master')) {
+    & git -C $Vendor.Path rev-parse --verify --quiet $candidate 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { return $candidate }
+  }
+  return $null
+}
+
+function Invoke-AgentHubVendorOperation {
+  param(
+    [string]$HubPath,
+    [switch]$Check,
+    [switch]$Update
+  )
+  if ($Check -and $Update) { throw 'Use -CheckVendorUpdates or -UpdateVendors, not both.' }
+  $foundChanges = $false
+  $hadErrors = $false
+  foreach ($vendor in Get-AgentHubVendors -HubPath $HubPath) {
+    if (-not (Test-Path (Join-Path $vendor.Path '.git'))) {
+      if ($Update) { Write-Warning "Vendor missing; not installing it: $($vendor.Name)" }
+      continue
+    }
+
+    if ($Check -or $Update) {
+      $fetchFailed = $false
+      try {
+        & git -C $vendor.Path fetch origin --quiet 2>$null
+        if ($LASTEXITCODE -ne 0) { $fetchFailed = $true }
+      } catch {
+        $fetchFailed = $true
+      }
+      if ($fetchFailed) {
+        $hadErrors = $true
+        Write-Warning "Could not fetch updates for $($vendor.Name)."
+        continue
+      }
+    }
+
+    $remote = Get-AgentHubVendorRemote -Vendor $vendor
+    if (-not $remote) {
+      $hadErrors = $true
+      Write-Warning "Could not determine origin branch for $($vendor.Name)."
+      continue
+    }
+    $dirty = @(& git -C $vendor.Path status --porcelain 2>$null)
+    $commits = @(& git -C $vendor.Path log HEAD..$remote --oneline 2>$null)
+    if ($commits.Count -gt 0) { $foundChanges = $true }
+
+    if ($Check) {
+      if ($dirty.Count -gt 0) {
+        $foundChanges = $true
+        Write-Host "[$($vendor.Name)] alterações locais (preservadas):"
+        $dirty | ForEach-Object { Write-Host "  $_" }
+      }
+      if ($commits.Count -gt 0) {
+        Write-Host "[$($vendor.Name)] commits novos em ${remote}:"
+        $commits | ForEach-Object { Write-Host "  $_" }
+        Write-Host "[$($vendor.Name)] resumo:"
+        & git -C $vendor.Path diff --stat HEAD..$remote
+      }
+      continue
+    }
+
+    if ($dirty.Count -gt 0) {
+      Write-Warning "Skipping $($vendor.Name): local changes detected; review or save them before -UpdateVendors."
+      continue
+    }
+    if ($commits.Count -eq 0) {
+      Write-Host "[$($vendor.Name)] already up to date."
+      continue
+    }
+    $before = (& git -C $vendor.Path rev-parse --short HEAD).Trim()
+    & git -C $vendor.Path merge --ff-only $remote 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "Could not fast-forward $($vendor.Name); no vendor update was applied."
+      continue
+    }
+    $after = (& git -C $vendor.Path rev-parse --short HEAD).Trim()
+    Write-Host "[$($vendor.Name)] updated $before -> $after. Review and commit the submodule pointer in the hub."
+  }
+  if ($Check -and -not $foundChanges -and -not $hadErrors) { Write-Host 'No vendor changes found.' }
+  if ($Check -and $hadErrors) { Write-Warning 'Vendor check incomplete; resolve the warnings and run it again.' }
+  if ($Update) { Write-Host 'Vendor update operation finished. The hub submodule pointers are not committed automatically.' }
+}
+
 # --- main ---
 $HubPath = Resolve-HubPath -Path $HubPath
+if ($CheckVendorUpdates -or $UpdateVendors) {
+  Invoke-AgentHubVendorOperation -HubPath $HubPath -Check:$CheckVendorUpdates -Update:$UpdateVendors
+  exit 0
+}
 & python -c "import tomllib" 2>$null
 if ($LASTEXITCODE -ne 0) { throw 'AgentHub requires Python 3.11+ (tomllib) for safe TOML validation.' }
 $loadedDotEnv = Import-HubDotEnv -HubPath $HubPath
 if ($loadedDotEnv) { Write-Host "Loaded $HubPath\.env" }
-else { Write-Warning "No $HubPath\.env — using catalog ides/excludeIdes. Copy .env.example to .env for this machine." }
+else { Write-Warning ('No {0}.env - using catalog ides/excludeIdes. Copy .env.example to .env for this machine.' -f $HubPath) }
 
 $catalogPath = Join-Path $HubPath 'catalog\projects.json'
 $catalog = Get-Content $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -1736,7 +1843,12 @@ foreach ($root in $Roots) {
     Write-Host "`n=== $($proj.Name) [$family] ==="
     $stats.projects++
 
-    $skillNames = @($commonSkills) + @($cfg.skills) + @($mattPocockSkills) + @($superpowersSkills)
+    $disabledCommonSkills = @()
+    if ($cfg.PSObject.Properties.Name -contains 'disabledCommonSkills') {
+      $disabledCommonSkills = @($cfg.disabledCommonSkills)
+    }
+    $projectCommonSkills = @($commonSkills | Where-Object { $disabledCommonSkills -notcontains $_ })
+    $skillNames = @($projectCommonSkills) + @($cfg.skills) + @($mattPocockSkills) + @($superpowersSkills)
     Link-ProjectSkills -RepoPath $proj.FullName -HubPath $HubPath -SkillNames $skillNames -Ides $detected -DryRun:$DryRun
     if ($detected -contains 'Codex') {
       foreach ($old in Get-ChildItem (Join-Path $proj.FullName '.codex/skills') -Directory -ErrorAction SilentlyContinue) {

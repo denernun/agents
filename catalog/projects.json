@@ -87,17 +87,23 @@
         "*-erp"
       ],
       "skills": [
-        "delphi-erpclass",
-        "codegraph",
-        "debug-issue",
-        "explore-codebase",
-        "refactor-safely",
-        "review-changes"
       ],
       "mcp": [],
       "agentsTemplate": "delphi.md",
       "cursorRule": "stack-pointer-delphi.mdc",
-      "extraRules": []
+      "extraRules": [],
+      "disabledCommonSkills": [
+        "using-agent-skills",
+        "git-workflow-and-versioning",
+        "code-review-and-quality",
+        "security-and-hardening",
+        "observability-and-instrumentation",
+        "unlazy",
+        "spec-driven-development",
+        "planning-and-task-breakdown",
+        "incremental-implementation"
+      ],
+      "disabledSkillsUntilSelected": true
     },
     "android": {
       "match": [
@@ -142,7 +148,10 @@
     "code-review-and-quality",
     "security-and-hardening",
     "observability-and-instrumentation",
-    "unlazy"
+    "unlazy",
+    "spec-driven-development",
+    "planning-and-task-breakdown",
+    "incremental-implementation"
   ],
   "mattPocockSkills": [
     "grilling",

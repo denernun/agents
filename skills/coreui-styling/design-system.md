@@ -483,8 +483,28 @@ Regras (canonicas):
   `app-ui-table-pagination`) sempre visivel quando ha dados ---
   "Anterior / Proximo" + "pagina X de Y".
 
+**Paginacao e obrigatoria em TODO grid, sem excecao** --- inclusive listas
+"Top N" de dashboard (top contas, top produtos, formas de pagamento) que
+hoje parecem pequenas. Justificativa: a lista so parece pequena com os
+dados de teste/producao atuais; o grid precisa aguentar crescimento futuro
+sem virar uma tela sem controle de paginacao. Duas formas validas:
+
+1. **Servidor pagina** (`pageSize: DS_TABLE_PAGE_SIZE` no request) ---
+   preferivel quando o endpoint ja aceita `page`/`limit`.
+2. **Cliente pagina** (`DS_TABLE_PAGE_SIZE` fatiando o array em memoria)
+   --- quando o array inteiro vem embutido numa resposta maior (ex.: um
+   dashboard agregado que devolve `topAccounts[]` dentro de um payload
+   unico, sem paginacao propria no endpoint). Padrao: getters
+   `pagedX`/`xTotalPages` no componente + `<app-ui-table-pagination
+   [currentPage]="xPage" [totalPages]="xTotalPages"
+   [totalRecords]="x.length" (pageChange)="xPage = $event" />`; resetar a
+   pagina para 1 sempre que os dados forem recarregados (novo filtro).
+
+Nunca renderizar um `app-ui-data-table` sem `app-ui-table-pagination` (ou o
+rodape equivalente) ao lado, mesmo que a lista atual caiba numa pagina so.
+
 Proibido em grids: `<br>` em celula, quebra de descricao longa, altura de
-linha variavel.
+linha variavel, grid sem paginacao.
 
 ## 11.6 Chart Card --- `app-chart-card`
 

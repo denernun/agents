@@ -23,14 +23,16 @@ ROOT="/d/sistemas"
 
 # folder-name -> absolute path
 #
-# NOT included: nfeclass-app (still on Tailwind for page content — this
-# design system explicitly excludes Tailwind, see design-system.md) and
-# shopclass-app (no @coreui dependency at all — never onboarded). Both had
-# stray, never-wired _tokens.scss/_ds-*.scss files sitting in src/styles/
-# from an earlier abandoned attempt; those were removed rather than synced,
-# to avoid dead files implying an adoption that never happened. Onboarding
-# either one is a real migration project (drop Tailwind or add CoreUI+
-# Bootstrap first), not something this script should attempt silently.
+# NOT included: shopclass-app (no @coreui dependency at all — never
+# onboarded; had stray, never-wired _tokens.scss/_ds-*.scss files from an
+# abandoned attempt, removed rather than synced to avoid dead files implying
+# an adoption that never happened). Onboarding it is a real migration
+# project (add CoreUI + Bootstrap first), not something this script should
+# attempt silently.
+#
+# nfeclass-app was Tailwind-only until it was migrated off Tailwind onto
+# this design system (Tailwind's page-content usage was tiny — the shell was
+# already CoreUI); now included like every other project.
 declare -A PROJECTS=(
   [erpclass-admin]="$ROOT/ERPCLASS/erpclass-admin"
   [erpclass-dash]="$ROOT/ERPCLASS/erpclass-dash"
@@ -41,6 +43,7 @@ declare -A PROJECTS=(
   [erpclass-conn]="$ROOT/ERPCLASS/erpclass-conn"
   [mobiclass-app]="$ROOT/MOBICLASS/mobiclass-app"
   [crmclass-app]="$ROOT/CRMCLASS/crmclass-app"
+  [nfeclass-app]="$ROOT/NFECLASS/nfeclass-app"
 )
 
 TARGET_FILTER="${1:-}"

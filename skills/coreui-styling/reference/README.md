@@ -17,6 +17,22 @@ A project's `src/styles/` copies of these must be **byte-identical**. `styles.sc
 wires them: `@use 'tokens';` first, then after `@use 'theme';` add
 `@use 'ds-components';` and `@use 'ds-forms';`.
 
+## `styles/_ds-modals.scss` — conditional 5th file
+
+Themes sweetalert2's own classes (`.swal2-*`) with the `--ds-*` tokens. Only
+copy this into a project that depends on `sweetalert2` (check its
+`package.json`). Wire it from `_custom.scss` with `@use 'ds-modals';` (the
+file lives at `src/styles/_ds-modals.scss`, sibling of `_tokens.scss` — not
+under `custom/`, since it is canonical, not a per-project exception). Never
+touches `ds-*` classes, so it carries zero collision risk with the four core
+files.
+
+Kanban board styling (`ds-kanban-*`) is **not** part of the canonical set —
+it is a per-app pattern for pipeline/CRM-style boards, today only
+`crmclass-app`. Each app that needs one keeps its own
+`custom/_<app>-kanban.scss` built on the same `--ds-*` tokens, documented as
+an exception in that project's `docs/design_ui.md`.
+
 ## `layout-shared/` — the Angular components (copy + adapt one file)
 
 Mirror of `src/app/layout/shared/` — the presentational components that consume

@@ -1,0 +1,181 @@
+// Design system — SweetAlert2 modal theming
+//
+// Restyles sweetalert2's own classes (.swal2-*) to match the ds-* token
+// system. Safe to include in any project that depends on `sweetalert2` —
+// it never touches ds-* component classes, only the library's own markup.
+
+.swal2-popup {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-card);
+  box-shadow: var(--ds-shadow-card-hover, var(--ds-shadow-card));
+  font-family: var(--ds-font-sans);
+  animation: ds-modal-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.swal2-title {
+  color: var(--ds-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.swal2-html-container,
+.swal2-text {
+  color: var(--ds-text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.swal2-actions {
+  gap: 0.625rem;
+}
+
+.swal2-confirm.swal2-styled {
+  background: var(--ds-primary) !important;
+  border-radius: var(--ds-radius-button);
+  font-weight: 600;
+  padding: 0.625rem 1.25rem;
+  box-shadow: none;
+  transition:
+    filter 0.2s ease,
+    transform 0.1s ease;
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:focus {
+    box-shadow: 0 0 0 3px var(--ds-primary-soft);
+  }
+}
+
+.swal2-cancel.swal2-styled {
+  background: var(--ds-surface-muted) !important;
+  color: var(--ds-text) !important;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-button);
+  font-weight: 600;
+  padding: 0.625rem 1.25rem;
+  box-shadow: none;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: var(--ds-border) !important;
+  }
+}
+
+.swal2-deny.swal2-styled {
+  background: var(--ds-danger) !important;
+  border-radius: var(--ds-radius-button);
+  font-weight: 600;
+  padding: 0.625rem 1.25rem;
+  box-shadow: none;
+}
+
+.swal2-close {
+  color: var(--ds-text-muted);
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+
+  &:hover {
+    color: var(--ds-danger);
+    transform: rotate(90deg);
+    background: transparent;
+  }
+
+  &:focus {
+    box-shadow: 0 0 0 3px var(--ds-primary-soft);
+  }
+}
+
+// Icon accents pick up the same semantic colors as everywhere else
+.swal2-icon.swal2-success {
+  border-color: var(--ds-success);
+  color: var(--ds-success);
+
+  [class^='swal2-success-line'] {
+    background-color: var(--ds-success);
+  }
+
+  .swal2-success-ring {
+    border-color: rgb(16 185 129 / 0.3);
+  }
+}
+
+.swal2-icon.swal2-error {
+  border-color: var(--ds-danger);
+  color: var(--ds-danger);
+
+  [class^='swal2-x-mark-line'] {
+    background-color: var(--ds-danger);
+  }
+}
+
+.swal2-icon.swal2-warning {
+  border-color: var(--ds-warning);
+  color: var(--ds-warning);
+}
+
+.swal2-icon.swal2-info {
+  border-color: var(--ds-info);
+  color: var(--ds-info);
+}
+
+.swal2-icon.swal2-question {
+  border-color: var(--ds-primary);
+  color: var(--ds-primary);
+}
+
+// Form fields inside a modal (Swal.fire({ input: ... }))
+.swal2-input,
+.swal2-textarea,
+.swal2-select {
+  background: var(--ds-surface);
+  border: 1.5px solid var(--ds-border);
+  border-radius: var(--ds-radius-input);
+  color: var(--ds-field-text, var(--ds-text));
+  box-shadow: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &:focus {
+    border-color: var(--ds-primary);
+    box-shadow: 0 0 0 3px var(--ds-primary-soft);
+  }
+
+  &::placeholder {
+    color: var(--ds-input-placeholder, var(--ds-text-muted));
+  }
+}
+
+// Backdrop — slightly darker than the default, consistent in both themes
+.swal2-container.swal2-backdrop-show,
+.swal2-container.swal2-backdrop-hide {
+  background: rgb(15 23 42 / 0.55);
+}
+
+@keyframes ds-modal-in {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+html[data-coreui-theme='dark'],
+body.c-dark-theme {
+  .swal2-container.swal2-backdrop-show,
+  .swal2-container.swal2-backdrop-hide {
+    background: rgb(0 0 0 / 0.65);
+  }
+}

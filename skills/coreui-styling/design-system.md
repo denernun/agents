@@ -1498,8 +1498,26 @@ Regra: nao duplicar estilos nos templates --- encapsular em
 |                       | microinteracoes                                     |
 | `_ds-forms.scss`      | Inputs, ng-select, busca no header, kbd, paginacao   |
 | `_theme.scss`         | Shell CoreUI (body, header, sidebar, footer)         |
+| `_ds-modals.scss`     | Tema do sweetalert2 (`.swal2-*`) --- so em projetos  |
+|                       | com a dependencia `sweetalert2`                      |
 | `styles.scss`         | Bootstrap 5 + CoreUI + imports do DS                 |
 | `_custom.scss`        | Barrel de `custom/_<feature>.scss`                   |
+
+### 51.3.1 `_ds-modals.scss` (condicional)
+
+Restyla as classes proprias do sweetalert2 (`.swal2-popup`, `.swal2-title`,
+`.swal2-confirm`, `.swal2-icon.swal2-*`, campos de input do modal) com os
+tokens `--ds-*` --- fundo, texto, raio, sombra e cores semanticas por icone
+(success/error/warning/info/question). Nao toca em nenhuma classe `ds-*` do
+sistema, entao nao ha risco de colisao. So faz sentido incluir em projetos
+que dependem de `sweetalert2` (a maioria do parque CLASS ja depende). Import
+em `styles.scss` ou via `_custom.scss` com `@use 'ds-modals';` apos os
+quatro arquivos base.
+
+Kanban boards (`ds-kanban-*`) NAO fazem parte do conjunto canonico --- e um
+padrao especifico de app com pipeline (hoje so o `crmclass-app`). Cada app
+com essa necessidade mantem seu proprio `custom/_<app>-kanban.scss` seguindo
+os mesmos tokens, documentado como excecao em `docs/design_ui.md`.
 | `custom/_*.scss`      | CSS por feature (ex.: `_auth-social.scss`)           |
 
 ### Formularios (`_ds-forms.scss`)

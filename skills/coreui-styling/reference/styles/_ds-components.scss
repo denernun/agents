@@ -274,6 +274,21 @@
   color: #fff;
   opacity: 0.22;
   flex-shrink: 0;
+  transition:
+    transform 0.25s ease,
+    opacity 0.25s ease;
+}
+
+// Hero cards get their own colored elevation on hover (base .ds-stat-card:hover
+// only applies the neutral --ds-shadow-card-hover) and a subtle watermark lift.
+.ds-stat-card--hero:hover {
+  box-shadow: var(--ds-accent-shadow, var(--ds-shadow-card-colored));
+  filter: brightness(1.04);
+
+  .ds-stat-card__watermark {
+    transform: scale(1.08) rotate(-4deg);
+    opacity: 0.3;
+  }
 }
 
 .ds-stat-card--metric {

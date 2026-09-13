@@ -595,6 +595,48 @@ Segment control de periodo (`.ds-segment` / `.ds-segment__btn`).
 | `active`    | `string`                        | `'day'`      |
 | `ariaLabel` | `string`                        | `'Periodo'`  |
 
+## 11.15 Date Range Filter --- `app-date-range-filter`
+
+Filtro de periodo padrao: dropdown de atalhos (Hoje / 7 dias / 30 dias / Mes
+atual / Mes anterior) + `bsDaterangepicker` (ngx-bootstrap) para range
+customizado. Ver secao 50.5 para o contrato completo do pacote
+`ngx-bootstrap` (config global, locale, tema).
+
+```html
+<app-date-range-filter initialPreset="today" (rangeChange)="onPeriodChange($event)" />
+```
+
+| Input             | Tipo               | Default                    |
+| ----------------- | ------------------ | --------------------------- |
+| `initialPreset`   | `DateRangePreset`  | `'today'`                   |
+| `shortcutsLabel`  | `string`           | `'Atalhos de periodo'`      |
+| `inputLabel`      | `string`           | `'Periodo'`                 |
+
+| Output        | Tipo                          |
+| ------------- | ----------------------------- |
+| `rangeChange` | `EventEmitter<readonly [Date, Date]>` |
+
+`DateRangePreset = 'today' \| 'last7' \| 'last30' \| 'month' \| 'lastMonth'`.
+A funcao pura `computeDateRangePreset(preset)` (mesmo arquivo) fica exportada
+para reuso caso a pagina precise recalcular um preset fora do componente.
+
+**Quando NAO usar este componente** (mas ainda usar `bsDaterangepicker`
+diretamente, nunca um datepicker inventado):
+
+- Filtro sem atalhos, so range livre + botao "Filtrar" explicito (ex.:
+  `titulos.component.html` do erpclass-cob) --- use `bsDaterangepicker`
+  puro no input.
+- Estado de filtro persistido entre rotas via um service com signals (ex.:
+  `DashboardFilterService` do erpclass-dash/cob/mkt/conn, que tambem
+  combina o range com um multi-select de status na mesma `app-filter-bar`)
+  --- mantenha o service; o `dropdown` + `bsDaterangepicker` inline la
+  dentro ja segue o padrao correto, so nao usa o wrapper generico porque
+  tem um preset extra (ano atual) e i18n via `_translate`.
+
+Ambas as variantes sao validas porque as duas usam `bsDaterangepicker` do
+ngx-bootstrap --- a regra nao e "sempre o mesmo componente Angular", e
+"nunca reinventar o datepicker".
+
 ---
 
 # 12. Layout principal
@@ -1433,6 +1475,96 @@ Classes em `_ds-components.scss` (`.ds-badge--*`). Light e dark usam a
 [ ] Charts reagem ao evento de troca de tema
 ```
 
+## 50.5 ngx-bootstrap suite --- regra e contrato
+
+**Regra:** quando a tela precisar de datepicker, date-range, timepicker,
+modal, dropdown ou tabs, usar o componente pronto do `ngx-bootstrap`
+(`ngx-bootstrap@22`). Nunca construir um calendario/seletor de hora do
+zero --- nem em HTML puro, nem com outra lib. Isso vale para todo app da
+familia CLASS.
+
+| Necessidade | Componente ngx-bootstrap | Modulo |
+| --- | --- | --- |
+| Data unica | `bsDatepicker` | `ngx-bootstrap/datepicker` (`BsDatepickerModule`) |
+| Intervalo de datas | `bsDaterangepicker` | mesmo modulo --- e o par mais usado na pratica, ver `app-date-range-filter` (11.15) |
+| Hora | `timepicker` | `ngx-bootstrap/timepicker` (`TimepickerModule`) --- **nenhum app da familia usa hoje**; se precisar, este e o componente certo, nao um input mascarado |
+| Modal | `BsModalService.show(template, options)` | `ngx-bootstrap/modal` (`ModalModule`) --- classes `ds-modal__*` no `<ng-template>` |
+| Dropdown com menu | `dropdown` / `dropdownToggle` / `*dropdownMenu` | `ngx-bootstrap/dropdown` (`BsDropdownModule`) --- ver `app-ui-dropdown` (11.10) |
+
+Nao importar `TabsModule` / `TooltipModule` "por garantia" --- em
+`erpclass-admin` os dois estao registrados no `SharedModule` sem nenhum uso
+real (`<tab>`/`<tabset>`/`tooltip="..."` inexistentes em qualquer template).
+Import morto nao e padrao a copiar; se a tela realmente precisar de tabs ou
+tooltip, importe so onde for usado.
+
+### Config global (nao por instancia)
+
+`BsDatepickerConfig`/`BsDaterangepickerConfig` sao injetados como singleton
+e configurados **uma vez**, tipicamente dentro do service de i18n do app
+(`TranslateService` em `erpclass-admin`), nao via `[bsConfig]` em cada
+`<input>`:
+
+```ts
+private readonly bsDatepickerConfig = inject(BsDatepickerConfig);
+private readonly bsDaterangePickerConfig = inject(BsDaterangepickerConfig);
+
+private setLocaleDate(): void {
+  this.bsDatepickerConfig.dateInputFormat = this.getConfig.date.format;
+  this.bsDatepickerConfig.showWeekNumbers = false;
+  this.bsDatepickerConfig.containerClass = 'ds-datepicker'; // nunca um tema stock (theme-blue, theme-dark-blue, ...)
+  this.bsDatepickerConfig.isAnimated = true;
+  this.bsDaterangePickerConfig.dateInputFormat = this.getConfig.date.format;
+  this.bsDaterangePickerConfig.showWeekNumbers = false;
+  this.bsDaterangePickerConfig.containerClass = 'ds-datepicker';
+  this.bsDaterangePickerConfig.isAnimated = true;
+}
+```
+
+`containerClass: 'ds-datepicker'` e obrigatorio --- e a classe que
+`_ds-datepicker.scss` (canonico, ver `reference/styles/`) usa para pintar o
+calendario com os tokens `--ds-*` em vez do tema stock hardcoded do
+ngx-bootstrap. Sem essa classe o datepicker renderiza cores fixas
+(`#337ab7` etc.) que nao respeitam dark mode.
+
+### Locale
+
+```ts
+import { defineLocale } from 'ngx-bootstrap/chronos';
+import { esLocale, ptBrLocale } from 'ngx-bootstrap/locale';
+
+defineLocale('es', esLocale);
+defineLocale('pt-br', ptBrLocale);
+```
+
+Executado uma vez, top-level do arquivo do service (nao dentro de metodo).
+`BsLocaleService.use(...)` troca o idioma do calendario junto com o resto
+da UI.
+
+### CSS vendor
+
+`bs-datepicker.css` entra pelo `angular.json` (`styles` array do target de
+build), **antes** de `src/styles/styles.scss` --- nao via `@import`/`@use`
+no SCSS:
+
+```json
+"styles": [
+  "node_modules/ngx-bootstrap/datepicker/bs-datepicker.css",
+  "src/styles/styles.scss"
+]
+```
+
+## 50.6 Checklist ngx-bootstrap
+
+```text
+[ ] Nenhum datepicker/timepicker construido do zero --- sempre ngx-bootstrap
+[ ] bsDaterangepicker com dropdown de atalhos usa app-date-range-filter (11.15)
+    quando a tela nao exige estado persistido entre rotas ou preset extra
+[ ] containerClass: 'ds-datepicker' no BsDatepickerConfig/BsDaterangepickerConfig
+[ ] _ds-datepicker.scss presente e importado em styles.scss
+[ ] Nenhum import de TabsModule/TooltipModule sem uso real no template
+[ ] Modal via BsModalService + <ng-template> + classes ds-modal__*
+```
+
 ---
 
 # 51. Referencia pratica --- `layout/shared` e classes `ds-*`
@@ -1500,6 +1632,9 @@ Regra: nao duplicar estilos nos templates --- encapsular em
 | `_theme.scss`         | Shell CoreUI (body, header, sidebar, footer)         |
 | `_ds-modals.scss`     | Tema do sweetalert2 (`.swal2-*`) --- so em projetos  |
 |                       | com a dependencia `sweetalert2`                      |
+| `_ds-datepicker.scss` | Tema do ngx-bootstrap datepicker/daterangepicker     |
+|                       | (`.ds-datepicker .bs-datepicker-*`) --- so em        |
+|                       | projetos com a dependencia `ngx-bootstrap`           |
 | `styles.scss`         | Bootstrap 5 + CoreUI + imports do DS                 |
 | `_custom.scss`        | Barrel de `custom/_<feature>.scss`                   |
 
@@ -1518,6 +1653,19 @@ Kanban boards (`ds-kanban-*`) NAO fazem parte do conjunto canonico --- e um
 padrao especifico de app com pipeline (hoje so o `crmclass-app`). Cada app
 com essa necessidade mantem seu proprio `custom/_<app>-kanban.scss` seguindo
 os mesmos tokens, documentado como excecao em `docs/design_ui.md`.
+
+### 51.3.2 `_ds-datepicker.scss` (condicional)
+
+Restyla as classes proprias do `ngx-bootstrap` datepicker/daterangepicker
+(`.bs-datepicker-head`, `.bs-datepicker-body table td span.selected`,
+`.bs-datepicker-predefined-btns`, etc.) com os tokens `--ds-*`. So funciona
+se `containerClass: 'ds-datepicker'` estiver setado no
+`BsDatepickerConfig`/`BsDaterangepickerConfig` (ver 50.5) --- sem essa
+classe o calendario usa o tema stock hardcoded do ngx-bootstrap, que nao
+respeita dark mode. So faz sentido incluir em projetos com a dependencia
+`ngx-bootstrap` (a maioria do parque CLASS ja depende). Import em
+`styles.scss` com `@use 'ds-datepicker';` apos `ds-forms`.
+
 | `custom/_*.scss`      | CSS por feature (ex.: `_auth-social.scss`)           |
 
 ### Formularios (`_ds-forms.scss`)

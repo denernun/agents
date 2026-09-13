@@ -33,15 +33,35 @@ it is a per-app pattern for pipeline/CRM-style boards, today only
 `custom/_<app>-kanban.scss` built on the same `--ds-*` tokens, documented as
 an exception in that project's `docs/design_ui.md`.
 
+## `styles/_ds-datepicker.scss` — conditional 5th file (ngx-bootstrap)
+
+Themes `ngx-bootstrap`'s own datepicker/daterangepicker classes
+(`.bs-datepicker-*`) with the `--ds-*` tokens — only takes effect when the
+app sets `containerClass: 'ds-datepicker'` on its `BsDatepickerConfig` /
+`BsDaterangepickerConfig` (design-system.md §50.5), replacing the stock
+hardcoded theme names (`theme-blue`, `theme-dark-blue`, …) that ship with
+`ngx-bootstrap` and ignore dark mode entirely. Copy into a project that
+depends on `ngx-bootstrap` (nearly the whole fleet). Wire with
+`@use 'ds-datepicker';` in `styles.scss`, after `ds-forms`.
+
 ## `layout-shared/` — the Angular components (copy + adapt one file)
 
 Mirror of `src/app/layout/shared/` — the presentational components that consume
 the `ds-*` classes (`app-page-header`, `app-stat-card`, `app-ui-card`,
 `app-chart-card`, `app-status-badge`, `app-ui-data-table`, `app-empty-state`,
 `app-ui-skeleton`, `app-ui-button`, `app-ui-modal`, `app-ui-dropdown`,
-`app-insight-alert`, `app-period-segment`, `app-ui-table-cell-text`,
-`app-ui-table-pagination`, `app-filter-bar`). APIs documented in
-`../design-system.md` §11.
+`app-insight-alert`, `app-period-segment`, `app-date-range-filter`,
+`app-ui-table-cell-text`, `app-ui-table-pagination`, `app-filter-bar`). APIs
+documented in `../design-system.md` §11.
+
+`app-date-range-filter` depends on `ngx-bootstrap` (`BsDatepickerModule`,
+`BsDropdownModule`) and `dayjs` — both already standard across the fleet.
+It is the reference pattern for "quick-select + `bsDaterangepicker`"; a
+project with a more advanced service-backed date filter (persisted across
+routes, extra presets) does not need to replace that with this component —
+see design-system.md §11.15 for when each shape applies. **Never build a
+custom calendar/date-range widget instead of `bsDaterangepicker` —
+`ngx-bootstrap` already has one.**
 
 Copy the folder into `src/app/layout/shared/`. **One file is project-specific:**
 `tokens/ui-tokens.ts` here has only the generic pieces (`UiAccentColor`,

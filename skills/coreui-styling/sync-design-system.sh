@@ -83,8 +83,28 @@ sync_one() {
     fi
   fi
 
+  local has_ngxbs=0
+  if [ -f "$dir/package.json" ] && grep -q '"ngx-bootstrap"' "$dir/package.json"; then
+    has_ngxbs=1
+    if [ ! -f "$styles_dir/_ds-datepicker.scss" ] || ! cmp -s "$HUB_STYLES/_ds-datepicker.scss" "$styles_dir/_ds-datepicker.scss"; then
+      cp "$HUB_STYLES/_ds-datepicker.scss" "$styles_dir/_ds-datepicker.scss"
+      changed=1
+    fi
+
+    local styles_scss="$styles_dir/styles.scss"
+    if [ -f "$styles_scss" ] && ! grep -q "ds-datepicker" "$styles_scss"; then
+      # Insert right after the ds-forms import line (same relative position as erpclass-admin).
+      sed -i "/@use 'ds-forms';/a\\
+\\
+// ngx-bootstrap datepicker/daterangepicker theming (--ds-* tokens instead of stock themes)\\
+@use 'ds-datepicker';" "$styles_scss"
+      changed=1
+      echo "      -> wired @use 'ds-datepicker'; into styles.scss (review placement)"
+    fi
+  fi
+
   if [ "$changed" = "1" ]; then
-    echo "SYNC  $name (styles updated$([ "$has_swal" = "1" ] && echo ", ds-modals present"))"
+    echo "SYNC  $name (styles updated$([ "$has_swal" = "1" ] && echo ", ds-modals present")$([ "$has_ngxbs" = "1" ] && echo ", ds-datepicker present"))"
   else
     echo "OK    $name (already in sync)"
   fi

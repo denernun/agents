@@ -1,0 +1,134 @@
+// Design system — ngx-bootstrap datepicker/daterangepicker theming
+//
+// ngx-bootstrap ships its own stock themes (theme-blue, theme-dark-blue, …)
+// as hardcoded hex colors with zero relationship to --ds-* tokens or dark
+// mode. This file replaces that: set `containerClass: 'ds-datepicker'` on
+// the app's BsDatepickerConfig/BsDaterangepickerConfig (see design-system.md
+// §"ngx-bootstrap suite") instead of a stock theme name, and this stylesheet
+// takes over — same look in light/dark, no separate dark block needed since
+// --ds-* tokens already flip per theme.
+
+.ds-datepicker.bs-datepicker {
+  box-shadow: var(--ds-shadow-card-hover, var(--ds-shadow-card));
+}
+
+.ds-datepicker .bs-datepicker-container {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-card);
+  padding: 0.5rem;
+}
+
+.ds-datepicker .bs-datepicker-head {
+  background: var(--ds-primary);
+  border-radius: calc(var(--ds-radius-card) - 2px) calc(var(--ds-radius-card) - 2px) 0 0;
+
+  button {
+    color: #fff;
+  }
+
+  button:hover,
+  button:focus {
+    background: rgb(255 255 255 / 0.15);
+    color: #fff;
+  }
+
+  .current {
+    color: #fff;
+  }
+}
+
+.ds-datepicker .bs-datepicker-body {
+  background: var(--ds-surface);
+  border: none;
+
+  table th {
+    color: var(--ds-text-muted);
+    font-weight: 600;
+  }
+
+  table td span,
+  table td.week span {
+    color: var(--ds-text);
+  }
+
+  table td span.is-other-month,
+  table td.is-other-month span {
+    color: var(--ds-text-muted);
+    opacity: 0.5;
+  }
+
+  table td:not(.disabled):not(.week) span:not(.disabled):not(.is-other-month):hover {
+    background: var(--ds-primary-100);
+    color: var(--ds-text);
+    transition: background-color 0.15s ease;
+  }
+
+  // Single selected date, and the two range endpoints
+  table td span.selected,
+  table td.selected span,
+  table td span[class*='select-']:after,
+  table td[class*='select-'] span:after {
+    background: var(--ds-primary) !important;
+    color: #fff !important;
+  }
+
+  // Days between the two range endpoints
+  table.days td.in-range:not(.select-start):not(.disabled):before,
+  table.days span.in-range:not(.select-start):not(.disabled):before {
+    background: var(--ds-primary-100);
+  }
+
+  table td.is-highlighted:not(.disabled):not(.selected) span,
+  table td span.is-highlighted:not(.disabled):not(.selected) {
+    background: var(--ds-primary-50);
+  }
+
+  table td.disabled span,
+  table td span.disabled {
+    color: var(--ds-text-muted);
+    opacity: 0.4;
+  }
+
+  // "Today" marker (a thin bottom border ngx-bootstrap adds via ::after/::before per theme)
+  table td.active:not(.disabled) span,
+  table td.this-month.active:not(.disabled) span {
+    border-color: var(--ds-primary);
+  }
+}
+
+.ds-datepicker .bs-datepicker-predefined-btns {
+  background: var(--ds-surface-muted);
+  border-right: 1px solid var(--ds-border);
+
+  button {
+    color: var(--ds-text);
+  }
+
+  button:hover {
+    background: var(--ds-primary-50);
+    color: var(--ds-primary);
+  }
+
+  button.selected {
+    background: var(--ds-primary);
+    color: #fff;
+  }
+}
+
+.ds-datepicker .bs-datepicker-buttons {
+  .btn-default {
+    color: var(--ds-text);
+  }
+
+  .btn-today-wrapper .btn-success,
+  .btn-clear-wrapper .btn-success {
+    background: var(--ds-primary);
+    border-color: var(--ds-primary);
+    color: #fff;
+  }
+}
+
+// Custom date-range quick-select dropdown menu (app-date-range-filter) reuses
+// the shared .ds-dropdown__menu class already themed in _ds-components.scss —
+// nothing extra needed here.

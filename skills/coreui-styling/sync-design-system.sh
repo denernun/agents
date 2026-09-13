@@ -22,6 +22,15 @@ HUB_STYLES="/d/AGENTS/skills/coreui-styling/reference/styles"
 ROOT="/d/sistemas"
 
 # folder-name -> absolute path
+#
+# NOT included: nfeclass-app (still on Tailwind for page content — this
+# design system explicitly excludes Tailwind, see design-system.md) and
+# shopclass-app (no @coreui dependency at all — never onboarded). Both had
+# stray, never-wired _tokens.scss/_ds-*.scss files sitting in src/styles/
+# from an earlier abandoned attempt; those were removed rather than synced,
+# to avoid dead files implying an adoption that never happened. Onboarding
+# either one is a real migration project (drop Tailwind or add CoreUI+
+# Bootstrap first), not something this script should attempt silently.
 declare -A PROJECTS=(
   [erpclass-admin]="$ROOT/ERPCLASS/erpclass-admin"
   [erpclass-dash]="$ROOT/ERPCLASS/erpclass-dash"
@@ -30,9 +39,7 @@ declare -A PROJECTS=(
   [erpclass-mkt]="$ROOT/ERPCLASS/erpclass-mkt"
   [erpclass-help]="$ROOT/ERPCLASS/erpclass-help"
   [erpclass-conn]="$ROOT/ERPCLASS/erpclass-conn"
-  [nfeclass-app]="$ROOT/NFECLASS/nfeclass-app"
   [mobiclass-app]="$ROOT/MOBICLASS/mobiclass-app"
-  [shopclass-app]="$ROOT/SHOPCLASS/shopclass-app"
   [crmclass-app]="$ROOT/CRMCLASS/crmclass-app"
 )
 

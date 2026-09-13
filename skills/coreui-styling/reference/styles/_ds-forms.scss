@@ -177,17 +177,25 @@ $ds-select-font-size: 0.875rem;
 
       &.ng-option-marked,
       &:hover {
-        background-color: var(--ds-surface-muted) !important;
-        color: var(--ds-input-text) !important;
+        border-left: 0.25rem solid var(--ds-primary) !important;
+        background-color: var(--ds-primary-100) !important;
+        color: var(--ds-primary) !important;
+        font-weight: 600;
+
+        .ng-option-label {
+          color: var(--ds-primary) !important;
+        }
       }
 
       &.ng-option-selected,
       &.ng-option-selected.ng-option-marked {
-        background-color: var(--ds-primary-soft) !important;
-        color: var(--ds-input-text) !important;
+        border-left: 0.25rem solid var(--ds-primary) !important;
+        background-color: var(--ds-primary-200) !important;
+        color: var(--ds-primary) !important;
+        font-weight: 700;
 
         .ng-option-label {
-          color: var(--ds-input-text) !important;
+          color: var(--ds-primary) !important;
         }
       }
 

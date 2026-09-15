@@ -14,6 +14,12 @@ Delphi VCL ERP — Domain / Providers / legado convivendo.
 - Guia completo: skill **delphi-erpclass**.
 - Docs Domain: `../erpclass-docs/source/`.
 
+## Eficiência de execução
+- Entregue o resultado primeiro; não repita o pedido nem narre passos rotineiros.
+- Use detalhes, alternativas ou tabelas apenas quando o pedido, o risco ou uma decisão exigir.
+- Pesquise símbolos antes de abrir arquivos e limite a saída na origem; preserve por completo resultados de Read/Edit/Write.
+- Nunca economize em segurança, validação, testes, acessibilidade, diagnóstico ou requisitos explícitos.
+
 ## Skills (from `D:\AGENTS`)
 - `delphi-erpclass`
 - `debug-issue` / `explore-codebase` / `refactor-safely` / `review-changes`

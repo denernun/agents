@@ -73,11 +73,25 @@ def update(request):
     messages = []
     if request.get('format') == 'text':
         previous = state.get('text')
+        text_patch = request.get('text_patch')
+        if text_patch and path.exists() and text_patch['marker'] not in old:
+            matches = list(re.finditer(text_patch['anchor'], old, flags=re.MULTILINE))
+            if len(matches) != 1:
+                return {'changed': False, 'messages': [
+                    'Preserved manual file; safe text patch anchor missing or ambiguous: ' + str(path)
+                ]}
+            match = matches[0]
+            patch = text_patch['content'].rstrip() + '\n\n'
+            new = old[:match.start()] + patch + old[match.start():]
+            new_state = {'path': str(path), 'text': new}
+        elif text_patch and text_patch['marker'] in old:
+            return {'changed': False, 'messages': []}
         recognized = adopt and ('D:\\AGENTS' in old or 'AgentHub' in old or 'Install-AgentHub' in old)
-        if path.exists() and old != previous and not recognized:
+        if not text_patch and path.exists() and old != previous and not recognized:
             return {'changed': False, 'messages': ['Preserved manual file: ' + str(path)]}
-        new = '' if remove else request['text']
-        new_state = {'path': str(path), 'text': new}
+        if not text_patch:
+            new = '' if remove else request['text']
+            new_state = {'path': str(path), 'text': new}
     elif request.get('format') == 'toml':
         parsed = tomllib.loads(old)
         pattern = re.compile(r'(?ms)^# BEGIN AgentHub MCP\n.*?^# END AgentHub MCP(?:\n|$)')

@@ -589,7 +589,16 @@ function Write-AgentsFile {
     Write-Host ('  [dry] write AGENTS.md sizeKb=' + $kb)
     return
   }
-  Write-HubText -Path $dest -Content $content -DryRun:$DryRun
+  $efficiency = [regex]::Match($content, '(?s)(## Eficiência de execução\r?\n.*?)(?=\r?\n## Skills\b)').Groups[1].Value.TrimEnd()
+  $request = @{path=$dest; format='text'; text=$content; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun}
+  if ($efficiency) {
+    $request.text_patch = @{
+      marker = '## Eficiência de execução'
+      anchor = '^## Skills\b'
+      content = $efficiency
+    }
+  }
+  Invoke-HubConfig $request
   Write-Host "  wrote AGENTS.md"
 }
 

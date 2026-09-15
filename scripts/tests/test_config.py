@@ -101,6 +101,45 @@ class ConfigTests(unittest.TestCase):
         self.call(format='text', remove=True)
         self.assertEqual(self.path.read_text(), 'manual')
 
+    def test_safe_text_patch_updates_only_missing_managed_section(self):
+        original = '# Project\n\n## Skills\n- existing\n\n## Local\nmanual note\n'
+        self.path.write_text(original)
+        self.call(
+            format='text',
+            text='ignored for a safe patch',
+            text_patch={
+                'marker': '## Eficiência de execução',
+                'anchor': r'^## Skills\b',
+                'content': '## Eficiência de execução\n- safe',
+            },
+        )
+        expected = '# Project\n\n## Eficiência de execução\n- safe\n\n## Skills\n- existing\n\n## Local\nmanual note\n'
+        self.assertEqual(self.path.read_text(encoding='utf-8'), expected)
+        self.call(
+            format='text',
+            text='ignored for a safe patch',
+            text_patch={
+                'marker': '## Eficiência de execução',
+                'anchor': r'^## Skills\b',
+                'content': '## Eficiência de execução\n- safe',
+            },
+        )
+        self.assertEqual(self.path.read_text(encoding='utf-8'), expected)
+
+    def test_safe_text_patch_preserves_file_without_unique_anchor(self):
+        self.path.write_text('# Project\n## Skills\n## Skills\n')
+        result = self.call(
+            format='text',
+            text='ignored',
+            text_patch={
+                'marker': '## Eficiência de execução',
+                'anchor': r'^## Skills\b',
+                'content': '## Eficiência de execução\n- safe',
+            },
+        )
+        self.assertFalse(result['changed'])
+        self.assertNotIn('Eficiência', self.path.read_text())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -21,9 +21,10 @@
   --ds-shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.08);
   --ds-shadow-card-hover: 0 4px 12px 0 rgb(15 23 42 / 0.1);
   --ds-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --ds-input-bg: #eef2f7;
+  --ds-input-bg: #e8eef6;
+  --ds-input-border: #94a3b8;
   --ds-input-text: #1e293b;
-  --ds-input-placeholder: #64748b;
+  --ds-input-placeholder: #475569;
   --ds-field-text: #1e293b;
   --ds-kbd-bg: #dbe3ee;
   --ds-kbd-text: #334155;
@@ -92,6 +93,7 @@ body.c-dark-theme {
   --ds-shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.35);
   --ds-shadow-card-hover: 0 4px 16px 0 rgb(0 0 0 / 0.4);
   --ds-input-bg: #2c313a;
+  --ds-input-border: #6b7c93;
   --ds-input-text: #e2e8f0;
   --ds-input-placeholder: #9da5b1;
   --ds-field-text: #e2e8f0;

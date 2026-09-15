@@ -334,12 +334,14 @@
   flex-shrink: 0;
 }
 
-.ds-stat-card__variation--up {
+.ds-stat-card__variation--up,
+.ds-stat-card__variation--positive {
   background: rgb(16 185 129 / 0.12);
   color: var(--ds-success);
 }
 
-.ds-stat-card__variation--down {
+.ds-stat-card__variation--down,
+.ds-stat-card__variation--negative {
   background: rgb(239 68 68 / 0.12);
   color: var(--ds-danger);
 }
@@ -658,6 +660,19 @@
 
   &--striped tbody tr:nth-child(even):hover td {
     background: var(--ds-primary-50);
+  }
+
+  // Numeric columns (currency, quantities, percentages) — header + cell
+  &__num {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  // Date / datetime columns — header + cell centered; times display HH:mm only
+  &__date {
+    text-align: center;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -1059,6 +1074,15 @@ body.c-dark-theme .ds-alert--info {
   border-radius: var(--ds-radius-card);
   box-shadow: var(--ds-shadow-card-hover, var(--ds-shadow-card));
   overflow: hidden;
+}
+
+// Size modifiers — default (32rem) fits confirm/simple-form dialogs; wider content (data tables, grids) opts in.
+.ds-modal--lg {
+  max-width: 42rem;
+}
+
+.ds-modal--xl {
+  max-width: 56rem;
 }
 
 .ds-modal__header {

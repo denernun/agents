@@ -483,6 +483,30 @@ Regras (canonicas):
   `app-ui-table-pagination`) sempre visivel quando ha dados ---
   "Anterior / Proximo" + "pagina X de Y".
 
+### Alinhamento de colunas (obrigatorio)
+
+| Tipo de coluna | Classe em `th` e `td` | Conteudo |
+| -------------- | --------------------- | -------- |
+| Data / data+hora | `ds-table__date` | Centralizado; hora sempre `HH:mm` (sem segundos/ms) |
+| Valor monetario / quantidade / % | `ds-table__num` | Direita + `tabular-nums` |
+| Texto / status / acoes | (padrao) | Esquerda |
+
+Regras de formatacao de tempo:
+
+- Pipe `_time` e qualquer `DatePipe` com hora: **somente hora e minuto**
+  (`HH:mm`). Nunca `HH:mm:ss` nem milissegundos em grids.
+- Strings de relogio vindas da API (`hora`, `horaAbertura`, `08:00:00`):
+  use o pipe `_clock` (ou `formatClockHm`) antes de exibir.
+- Titulo (`th`) e celula (`td`) recebem a **mesma** classe de alinhamento.
+
+```html
+<th class="ds-table__date">Abertura</th>
+<th class="ds-table__num">Total</th>
+...
+<td class="ds-table__date">{{ row.data }} {{ row.hora | _clock }}</td>
+<td class="ds-table__num">{{ row.total | _number:2:'currency' }}</td>
+```
+
 **Paginacao e obrigatoria em TODO grid, sem excecao** --- inclusive listas
 "Top N" de dashboard (top contas, top produtos, formas de pagamento) que
 hoje parecem pequenas. Justificativa: a lista so parece pequena com os
@@ -1709,7 +1733,7 @@ respeita dark mode. So faz sentido incluir em projetos com a dependencia
 | `ds-page-header`              | Cabecalho de pagina                    |
 | `ds-kpi-grid` / `--2..--5`    | Grid de KPIs                           |
 | `ds-dashboard-grid` / `--two` / `--three` / `--hero` / `--alerts` | Grids de conteudo |
-| `ds-table` / `--fixed-rows` / `--striped` / `__sortable` | Tabelas         |
+| `ds-table` / `--fixed-rows` / `--striped` / `__sortable` / `__num` / `__date` | Tabelas |
 | `ds-badge--*`                 | Status (paleta unica light/dark)       |
 | `ds-rank--1/2/3/default`      | Posicao de ranking                     |
 | `ds-cell-progress__*`         | Barra de proporcao em celula           |

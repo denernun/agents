@@ -276,6 +276,8 @@ See `design-system.md` §11.5 / §38.
 | Pagination | Footer `ds-panel__footer--pagination` always visible when grid has data; Anterior/Próximo + `página X de Y` |
 | Wrapper | `app-ui-data-table` or `table.ds-table.ds-table--fixed-rows` |
 | Text cells | `app-ui-table-cell-text` — single line, ellipsis, full value in native `title` tooltip |
+| Date columns | `ds-table__date` on `th` + `td` (center); times as `HH:mm` via `_time` / `_clock` |
+| Value columns | `ds-table__num` on `th` + `td` (right + tabular-nums) |
 | Row height | `ds-table--fixed-rows` keeps uniform row height (no multi-line text in cells) |
 | Server-side | Pass `pageSize: DS_TABLE_PAGE_SIZE` to API; reset to page 1 on filter change |
 

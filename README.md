@@ -5,6 +5,7 @@ Fonte única de skills, templates e scripts para agentes de IA nos produtos **ER
 > ## AVISO — manter organizado
 >
 > - **Always-on fino** (`AGENTS.md`, `.cursorrules`, rules `.mdc` curtas): só ponteiros. Meta **&lt; ~2 KB**.
+> - **Eficiência segura**: resposta orientada ao resultado e contexto focado, sem cortar segurança, testes ou diagnósticos. Ver [`docs/AGENT-EFFICIENCY.md`](docs/AGENT-EFFICIENCY.md).
 > - **Guia de stack gordo** vive **só** em `skills/` neste hub (carrega sob demanda).
 > - **Nunca** recolocar NestJS/Angular/Delphi completo em `AGENTS.md`, `.cursorrules`, `alwaysApply: true`, Antigravity rules ou Copilot gordo.
 > - Edite no hub → rode `Install-AgentHub.ps1` → commit hub + `AGENTS` enxutos nos repos.

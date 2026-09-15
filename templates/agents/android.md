@@ -22,6 +22,12 @@ Android app — MOBICLASS (Java + XML Views today).
 - These apps are **Java + XML**, not Kotlin Compose. Follow the existing stack. Do **not** migrate to Compose, Navigation3, or Hilt unless the user asks.
 - Gradle project root may be `src/` (not the git root). Read `settings.gradle` / `build.gradle` there before changing the build.
 
+## Eficiência de execução
+- Entregue o resultado primeiro; não repita o pedido nem narre passos rotineiros.
+- Use detalhes, alternativas ou tabelas apenas quando o pedido, o risco ou uma decisão exigir.
+- Pesquise símbolos antes de abrir arquivos e limite a saída na origem; preserve por completo resultados de Read/Edit/Write.
+- Nunca economize em segurança, validação, testes, acessibilidade, diagnóstico ou requisitos explícitos.
+
 ## Skills (from `D:\AGENTS`)
 - `claude-android-ninja`
 - `codegraph`

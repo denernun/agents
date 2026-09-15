@@ -73,6 +73,7 @@ O install **não** joga mais todo `mcp/*.template.json` em todo repo. A lista ve
 - `mongodb` — `node` + `mongodb-mcp-server@2` **global** (`npm i -g`), somente leitura. Só família **nestjs**. URI local padrão: `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin` (igual ao Docker/dev). Override: `$env:MDB_MCP_CONNECTION_STRING` no install. **Não** usa `npx`/`cmd` no Windows (processos órfãos). URI só em `env`. Desative o MCP do plugin Cursor (skills ok) e não duplique `mongodb` em `~/.cursor/mcp.json`.
 - `openapi` — `npx -y @ivotoby/openapi-mcp-server --tools dynamic`. Só NestJS **com Swagger no `main.ts`**. Spec em `/swagger/json` (ou o `jsonDocumentUrl` do projeto). Omitido no **Codex**. A API local precisa estar rodando. Não grava JWT no `mcp.json`.
 - `playwright` — `npx -y @playwright/mcp --headless`. Família **angular** e projetos `*-www` / `*-ajuda`. Omitido no **Codex** (`mcp.skipIdes`) porque já interrompeu o startup.
+- `coreui` — `npx -y @coreui/docs-mcp --framework bootstrap`. Família **angular**. O MCP oficial ainda não tem framework Angular dedicado; use Bootstrap para componentes/classes CoreUI e complemente com https://coreui.io/angular/docs/ para sintaxe Angular.
 
 Não entram no hub: GitHub, Stripe, Figma, Pencil, Chrome DevTools.
 

@@ -22,6 +22,7 @@ $names=@('codegraph','context7','filesystem','playwright','coreui')
 Write-McpConfigs -RepoPath $repo -Ides @('Cursor','Claude','Codex','OpenCode','Antigravity') -Vars $vars -ServerNames $names -ManagedServers $names -SkipIdes $null
 $claude=Get-Content (Join-Path $repo '.mcp.json') -Raw | ConvertFrom-Json
 Assert (@($claude.mcpServers.PSObject.Properties).Count -eq 5) 'Claude lost MCPs when Cursor active'
+Assert (($claude.mcpServers.coreui.args -join ' ') -match '--framework bootstrap') 'CoreUI MCP must use Bootstrap framework reference'
 Assert (Test-Path (Join-Path $repo '.codex/config.toml')) 'Codex project config missing'
 $before=Get-FileHash (Join-Path $repo '.cursor/mcp.json')
 Write-McpConfigs -RepoPath $repo -Ides @('Cursor','Claude','Codex','OpenCode','Antigravity') -Vars $vars -ServerNames $names -ManagedServers $names -SkipIdes $null

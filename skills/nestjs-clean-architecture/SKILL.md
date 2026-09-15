@@ -417,6 +417,7 @@ Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CON
 ## 5. Testing
 
 - Framework: **Vitest** (`npm test` / `test:watch` / `test:cov`). Referência: `erpclass-kb` e `erpclass-auth` — `vitest.config.mts` + `unplugin-swc` (decorator metadata) + `test/setup.ts`. Specs `*.spec.ts` ao lado do código. **Não use Jest.**
+- **Pin da família: `vitest` + `@vitest/coverage-v8` em `4.1.11` (exato, sem `^`).** Não subir para Vitest 5.x: com `import { describe, it, expect, vi } from 'vitest'` o runner quebra (`TypeError: Cannot read properties of undefined (reading 'config')`). `globals: true` no `vitest.config.mts` + APIs globais (sem import de `vitest`) é o padrão; `vi` no setup se o projeto ainda usa `jest.fn` legado.
 - Mocks: `vi.fn()` / `vi.clearAllMocks()` (API compatível com o antigo `jest.fn`).
 - **Arrange-Act-Assert** para testes unitários; **Given-When-Then** para testes de aceitação de módulo.
 - Nomenclatura de variáveis de teste: `inputX`, `mockX`, `actualX`, `expectedX`.

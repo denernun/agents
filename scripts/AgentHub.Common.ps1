@@ -1,4 +1,5 @@
 # Shared read/write and ownership helpers. No work is performed on import.
+. (Join-Path $PSScriptRoot 'AgentHub.Ecc.ps1')
 function Invoke-HubConfig {
   param([hashtable]$Request)
   $Request.hub = $HubPath

@@ -1769,6 +1769,12 @@ $excludeIdes = @($idePolicy.Excluded)
 $qoderOptIn = [bool]$catalog.qoderOptIn
 $detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -Excluded $excludeIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn)
 if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides, AGENTHUB_IDES in .env, or catalog.ides.' }
+if ($catalog.PSObject.Properties['ecc']) {
+  $eccRoots = @{Cursor='.cursor/skills'; Claude='.claude/skills'; Codex='.agents/skills'; Antigravity='.agents/skills'; OpenCode='.opencode/skills'; VSCode='.github/skills'; Kiro='.kiro/skills'; Devin='.devin/skills'}
+  foreach ($rel in @($detected | Where-Object { $eccRoots.ContainsKey($_) } | ForEach-Object { $eccRoots[$_] } | Select-Object -Unique)) {
+    Sync-EccSkillLinks -HubPath $HubPath -SkillRoot (Join-Path $HubPath $rel) -Catalog $catalog -Names @(Get-EccSkillNames -Catalog $catalog -Maintenance) -DryRun:$DryRun
+  }
+}
 Write-Host "IDE allowlist ($($idePolicy.AllowedSource)): $(if ($allowedIdes.Count) { $allowedIdes -join ', ' } else { 'auto (all detected)' })"
 Write-Host "IDE exclude ($($idePolicy.ExcludedSource)): $(if ($excludeIdes.Count) { $excludeIdes -join ', ' } else { '(none)' })"
 
@@ -1816,7 +1822,7 @@ Write-Host "IDEs: $($detected -join ', ')"
 Write-Host "Roots: $($Roots -join ', ')"
 if ($GlobalSkills -and $detected -contains 'Codex') {
   & (Join-Path $PSScriptRoot 'Sync-Codegraph.ps1') -HubPath $HubPath -Global -AdoptLegacySkills:$AdoptLegacyConfigs -DryRun:$DryRun
-  foreach ($name in @($commonSkills + $mattPocockSkills + $superpowersSkills | Select-Object -Unique)) {
+  foreach ($name in @($commonSkills + $mattPocockSkills + $superpowersSkills + @(Get-EccSkillNames -Catalog $catalog -Maintenance) | Select-Object -Unique)) {
     $target = Join-Path $HubPath "skills/$name"
     if (-not (Test-HubSkill $target)) { throw "Invalid global skill: $name" }
     New-JunctionOrCopy -LinkPath (Join-Path $env:USERPROFILE ".agents/skills/$name") -TargetPath $target -DryRun:$DryRun
@@ -1857,7 +1863,7 @@ foreach ($root in $Roots) {
       $disabledCommonSkills = @($cfg.disabledCommonSkills)
     }
     $projectCommonSkills = @($commonSkills | Where-Object { $disabledCommonSkills -notcontains $_ })
-    $skillNames = @($projectCommonSkills) + @($cfg.skills) + @($mattPocockSkills) + @($superpowersSkills)
+    $skillNames = @($projectCommonSkills) + @($cfg.skills) + @($mattPocockSkills) + @($superpowersSkills) + @(Get-EccSkillNames -Catalog $catalog -Family $family -ProjectName $proj.Name)
     Link-ProjectSkills -RepoPath $proj.FullName -HubPath $HubPath -SkillNames $skillNames -Ides $detected -DryRun:$DryRun
     if ($detected -contains 'Codex') {
       foreach ($old in Get-ChildItem (Join-Path $proj.FullName '.codex/skills') -Directory -ErrorAction SilentlyContinue) {

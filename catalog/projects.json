@@ -179,6 +179,18 @@
     "finishing-a-development-branch",
     "writing-skills"
   ],
+  "ecc": {
+    "repository": "https://github.com/affaan-m/ECC",
+    "revision": "8321021c54d670126ce3b2969d5deb880b4b0c2a",
+    "skills": {
+      "contract-first": { "families": ["nestjs", "angular"], "match": [], "maintenance": false },
+      "api-design": { "families": ["nestjs"], "match": [], "maintenance": false },
+      "e2e-testing": { "families": ["angular"], "match": ["*-www", "*-ajuda"], "maintenance": false },
+      "skill-stocktake": { "families": [], "match": [], "maintenance": true },
+      "eval-harness": { "families": [], "match": [], "maintenance": true },
+      "security-scan": { "families": [], "match": [], "maintenance": true }
+    }
+  },
   "ides": [
     "Cursor",
     "Claude",

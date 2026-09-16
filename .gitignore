@@ -53,3 +53,26 @@ credentials.json
 __pycache__/
 .audit-output/
 .worktrees/
+
+# Hub-local ECC maintenance skill links (sources are tracked in skills/).
+.agents/skills/skill-stocktake/
+.agents/skills/eval-harness/
+.agents/skills/security-scan/
+.claude/skills/skill-stocktake/
+.claude/skills/eval-harness/
+.claude/skills/security-scan/
+.cursor/skills/skill-stocktake/
+.cursor/skills/eval-harness/
+.cursor/skills/security-scan/
+.opencode/skills/skill-stocktake/
+.opencode/skills/eval-harness/
+.opencode/skills/security-scan/
+.github/skills/skill-stocktake/
+.github/skills/eval-harness/
+.github/skills/security-scan/
+.kiro/skills/skill-stocktake/
+.kiro/skills/eval-harness/
+.kiro/skills/security-scan/
+.devin/skills/skill-stocktake/
+.devin/skills/eval-harness/
+.devin/skills/security-scan/

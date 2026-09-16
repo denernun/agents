@@ -12,6 +12,16 @@ Fonte única de skills, templates e scripts para agentes de IA nos produtos **ER
 > - Detalhes e última revisão: [`docs/CONTEXT-HYGIENE.md`](docs/CONTEXT-HYGIENE.md).
 > - Se `Inventory-AgentFiles.ps1` listar always-on &gt; 2 KB → **regressão**; não ignore.
 
+## Skills ECC selecionadas
+
+Seis skills de ECC complementam o hub: `contract-first`, `api-design`,
+`e2e-testing`, `skill-stocktake`, `eval-harness` e `security-scan`.
+Distribuição por família, adaptações Windows e dependências estão em
+[Integração ECC](docs/ecc-integration.md).
+
+Para distribuir somente essas skills: `./scripts/Sync-EccSkills.ps1 -GlobalSkills`
+(preview com `-DryRun`). O instalador completo também aplica os escopos do catálogo.
+
 ## Por quê
 
 - `AGENTS.md` / rules always-on estavam duplicando o mesmo guia NestJS/Angular (~5–20 KB) em dezenas de repos e IDEs.

@@ -197,12 +197,12 @@
     "Claude",
     "Codex",
     "OpenCode",
-    "Antigravity"
+    "Antigravity",
+    "Kiro"
   ],
   "excludeIdes": [
     "VSCode",
-    "Devin",
-    "Kiro"
+    "Devin"
   ],
   "excludeProjectNames": [
     "node_modules",

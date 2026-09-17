@@ -40,7 +40,7 @@ foreach ($root in $Roots) {
         try {
           if ($entry[2] -eq 'toml') {
             $request=@{action='inspect-toml';path=$path} | ConvertTo-Json -Compress
-            $reply=$request | & python (Join-Path $PSScriptRoot 'agenthub_config.py') | ConvertFrom-Json
+            $reply=$request | & (Get-HubPython) (Join-Path $PSScriptRoot 'agenthub_config.py') | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0) { throw 'Invalid TOML' }
             $servers=@($reply.servers); $disabled=@($reply.disabled)
           } else {

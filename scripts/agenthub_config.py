@@ -20,6 +20,32 @@ def atomic(path, text):
     os.replace(temporary, path)
 
 
+def read_state(state_path):
+    """Our own metadata is advisory: a corrupt or unreadable state file must
+    never abort an install. Falling back to {} treats every existing entry as
+    unowned/manual, which is the conservative outcome."""
+    if not state_path.exists():
+        return {}
+    try:
+        return json.loads(state_path.read_text(encoding='utf-8'))
+    except (ValueError, OSError):
+        return {}
+
+
+def read_previous(path):
+    """Return the file's text, or None when it is absent or unrecoverable.
+
+    An unclean shutdown can leave a freshly written file allocated but filled
+    with NUL bytes. Such a file has no user content, so it is treated as absent
+    and rewritten, instead of failing the parse or being preserved as garbage."""
+    if not path.exists():
+        return None
+    raw = path.read_bytes()
+    if not raw or not raw.strip(b'\x00'):
+        return None
+    return path.read_text(encoding='utf-8-sig')
+
+
 def legacy(name, value):
     """Recognize old hub launch signatures, never claim a name alone."""
     if not isinstance(value, dict):
@@ -61,8 +87,10 @@ def update(request):
     root = Path(request['hub']).absolute() / '.agenthub-state'
     ident = hashlib.sha256(str(path).casefold().encode()).hexdigest()
     state_path = root / (ident + '.json')
-    state = json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {}
-    old = path.read_text(encoding='utf-8-sig') if path.exists() else ''
+    state = read_state(state_path)
+    previous_text = read_previous(path)
+    exists = previous_text is not None
+    old = previous_text or ''
     desired = request.get('servers', {})
     if request.get('partial'):
         # A targeted refresh must retain other owned servers and their ownership.
@@ -74,7 +102,7 @@ def update(request):
     if request.get('format') == 'text':
         previous = state.get('text')
         text_patch = request.get('text_patch')
-        if text_patch and path.exists() and text_patch['marker'] not in old:
+        if text_patch and exists and text_patch['marker'] not in old:
             matches = list(re.finditer(text_patch['anchor'], old, flags=re.MULTILINE))
             if len(matches) != 1:
                 return {'changed': False, 'messages': [
@@ -87,7 +115,7 @@ def update(request):
         elif text_patch and text_patch['marker'] in old:
             return {'changed': False, 'messages': []}
         recognized = adopt and ('D:\\AGENTS' in old or 'AgentHub' in old or 'Install-AgentHub' in old)
-        if not text_patch and path.exists() and old != previous and not recognized:
+        if not text_patch and exists and old != previous and not recognized:
             return {'changed': False, 'messages': ['Preserved manual file: ' + str(path)]}
         if not text_patch:
             new = '' if remove else request['text']
@@ -140,7 +168,7 @@ def update(request):
         tomllib.loads(new)
         new_state = {'path': str(path), 'block': new_block, 'servers': selected}
     else:
-        parsed = json.loads(old) if path.exists() else {}
+        parsed = json.loads(old) if exists else {}
         if not isinstance(parsed, dict):
             raise ValueError('Config must be an object')
         prop = request.get('property', 'mcpServers')

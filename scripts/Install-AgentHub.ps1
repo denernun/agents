@@ -1649,7 +1649,7 @@ if ($CheckVendorUpdates -or $UpdateVendors) {
   Invoke-AgentHubVendorOperation -HubPath $HubPath -Check:$CheckVendorUpdates -Update:$UpdateVendors
   exit 0
 }
-& python -c "import tomllib" 2>$null
+& (Get-HubPython) -c "import tomllib" 2>$null
 if ($LASTEXITCODE -ne 0) { throw 'AgentHub requires Python 3.11+ (tomllib) for safe TOML validation.' }
 $loadedDotEnv = Import-HubDotEnv -HubPath $HubPath
 if ($loadedDotEnv) { Write-Host "Loaded $HubPath\.env" }

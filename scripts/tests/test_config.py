@@ -38,6 +38,22 @@ class ConfigTests(unittest.TestCase):
     def call(self, **kw):
         return config.update(dict(hub=str(self.root), path=str(self.path), **kw))
 
+    def test_corrupt_state_file_does_not_abort_install(self):
+        self.call(format='text', text='generated')
+        state = next((self.root / '.agenthub-state').glob('*.json'))
+        state.write_bytes(b'\x00' * len(state.read_bytes()))
+        result = self.call(format='text', text='generated')
+        self.assertFalse(result['changed'])
+        self.assertTrue(any('Preserved manual file' in message for message in result['messages']))
+        self.assertEqual(self.path.read_text(encoding='utf-8'), 'generated')
+
+    def test_zero_filled_file_is_rewritten_not_preserved(self):
+        self.call(format='text', text='generated')
+        self.path.write_bytes(b'\x00' * 32)
+        result = self.call(format='text', text='regenerated')
+        self.assertTrue(result['changed'])
+        self.assertEqual(self.path.read_text(encoding='utf-8'), 'regenerated')
+
     def test_manual_servers_and_top_level_survive(self):
         self.path.write_text(json.dumps({'model': 'keep', 'mcp': {'manual': {'command': ['custom']}}}))
         self.call(property='mcp', servers={'context7': {'command': ['new']}})

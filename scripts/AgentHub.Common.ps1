@@ -1,10 +1,41 @@
 # Shared read/write and ownership helpers. No work is performed on import.
 . (Join-Path $PSScriptRoot 'AgentHub.Ecc.ps1')
+$HubPythonExe = $null
+function Get-HubPython {
+  # The Windows Store app-alias shim (…\WindowsApps\python.exe) forwards to the
+  # Python Manager runtime, which can be momentarily unavailable while the
+  # package updates and then fails with "Fatal Python error: Failed to import
+  # encodings module". Prefer a real interpreter when one is installed.
+  if ($script:HubPythonExe) { return $script:HubPythonExe }
+  $paths = @()
+  foreach ($name in @('python', 'python3')) {
+    $paths += @(Get-Command $name -All -ErrorAction SilentlyContinue |
+      Where-Object { $_.Path -and $_.Path -notmatch '\\WindowsApps\\' } |
+      ForEach-Object { $_.Path })
+  }
+  $paths += @(Get-Command 'python' -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Path })
+  $resolved = $paths | Where-Object { $_ } | Select-Object -First 1
+  if (-not $resolved) { throw 'Python 3 not found; agenthub_config.py cannot run.' }
+  $script:HubPythonExe = $resolved
+  return $resolved
+}
+
 function Invoke-HubConfig {
   param([hashtable]$Request)
   $Request.hub = $HubPath
-  $result = ($Request | ConvertTo-Json -Depth 50 -Compress) | & python (Join-Path $PSScriptRoot 'agenthub_config.py')
-  if ($LASTEXITCODE -ne 0) { throw "Configuration update failed for $($Request.path); file preserved. Check syntax and manual changes." }
+  $python = Get-HubPython
+  $script = Join-Path $PSScriptRoot 'agenthub_config.py'
+  # An interpreter that fails to start prints nothing to stdout; a real config
+  # error always prints one JSON object. Retry only the former: the write is
+  # deterministic, so re-running it is safe.
+  for ($attempt = 1; ; $attempt++) {
+    $result = ($Request | ConvertTo-Json -Depth 50 -Compress) | & $python $script
+    if ($LASTEXITCODE -eq 0) { break }
+    if (($result -join '').Trim() -or $attempt -ge 2) {
+      throw "Configuration update failed for $($Request.path); file preserved. Check syntax and manual changes."
+    }
+    Start-Sleep -Milliseconds 250
+  }
   $response = $result | ConvertFrom-Json
   foreach ($message in @($response.messages)) { Write-Warning $message }
   if ($response.changed) { Write-Host "  $(if ($Request.dry) {'[dry] '})update $($Request.path)" }

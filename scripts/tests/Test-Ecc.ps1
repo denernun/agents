@@ -46,7 +46,7 @@ $aliases = Join-Path $root 'aliases'
 New-Item -ItemType Directory $aliases | Out-Null
 New-Item -ItemType Junction -Path (Join-Path $aliases 'api-alias') -Target (Join-Path $HubPath 'skills/api-design') | Out-Null
 $snapshot = Join-Path $root 'snapshot.json'
-& python (Join-Path $source 'skills/skill-stocktake/scripts/stocktake.py') --hub $HubPath --root $aliases --output $snapshot
+& (Get-HubPython) (Join-Path $source 'skills/skill-stocktake/scripts/stocktake.py') --hub $HubPath --root $aliases --output $snapshot
 Assert ($LASTEXITCODE -eq 0) 'Portable inventory failed'
 $inventory = Get-Content $snapshot -Raw | ConvertFrom-Json
 Assert ($inventory.skills.Count -eq 6) 'Junction counted as separate skill'

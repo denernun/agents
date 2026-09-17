@@ -1,6 +1,9 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import tomllib
 import unittest
@@ -79,7 +82,10 @@ class ConfigTests(unittest.TestCase):
         self.call(format='toml', servers={'x': {'command': 'original'}})
         self.path.write_text(self.path.read_text().replace('original', 'manual'))
         old = self.path.read_text()
-        with self.assertRaises(ValueError): self.call(format='toml', remove=True)
+        result = self.call(format='toml', remove=True)
+        self.assertFalse(result['changed'])
+        self.assertTrue(any('manually changed AgentHub TOML block' in message
+                            for message in result['messages']))
         self.assertEqual(self.path.read_text(), old)
         self.path.write_text('broken = [')
         with self.assertRaises(tomllib.TOMLDecodeError): self.call(format='toml', servers={})
@@ -139,6 +145,21 @@ class ConfigTests(unittest.TestCase):
         )
         self.assertFalse(result['changed'])
         self.assertNotIn('Eficiência', self.path.read_text())
+
+    def test_main_decodes_non_utf8_stdin_as_utf8(self):
+        # PowerShell pipes UTF-8 bytes; a Windows Python reading stdin with the
+        # active code page turns non-ASCII rule text into lone surrogates and
+        # fails on write (see decorator-placement.mdc). PYTHONIOENCODING pins
+        # the legacy behaviour so this stays a regression test.
+        script = Path(__file__).parents[1] / 'agenthub_config.py'
+        text = 'decorator \u2705 placement \u274c marker\n'
+        request = json.dumps({'hub': str(self.root), 'path': str(self.path),
+                              'format': 'text', 'text': text})
+        env = {**os.environ, 'PYTHONIOENCODING': 'cp1252:surrogateescape'}
+        result = subprocess.run([sys.executable, str(script)], input=request.encode('utf-8'),
+                                capture_output=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.path.read_text(encoding='utf-8'), text)
 
 
 if __name__ == '__main__':

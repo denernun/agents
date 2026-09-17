@@ -4,7 +4,8 @@
     "NFECLASS",
     "MOBICLASS",
     "SHOPCLASS",
-    "CRMCLASS"
+    "CRMCLASS",
+	"CLOUDCLASS"
   ],
   "mcp": {
     "common": [

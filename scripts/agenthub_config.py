@@ -100,7 +100,13 @@ def update(request):
             raise ValueError('Invalid AgentHub TOML markers')
         block = blocks[0].group() if blocks else ''
         if block and block != state.get('block'):
-            raise ValueError('Managed TOML block changed manually; preserving file')
+            # Other local tools can append their own MCP table inside the
+            # AgentHub marker block. Treat that exactly like a manual edit:
+            # preserve it and let the wider install continue rather than
+            # failing a dry run or risking removal of that tool's settings.
+            return {'changed': False, 'messages': [
+                'Preserved manually changed AgentHub TOML block: ' + str(path)
+            ]}
         base = pattern.sub('', old)
         if request.get('legacy_global'):
             eligible = set()
@@ -183,6 +189,9 @@ def update(request):
 
 
 def main():
+    for stream in (sys.stdin, sys.stdout):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8', errors='surrogateescape')
     request = json.load(sys.stdin)
     try:
         if request.get('action') in ('validate-toml', 'inspect-toml'):

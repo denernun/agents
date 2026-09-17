@@ -44,7 +44,9 @@ a reference to another project's design.
   reusable patterns: cards, forms, tables, KPI cards, charts, alerts, badges,
   empty states, and loading states.
 - **Tokens in `src/styles/_tokens.scss`** are the single source of every color,
-  surface, border, radius, shadow, and font. Nothing visual is hardcoded.
+  surface, border, radius, shadow, font, and the three **density levers**
+  (`--ds-gap-grid`, `--ds-gap-section`, `--ds-pad-card`). Nothing visual is
+  hardcoded.
 
 ## Cross-project consistency (mandatory)
 
@@ -83,6 +85,25 @@ Prohibited: bespoke `.card` restyles, one-off `box-shadow` / `border-radius` /
 `border` on a panel, per-screen KPI markup, top accent stripes on KPI cards
 (use `variant="hero"` instead), colored card backgrounds outside the
 `--ds-*-50/100` tint tokens.
+
+## Density (compact — mandatory)
+
+The UI is **compact** by design: an administrative app shows a lot of
+information per screen. The only density levers are three tokens in
+`_tokens.scss` (never re-space a screen by hand):
+
+| Token | Value | Controls |
+|-------|-------|----------|
+| `--ds-gap-grid` | `0.75rem` | gap between cards inside a grid |
+| `--ds-gap-section` | `1rem` | vertical gap between page sections |
+| `--ds-pad-card` | `1rem` | inner padding of panel / stat card |
+
+Grids (`ds-kpi-grid`, `ds-dashboard-grid`, `ds-section-stack`) and panels/stat
+cards read these tokens. The content wrapper uses **one** padding level
+(`c-container fluid` `px-3 px-lg-4 py-3`) with **no** padding on `.body` and
+**no** `mb-4` on the header — summing the two was producing double margins and
+the excess whitespace. To condense/expand globally, change the three tokens and
+sync; do not restyle per screen.
 
 ## Dark mode & typography contract (non-negotiable)
 

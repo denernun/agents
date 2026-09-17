@@ -156,11 +156,11 @@ Escala real usada pelo design system (`_ds-components.scss`):
 
 | Elemento                | Tamanho    | Peso |
 | ----------------------- | ---------- | ---- |
-| Titulo da pagina        | `1.75rem`  | 700  |
+| Titulo da pagina        | `1.5rem`   | 700  |
 | Subtitulo da pagina     | `0.875rem` | 400  |
 | Titulo de painel        | `0.9375rem`| 600  |
 | Subtitulo de painel     | `0.75rem`  | 400  |
-| Valor de KPI            | `1.5rem`   | 700  |
+| Valor de KPI            | `1.375rem` | 700  |
 | Label de KPI            | `0.6875rem`| 600 (uppercase, `letter-spacing .06em`) |
 | Texto de tabela (td)    | `0.875rem` | 400  |
 | Cabecalho de tabela (th)| `0.6875rem`| 600 (uppercase, `letter-spacing .05em`) |
@@ -181,13 +181,23 @@ Escala baseada em Bootstrap 5 (multiplos de `0.25rem`):
 
 Regra pratica:
 
-- conteudo interno de card: `1.25rem` (`ds-panel__body`)
-- distancia entre cards / grid gap: `1rem`
-- distancia entre secoes: `1.5rem` (`margin-bottom` dos grids)
-- titulo e subtitulo: `0.25rem–0.375rem`
+- conteudo interno de card: `1rem` (`--ds-pad-card`, `ds-panel__body`)
+- distancia entre cards / grid gap: `0.75rem` (`--ds-gap-grid`)
+- distancia entre secoes: `1rem` (`--ds-gap-section`, `margin-bottom` dos grids)
+- titulo e subtitulo: `0.25rem`
 - elementos de formulario: `0.5rem–0.75rem` (`row g-3`)
 
-Preferir utilities Bootstrap (`gap-*`, `mb-*`, `p-*`) a CSS proprio.
+Estes tres valores (`--ds-gap-grid`, `--ds-gap-section`, `--ds-pad-card`) sao
+os **unicos botoes de densidade** da interface. Para condensar ou expandir o
+layout, alterar **so** eles em `_tokens.scss` e sincronizar — nunca remexer
+`_ds-components.scss` por tela. Densidade alvo: **compacta** (interface
+administrativa, muita informacao por tela).
+
+Evitar `gap-4` / `mb-4` / `p-4` avulsos nas telas; o ritmo vertical vem do
+page-header + grids (`--ds-gap-section`), nao de margens soltas.
+
+Preferir utilities Bootstrap (`gap-*`, `mb-*`, `p-*`) a CSS proprio — dentro
+dos limites dos tokens acima.
 
 ---
 
@@ -707,6 +717,25 @@ Footer:  3rem + 1px
 O shell (sidebar/header/footer/container) e **CoreUI** e nao deve ser
 reimplementado com markup proprio.
 
+## Padding do conteudo
+
+**Um unico** nivel de padding, vindo do container. Nao somar padding do
+`.body` com o do `c-container` — isso cria margem dupla e muito espaco em
+branco a esquerda/direita e em cima/baixo:
+
+```html
+<div class="body flex-grow-1 pb-footer">
+  <c-container fluid class="h-auto px-3 px-lg-4 py-3">
+    <router-outlet />
+  </c-container>
+</div>
+```
+
+- `.body`: **sem** padding horizontal (nada de `px-2 px-md-3`).
+- container: `px-3 px-lg-4 py-3` (12px / 24px / 12px).
+- header: **sem** `mb-4`; o espaco abaixo dele vem do `py-3` do container
+  e do `margin-bottom` do `app-page-header` (`--ds-gap-section`).
+
 ---
 
 # 13. Sidebar
@@ -774,7 +803,7 @@ Secondary        -> ds-dashboard-grid--two / --three
 Tables / Rankings
 ```
 
-Grids (todos com `gap 1rem`, `margin-bottom 1.5rem`, filhos `height:100%`):
+Grids (todos com `gap --ds-gap-grid` = `0.75rem`, `margin-bottom --ds-gap-section` = `1rem`, filhos `height:100%`):
 
 | Classe                        | Colunas (>= breakpoint)                         |
 | ----------------------------- | ---------------------------------------------- |
@@ -1051,9 +1080,10 @@ espalhar valores de identidade visual pela aplicacao e nao criar um
 segundo sistema de tokens.
 
 Grupos de tokens: cores base, `primary-hover/soft`, superficies,
-`radius`, `shadow`, `font`, campos (`input`/`field`), `kbd`, `tag`,
-tints (`-50/-100/-200`), gradientes de card e de header, ranking,
-sombras coloridas.
+`radius`, `shadow`, `font`, **spacing/densidade** (`--ds-gap-grid`,
+`--ds-gap-section`, `--ds-pad-card` — so no `:root`, sem override no
+dark), campos (`input`/`field`), `kbd`, `tag`, tints (`-50/-100/-200`),
+gradientes de card e de header, ranking, sombras coloridas.
 
 Manter `_tokens.scss` (e `_ds-components.scss`, `_ds-forms.scss`,
 `_theme.scss`) **byte-identicos ao `reference/styles/` desta skill** ---

@@ -33,10 +33,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 1rem 1.25rem 0.875rem;
+  padding: 0.75rem var(--ds-pad-card) 0.625rem;
   border-bottom: 1px solid var(--ds-border);
   background: var(--ds-surface);
-  min-height: 3.25rem;
+  min-height: 2.75rem;
 }
 
 .ds-panel__heading {
@@ -66,10 +66,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.125rem;
-  height: 2.125rem;
+  width: 1.875rem;
+  height: 1.875rem;
   border-radius: 0.5rem;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   background: var(--ds-primary-soft);
   color: var(--ds-primary);
   box-shadow: 0 1px 4px rgb(99 102 241 / 0.15);
@@ -77,15 +77,15 @@
 
 .ds-panel__body {
   flex: 1;
-  padding: 1.25rem;
+  padding: var(--ds-pad-card);
 
   &--flush {
     padding: 0;
   }
 
   &--chart {
-    min-height: 18rem;
-    padding: 1rem 1.25rem 1.25rem;
+    min-height: 15rem;
+    padding: 0.875rem var(--ds-pad-card) var(--ds-pad-card);
   }
 }
 
@@ -95,7 +95,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
+  padding: 0.5rem var(--ds-pad-card);
   border-top: 1px solid var(--ds-border);
   background: var(--ds-surface-header, var(--ds-surface-muted));
 }
@@ -122,8 +122,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 8.5rem;
-  padding: 1.125rem 1.25rem 1rem;
+  min-height: 7rem;
+  padding: 0.875rem var(--ds-pad-card) 0.75rem;
   background: var(--ds-surface);
   border: 1px solid var(--ds-border);
   border-radius: var(--ds-radius-card);
@@ -167,7 +167,7 @@
 
 .ds-stat-card__value {
   margin: 0.25rem 0 0;
-  font-size: 1.5rem;
+  font-size: 1.375rem;
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.03em;
@@ -194,10 +194,10 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.875rem;
-  font-size: 1.25rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  font-size: 1rem;
   background: var(--ds-accent-soft, var(--ds-primary-soft));
   color: var(--ds-accent, var(--ds-primary));
   box-shadow: 0 2px 8px -1px var(--ds-accent-soft, rgb(99 102 241 / 0.2));
@@ -251,9 +251,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  min-height: 7.5rem;
+  min-height: 6.5rem;
   height: 100%;
-  padding: 1.25rem 1.5rem;
+  padding: 1rem var(--ds-pad-card, 1rem);
   border: none;
   background: var(--ds-accent, var(--ds-primary));
   box-shadow: var(--ds-accent-shadow, var(--ds-shadow-card-colored));
@@ -264,7 +264,21 @@
 
   .ds-stat-card__value {
     color: #fff;
-    font-size: 1.5rem;
+    font-size: 1.375rem;
+  }
+
+  // Variation chip on saturated hero fill — dark success/danger tokens are unreadable;
+  // use frosted pill + light text so % stays legible on every accent color.
+  .ds-stat-card__variation--up,
+  .ds-stat-card__variation--positive {
+    background: rgb(255 255 255 / 0.22);
+    color: #ecfdf5;
+  }
+
+  .ds-stat-card__variation--down,
+  .ds-stat-card__variation--negative {
+    background: rgb(255 255 255 / 0.22);
+    color: #fff1f2;
   }
 }
 
@@ -348,22 +362,22 @@
 
 // ── Page header ─────────────────────────────────────────────────────────────
 .ds-page-header {
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.25rem;
+  margin-bottom: var(--ds-gap-section);
+  padding-bottom: 0.875rem;
   border-bottom: 2px solid transparent;
   border-image: linear-gradient(90deg, var(--ds-primary) 0%, var(--ds-info) 50%, transparent 100%) 1;
 }
 
 .ds-page-header__title {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--ds-text);
 }
 
 .ds-page-header__subtitle {
-  margin: 0.375rem 0 0;
+  margin: 0.25rem 0 0;
   font-size: 0.875rem;
   color: var(--ds-text-muted);
 }
@@ -372,10 +386,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 0.75rem;
-  font-size: 1.25rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
+  font-size: 1.0625rem;
   background: var(--ds-gradient-primary);
   color: var(--ds-primary);
   border: 1px solid var(--ds-primary-100);
@@ -400,8 +414,8 @@
 .ds-kpi-row {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--ds-gap-grid);
+  margin-bottom: var(--ds-gap-section);
   @include ds-stretch-grid-children;
 
   @media (min-width: 576px) {
@@ -464,8 +478,8 @@
 .ds-dashboard-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: var(--ds-gap-grid);
+  margin-bottom: var(--ds-gap-section);
   @include ds-stretch-grid-children;
 
   @media (min-width: 1200px) {
@@ -512,7 +526,7 @@
 .ds-section-stack {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: var(--ds-gap-grid);
   @include ds-stretch-grid-children;
 }
 
@@ -525,7 +539,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  margin: 0 0 0.875rem;
+  margin: 0 0 0.625rem;
 }
 
 .ds-section-heading__title {
@@ -599,7 +613,7 @@
   font-size: 0.875rem;
 
   thead th {
-    padding: 0.75rem 1.25rem;
+    padding: 0.625rem var(--ds-pad-card);
     font-size: 0.6875rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -611,7 +625,7 @@
   }
 
   tbody td {
-    padding: 0.75rem 1.25rem;
+    padding: 0.625rem var(--ds-pad-card);
     color: var(--ds-text);
     border-bottom: 1px solid var(--ds-border);
     vertical-align: middle;
@@ -768,7 +782,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2.5rem 1.5rem;
+  padding: 1.75rem 1rem;
   text-align: center;
 }
 
@@ -776,13 +790,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 3.5rem;
-  height: 3.5rem;
-  margin-bottom: 1rem;
-  border-radius: 1rem;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0.75rem;
   background: var(--ds-surface-muted);
   color: var(--ds-text-muted);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
 }
 
 .ds-empty__title {
@@ -820,14 +834,14 @@
 .ds-skeleton--card {
   border-radius: var(--ds-radius-card);
   border: 1px solid var(--ds-border);
-  padding: 1.25rem;
-  min-height: 8.5rem;
+  padding: var(--ds-pad-card);
+  min-height: 7rem;
   height: 100%;
 }
 
 .ds-skeleton--chart {
   border-radius: 0.75rem;
-  min-height: 16rem;
+  min-height: 14rem;
 }
 
 // ── Filter panel form tweaks inside dark theme ──────────────────────────────
@@ -1090,7 +1104,7 @@ body.c-dark-theme .ds-alert--info {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 1rem 1.25rem;
+  padding: 0.75rem var(--ds-pad-card);
   border-bottom: 1px solid var(--ds-border);
   background: var(--ds-surface-header, var(--ds-surface-muted));
 }
@@ -1103,7 +1117,7 @@ body.c-dark-theme .ds-alert--info {
 }
 
 .ds-modal__body {
-  padding: 1.25rem;
+  padding: var(--ds-pad-card);
   overflow: auto;
   color: var(--ds-text);
 }
@@ -1113,7 +1127,7 @@ body.c-dark-theme .ds-alert--info {
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
-  padding: 0.875rem 1.25rem;
+  padding: 0.625rem var(--ds-pad-card);
   border-top: 1px solid var(--ds-border);
   background: var(--ds-surface-header, var(--ds-surface-muted));
 }

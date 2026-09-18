@@ -3,7 +3,7 @@
 > ## AVISO — manter organizado
 >
 > Contexto **always-on gordo** = tokens desperdiçados em **toda** conversa.
-> Guias NestJS / Angular / Delphi completos vivem **somente** em `skills/` (on-demand).
+> Guias NestJS / Angular completos vivem **somente** em `skills/` (on-demand).
 > **Nunca** recolocar esses guias em `AGENTS.md`, `.cursorrules`, rules com `alwaysApply: true`,
 > `.agents/rules/*.md`, `.kiro/steering/*.md` ou `copilot-instructions.md`.
 > Edite no hub → `Install-AgentHub.ps1` → commit só o que for texto versionado (AGENTS enxutos).
@@ -13,7 +13,7 @@
 | Camada | Arquivos típicos | Quando carrega | Tamanho alvo |
 |--------|------------------|----------------|--------------|
 | **Always-on** | `AGENTS.md`, `.cursorrules`, ponteiros `.mdc`, Copilot slim, `.agents/rules/stack-pointer.md` (Antigravity), `.kiro/steering/stack-pointer.md` (Kiro) | Toda conversa no repo | **&lt; 2 KB** cada |
-| **On-demand** | Skills em `.cursor/skills/*`, `.agents/skills/*`, `.kiro/skills/*`, `.opencode/skills/*`, `.claude/skills/*`, `.codex/skills/*`, `.devin/skills/*` (junction → hub) | Só quando o agente abre a skill | OK 1–25 KB |
+| **On-demand** | Skills em `.cursor/skills/*`, `.agents/skills/*`, `.kiro/skills/*`, `.opencode/skills/*`, `.claude/skills/*`, `.codex/skills/*`, `.devin/skills/*` (junction → hub; **Kiro = cópia**, ver Revisão 2026-09-18) | Só quando o agente abre a skill | OK 1–25 KB |
 | **MCP** | `.cursor/mcp.json`, `.vscode/mcp.json`, `.kiro/settings/mcp.json`, `opencode.json` (raiz), `.agents/mcp_config.json`, `.mcp.json` (Claude Code), `.codex/config.toml`, `.devin/mcp_config.json` | Ferramentas MCP, não texto de guia | trio comum; mongodb+openapi nas APIs; playwright nos frontends (exceto Codex) |
 | **Local only** | seção `## Local` do `AGENTS.md` | Always-on, mas só notas do repo | Curto |
 
@@ -22,7 +22,6 @@
 | Skill | ~KB | Família |
 |-------|-----|---------|
 | `nestjs-clean-architecture` | 21 | NestJS |
-| `delphi-erpclass` | 16 | Delphi |
 | `angular-coreui` | 10 | Angular |
 | `coreui-styling` | 14 + `design-system.md` 52 | Angular |
 | `claude-android-ninja` | vendor | Android (junction → `vendor/claude-android-ninja`) |
@@ -45,7 +44,7 @@
 
 ## Proibido (sempre-on)
 
-- Guias NestJS/Angular/Delphi completos em `AGENTS.md`, `.cursorrules`, `*.mdc` com `alwaysApply: true`
+- Guias NestJS/Angular completos em `AGENTS.md`, `.cursorrules`, `*.mdc` com `alwaysApply: true`
 - Duplicar o mesmo guia em `.agents/rules/*.md`, `.kiro/steering/*.md`, `copilot-instructions.md`, `source/AGENTS.md`, etc.
 - Criar skill nova **só** dentro de um repo (sem passar pelo hub)
 
@@ -82,6 +81,8 @@ Para usar sua chave Context7, coloque `CONTEXT7_API_KEY` em `D:\AGENTS\.env` (ou
 ## IDEs por máquina
 
 Allow/exclude **não** é um padrão único no git. Cada PC copia `.env.example` → `.env` e define `AGENTHUB_IDES` / `AGENTHUB_EXCLUDE_IDES`. Sem `.env`, o fallback é `catalog/projects.json`. Exclude apaga skills/MCP dessa IDE.
+
+O install **só grava para IDEs realmente instaladas nesta máquina** (footprint em disco / PATH — ver `Get-PresentIdes`). Isso vale tanto para a auto-detecção quanto para uma lista explícita `-Ides` / `AGENTHUB_IDES`: uma IDE pedida mas ausente é ignorada com aviso. Assim, levar o hub para outra máquina nunca cria `.<ide>/skills` nem MCP de uma IDE que não existe lá. Para forçar mesmo assim, use `-AllowMissing` (ver Revisão 2026-09-18).
 
 ## Revisão 2026-08-08
 
@@ -223,3 +224,58 @@ não existia na sessão.
 - Sem braço `Codex` em `Write-McpConfigs` — a config do Codex é global, não por repo.
 - Fix manual avulso: `codex mcp add codegraph -- cmd /c codegraph serve --mcp`.
 
+## Revisão 2026-09-18 — Delphi removido, review-changes, Kiro por cópia, filtro de IDE ausente
+
+Quatro mudanças nesta rodada:
+
+### 1. Stack Delphi descontinuado
+
+Removidos a família `delphi` do `catalog/projects.json`, a skill vazia
+`skills/delphi-erpclass/`, os templates `templates/agents/delphi.md`,
+`templates/copilot/delphi.md`, `templates/rules/stack-pointer-delphi.mdc`, e as
+menções em steering (`tech.md`, `structure.md`, `product.md`), `minimal.md` e
+`antigravity/rules.md`. Também um resquício em `Get-ProjectFamily`
+(array hardcoded `nestjs/angular/delphi/android`) que quebrava o install com
+`The property 'match' cannot be found`. Projetos `*-erp` agora caem em
+`minimal`. O path `stack-pointer-delphi.mdc` foi mantido de propósito na lista
+de cleanup do `AgentHub.Common.ps1` para limpar pointers de instalações antigas.
+
+### 2. code-review-and-quality fora de commonSkills; review-changes desambiguada
+
+Havia 3 skills de review competindo pelo mesmo gatilho. Nenhuma foi apagada
+(as duas do vendor são junctions, não editáveis). Solução: `code-review-and-quality`
+saiu de `catalog.commonSkills` (o install poda os junctions dela em todos os
+repos), e a `description` da `review-changes` (skill do hub) foi reescrita para
+declarar-se a revisão rápida/risco default e apontar as outras duas por nome.
+
+### 3. Kiro carrega skills por CÓPIA, não junction
+
+**O Kiro não segue directory junctions em `.kiro/skills/`** — só lê pastas
+reais (a doc dele só documenta *copiar* skills). Testado: uma skill de pasta
+real aparece no kiro-cli; um junction idêntico não. Os demais agentes (Cursor,
+Codex, Antigravity, OpenCode, Claude) seguem junction normalmente.
+
+- `New-JunctionOrCopy` ganhou `-ForceCopy`: copia a pasta (com marker
+  `.agenthub-managed`, reaproveitando o mecanismo de poda existente) e converte
+  junctions pré-existentes em cópia.
+- `Link-ProjectSkills` marca só o root do Kiro (`.kiro/skills`) como copy-only.
+- `Sync-Codegraph.ps1` também copia o `codegraph` no `.kiro/skills`.
+
+**Consequência de manutenção:** a cópia do Kiro **não se auto-atualiza**. Ao
+editar uma skill no hub, é preciso **re-rodar o install** para propagar as
+cópias do Kiro (os junctions das outras IDEs refletem na hora). Cópia também
+ocupa mais espaço que junction.
+
+### 4. IDE ausente é filtrada mesmo com -Ides explícito
+
+Antes, uma lista explícita `-Ides` / `AGENTHUB_IDES` pulava a checagem de
+presença e escrevia `.<ide>/skills` + MCP para IDEs que não existiam na
+máquina — problema ao levar o hub para outro PC. Agora a detecção de presença
+foi extraída para `Get-PresentIdes` e é aplicada **também** ao override: uma
+IDE pedida mas não instalada é ignorada com aviso. Novo switch `-AllowMissing`
+restaura o comportamento antigo (forçar a lista) quando desejado.
+
+Rodado: `Install-AgentHub.ps1 -WriteAgents` → 38 projetos, EXIT 0. Também
+corrigido um `UnboundLocalError` em `agenthub_config.py` que abortava o install
+quando um `text_patch` era pedido para um `AGENTS.md` ainda inexistente
+(cloudclass-*): agora escreve o arquivo do zero nesse caso.

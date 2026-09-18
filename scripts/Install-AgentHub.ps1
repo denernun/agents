@@ -68,7 +68,11 @@ param(
   [switch]$GlobalSkills,
   [switch]$AdoptLegacyConfigs,
   [switch]$CheckVendorUpdates,
-  [switch]$UpdateVendors
+  [switch]$UpdateVendors,
+  # By default, an explicit -Ides / AGENTHUB_IDES list is still filtered to the
+  # IDEs actually installed on this machine (so carrying the hub elsewhere never
+  # writes configs for absent IDEs). Set -AllowMissing to force the given list.
+  [switch]$AllowMissing
 )
 
 Set-StrictMode -Version Latest
@@ -160,9 +164,22 @@ function Resolve-IdePolicy {
 }
 
 function Get-DetectedIdes {
-  param([string[]]$Override, [string[]]$Allowed, [string[]]$Excluded, [switch]$IncludeQoder)
+  param([string[]]$Override, [string[]]$Allowed, [string[]]$Excluded, [switch]$IncludeQoder, [switch]$AllowMissing)
+  # Which IDEs actually have a footprint on THIS machine. Used both for
+  # auto-detection and to filter an explicit -Ides / AGENTHUB_IDES override, so
+  # carrying the hub to a machine that lacks an IDE never writes that IDE's
+  # skills/configs (unless -AllowMissing is set to intentionally force it).
+  $present = Get-PresentIdes -IncludeQoder:$IncludeQoder
+
   if ($Override -and $Override.Count -gt 0) {
     $candidates = @($Override | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if (-not $AllowMissing) {
+      $missing = @($candidates | Where-Object { $present -notcontains $_ })
+      if ($missing.Count -gt 0) {
+        Write-Warning ("Ignoring IDEs from -Ides/AGENTHUB_IDES not detected on this machine: {0}. Use -AllowMissing to force." -f ($missing -join ', '))
+      }
+      $candidates = @($candidates | Where-Object { $present -contains $_ })
+    }
     if ($Allowed -and $Allowed.Count -gt 0) {
       $candidates = @($candidates | Where-Object { $Allowed -contains $_ })
     }
@@ -171,10 +188,29 @@ function Get-DetectedIdes {
     }
     return , $candidates
   }
+  $candidates = @($present | Select-Object -Unique)
+  if ($Allowed -and $Allowed.Count -gt 0) {
+    $candidates = @($candidates | Where-Object { $Allowed -contains $_ })
+  }
+  if ($Excluded -and $Excluded.Count -gt 0) {
+    $candidates = @($candidates | Where-Object { $Excluded -notcontains $_ })
+  }
+  return , $candidates
+}
+
+function Get-PresentIdes {
+  # Returns the IDE names that have an on-disk / on-PATH footprint on this
+  # machine. Single source of truth for "is this IDE installed here".
+  param([switch]$IncludeQoder)
   $userHome = $env:USERPROFILE
   $found = [System.Collections.Generic.List[string]]::new()
   if (Test-Path (Join-Path $userHome '.cursor')) { [void]$found.Add('Cursor') }
-  if ((Test-Path (Join-Path $userHome '.vscode')) -or (Get-Command code -ErrorAction SilentlyContinue)) {
+  # VS Code Stable or Insiders (Insiders uses ~/.vscode-insiders and the
+  # `code-insiders` launcher; either footprint counts as VSCode present).
+  if ((Test-Path (Join-Path $userHome '.vscode')) -or
+      (Test-Path (Join-Path $userHome '.vscode-insiders')) -or
+      (Get-Command code -ErrorAction SilentlyContinue) -or
+      (Get-Command code-insiders -ErrorAction SilentlyContinue)) {
     [void]$found.Add('VSCode')
   }
   if (Test-Path (Join-Path $userHome '.kiro')) { [void]$found.Add('Kiro') }
@@ -204,14 +240,7 @@ function Get-DetectedIdes {
       (Get-Command devin -ErrorAction SilentlyContinue)) {
     [void]$found.Add('Devin')
   }
-  $candidates = @($found | Select-Object -Unique)
-  if ($Allowed -and $Allowed.Count -gt 0) {
-    $candidates = @($candidates | Where-Object { $Allowed -contains $_ })
-  }
-  if ($Excluded -and $Excluded.Count -gt 0) {
-    $candidates = @($candidates | Where-Object { $Excluded -notcontains $_ })
-  }
-  return , $candidates
+  return , @($found | Select-Object -Unique)
 }
 
 function Ensure-VendorAgentSkills {
@@ -455,7 +484,7 @@ function Test-SkillTargetHasContent {
 }
 
 function New-JunctionOrCopy {
-  param([string]$LinkPath, [string]$TargetPath, [switch]$DryRun)
+  param([string]$LinkPath, [string]$TargetPath, [switch]$DryRun, [switch]$ForceCopy)
   if (-not (Test-Path $TargetPath)) {
     Write-Warning "Missing skill target: $TargetPath"
     return
@@ -472,13 +501,20 @@ function New-JunctionOrCopy {
     $item = Get-Item $LinkPath -Force
     $isReparse = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
     if ($isReparse) {
-      if (@($item.Target) -contains $TargetPath) { return }
-      if (-not (Test-HubOwnedLink -Path $LinkPath -HubPath $HubPath)) { Write-Warning "Preserved external link: $LinkPath"; return }
-      if (-not $DryRun) {
+      # A junction exists but we now need a real copy (ForceCopy): remove it.
+      if ($ForceCopy) {
+        if (-not (Test-HubOwnedLink -Path $LinkPath -HubPath $HubPath)) { Write-Warning "Preserved external link: $LinkPath"; return }
         Remove-HubLink -Path $LinkPath -Root $parent -HubPath $HubPath
-        if (Test-Path $LinkPath) {
-          Write-Warning "Failed to remove existing junction at $LinkPath - skipping."
-          return
+      }
+      else {
+        if (@($item.Target) -contains $TargetPath) { return }
+        if (-not (Test-HubOwnedLink -Path $LinkPath -HubPath $HubPath)) { Write-Warning "Preserved external link: $LinkPath"; return }
+        if (-not $DryRun) {
+          Remove-HubLink -Path $LinkPath -Root $parent -HubPath $HubPath
+          if (Test-Path $LinkPath) {
+            Write-Warning "Failed to remove existing junction at $LinkPath - skipping."
+            return
+          }
         }
       }
     } else {
@@ -489,11 +525,22 @@ function New-JunctionOrCopy {
         Write-Warning "Existing directory at $LinkPath is not hub-managed (no .agenthub-managed marker). Skipping to avoid data loss. Remove manually if unneeded."
         return
       }
+      # ForceCopy always refreshes; a plain fallback copy that already matches
+      # would be re-copied harmlessly. Remove and recopy to pick up edits.
       if (-not $DryRun) { Remove-HubLink -Path $LinkPath -Root $parent -HubPath $HubPath }
     }
   }
   if ($DryRun) {
-    Write-Host "  [dry] junction $LinkPath -> $TargetPath"
+    Write-Host ('  [dry] {0} {1} -> {2}' -f $(if ($ForceCopy) {'copy'} else {'junction'}), $LinkPath, $TargetPath)
+    return
+  }
+  # Kiro (and any agent that doesn't follow reparse points) can't read skills
+  # through a junction, so copy the folder instead of linking. The copy carries
+  # a .agenthub-managed marker so future runs treat it as hub-owned.
+  if ($ForceCopy) {
+    Copy-Item $TargetPath $LinkPath -Recurse -Force
+    Set-Content -Path (Join-Path $LinkPath '.agenthub-managed') -Value "Created by Install-AgentHub.ps1 on $(Get-Date -Format 'yyyy-MM-dd HH:mm'). Safe to delete this folder." -Encoding UTF8
+    Write-Host "  copied $LinkPath"
     return
   }
   $ok = $true
@@ -1354,41 +1401,46 @@ function Link-ProjectSkills {
     [string[]]$Ides,
     [switch]$DryRun
   )
-  $skillRoots = [System.Collections.Generic.List[string]]::new()
-  if ($Ides -contains 'Cursor') { [void]$skillRoots.Add((Join-Path $RepoPath '.cursor\skills')) }
+  # Each root records whether it must be populated by copy instead of junction.
+  # Kiro does not follow directory junctions when discovering skills (its docs
+  # only describe copying skill folders), so its root is copy-only.
+  $skillRoots = [System.Collections.Generic.List[object]]::new()
+  if ($Ides -contains 'Cursor') { [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.cursor\skills'); Copy = $false }) }
   if ($Ides -contains 'VSCode') {
     # GitHub Copilot (VS Code / Copilot CLI) discovers project skills at
     # .github\skills\<name>\SKILL.md
-    [void]$skillRoots.Add((Join-Path $RepoPath '.github\skills'))
+    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.github\skills'); Copy = $false })
   }
   if ($Ides -contains 'Antigravity' -or $Ides -contains 'Codex') {
     # Shared discovery directory for Codex and Antigravity. workspace skills live under .agents\skills (see
     # codelabs.developers.google.com/autonomous-ai-developer-pipelines-antigravity).
-    [void]$skillRoots.Add((Join-Path $RepoPath '.agents\skills'))
+    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.agents\skills'); Copy = $false })
   }
   if ($Ides -contains 'Kiro') {
-    # Kiro also discovers project-level skills at .kiro\skills\<name>\SKILL.md
-    [void]$skillRoots.Add((Join-Path $RepoPath '.kiro\skills'))
+    # Kiro discovers project-level skills at .kiro\skills\<name>\SKILL.md but
+    # does NOT follow junctions there, so copy the folders instead.
+    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.kiro\skills'); Copy = $true })
   }
   if ($Ides -contains 'OpenCode') {
     # OpenCode discovers skills at .opencode\skills (docs.opencode.ai/docs/skills).
-    [void]$skillRoots.Add((Join-Path $RepoPath '.opencode\skills'))
+    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.opencode\skills'); Copy = $false })
   }
   if ($Ides -contains 'Claude') {
     # Claude Code discovers project skills at .claude\skills\<name>\SKILL.md
-    [void]$skillRoots.Add((Join-Path $RepoPath '.claude\skills'))
+    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.claude\skills'); Copy = $false })
   }
   if ($Ides -contains 'Devin') {
     # Devin discovers SKILL.md under .devin\skills (docs.devin.ai/product-guides/skills).
-    [void]$skillRoots.Add((Join-Path $RepoPath '.devin\skills'))
+    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.devin\skills'); Copy = $false })
   }
 
-  foreach ($root in $skillRoots) {
+  foreach ($rootInfo in $skillRoots) {
+    $root = $rootInfo.Path
     foreach ($skill in $SkillNames) {
       $target = Join-Path $HubPath "skills\$skill"
       $link = Join-Path $root $skill
       if (-not (Test-HubSkill $target)) { throw "Invalid SKILL.md: $target" }
-      New-JunctionOrCopy -LinkPath $link -TargetPath $target -DryRun:$DryRun
+      New-JunctionOrCopy -LinkPath $link -TargetPath $target -DryRun:$DryRun -ForceCopy:$rootInfo.Copy
     }
     Remove-StaleProjectSkills -SkillRoot $root -HubPath $HubPath -KeepNames $SkillNames -DryRun:$DryRun
   }
@@ -1767,7 +1819,7 @@ $idePolicy = Resolve-IdePolicy -Catalog $catalog
 $allowedIdes = @($idePolicy.Allowed)
 $excludeIdes = @($idePolicy.Excluded)
 $qoderOptIn = [bool]$catalog.qoderOptIn
-$detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -Excluded $excludeIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn)
+$detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -Excluded $excludeIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn) -AllowMissing:$AllowMissing
 if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides, AGENTHUB_IDES in .env, or catalog.ides.' }
 if ($catalog.PSObject.Properties['ecc']) {
   $eccRoots = @{Cursor='.cursor/skills'; Claude='.claude/skills'; Codex='.agents/skills'; Antigravity='.agents/skills'; OpenCode='.opencode/skills'; VSCode='.github/skills'; Kiro='.kiro/skills'; Devin='.devin/skills'}

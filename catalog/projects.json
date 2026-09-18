@@ -174,10 +174,10 @@
     "Codex",
     "OpenCode",
     "Antigravity",
-    "Kiro"
+    "Kiro",
+    "VSCode"
   ],
   "excludeIdes": [
-    "VSCode",
     "Devin"
   ],
   "excludeProjectNames": [

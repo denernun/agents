@@ -38,7 +38,11 @@ stack-specific coding rules.
 Detected: Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin
 (Qoder is opt-in via `-IncludeQoder`). Per-machine allow/exclude lives in
 `D:\AGENTS\.env` (`AGENTHUB_IDES`, `AGENTHUB_EXCLUDE_IDES`); catalog `ides` /
-`excludeIdes` is only the fallback when `.env` is missing.
+`excludeIdes` is only the fallback when `.env` is missing. Install only writes
+for IDEs actually present on the machine (even with explicit `-Ides`; override
+with `-AllowMissing`). Skills link as junctions except **Kiro**, which needs
+real copies in `.kiro/skills` — so re-run install after editing a skill to
+refresh Kiro's copies. See `docs/CONTEXT-HYGIENE.md` Revisão 2026-09-18.
 
 ## Common commands
 

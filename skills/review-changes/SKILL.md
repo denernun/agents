@@ -1,6 +1,6 @@
 ---
 name: review-changes
-description: Perform a structured code review using change detection and impact
+description: Fast risk-focused review of a local diff via codegraph — flags blast radius and untested impact. This is the default day-to-day review. For a deep multi-axis quality checklist (correctness/readability/architecture/security/performance) before merge, use code-review-and-quality; to review a branch/PR against its originating spec from a fixed point, use code-review.
 ---
 
 ## Review Changes

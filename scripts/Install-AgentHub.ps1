@@ -431,7 +431,7 @@ function Get-ProjectFamily {
       }
     }
   }
-  foreach ($key in @('nestjs', 'angular', 'delphi', 'android')) {
+  foreach ($key in @('nestjs', 'angular', 'android')) {
     foreach ($pattern in $Families[$key].match) { if ($Name -like $pattern) { return $key } }
   }
   return 'minimal'
@@ -442,8 +442,8 @@ function Test-SkillTargetHasContent {
   # every project. A skill target is a directory that should contain at
   # least one non-empty file (normally SKILL.md); "references" is a plain
   # folder of checklists, not a single skill, so any non-empty file counts.
-  # A directory containing only a ".gitkeep" placeholder (e.g. an
-  # intentionally-empty skill stub like delphi-erpclass) is treated as valid.
+  # A directory containing only a ".gitkeep" placeholder (an
+  # intentionally-empty skill stub) is treated as valid.
   param([string]$TargetPath)
   if (-not (Test-Path $TargetPath -PathType Container)) { return $true } # not a dir mirror case, let caller handle
   $files = @(Get-ChildItem -Path $TargetPath -Recurse -File -Force -ErrorAction SilentlyContinue)

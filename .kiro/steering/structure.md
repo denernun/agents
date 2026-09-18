@@ -35,7 +35,7 @@ D:\IA\agents/
 
 - **Skill files** (`skills/<name>/SKILL.md`): YAML frontmatter with `name` +
   `description` (the description drives when an agent should load it), followed
-  by the guide body. Stack-specific skills (nestjs/angular/delphi) are written
+  by the guide body. Stack-specific skills (nestjs/angular) are written
   in the target repo's convention language; process skills (debug-issue,
   explore-codebase, refactor-safely, review-changes) are short (~1-2 KB) and
   end with a shared "Token Efficiency Rules" section.
@@ -44,7 +44,7 @@ D:\IA\agents/
   `mcp` (extra MCP servers on top of `mcp.common`), `agentsTemplate`,
   `cursorRule`, `extraRules`. Top-level `mcp.common` / `mcp.skipIdes` /
   `mcp.extra` select servers per repo and per IDE. Family resolution order in
-  `Install-AgentHub.ps1` is nestjs → angular → delphi → android → minimal (first match wins).
+  `Install-AgentHub.ps1` is nestjs → angular → android → minimal (first match wins).
 - **Templates use placeholders**: `{{PROJECT}}`, `{{REPO}}`,
   `{{HUB}}`, `{{CONTEXT7_API_KEY}}` — substituted by `Install-AgentHub.ps1`
   when writing into target repos.
@@ -53,7 +53,7 @@ D:\IA\agents/
   sections added by date) rather than rewritten.
 - **Language**: README and Portuguese-facing docs (CONTEXT-HYGIENE.md) are in
   Portuguese since the target teams are Brazilian; skill bodies match the
-  target stack's convention (Delphi/NestJS skills in Portuguese, Angular skill
+  target stack's convention (NestJS skills in Portuguese, Angular skill
   in English) — follow the existing language of the file being edited.
 - **No junctions committed to Git**: symlinks/junctions created by
   `Install-AgentHub.ps1` in target repos are local-only and must never be

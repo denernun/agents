@@ -15,7 +15,7 @@ service, API, or UI to build here.
 
 ## Problem it solves
 
-Previously, every repo duplicated full NestJS/Angular/Delphi stack guides
+Previously, every repo duplicated full NestJS/Angular stack guides
 inside always-on files (`AGENTS.md`, `.cursorrules`, IDE rules). This wasted
 tokens on every conversation and drifted out of sync across repos.
 
@@ -26,7 +26,7 @@ hub instead of duplicating it.
 ## Core concepts
 
 - **Hub** (`D:\IA\agents`): canonical skills, templates, MCP templates, catalog, scripts.
-- **Family**: a stack profile (`nestjs`, `angular`, `delphi`, `android`, `minimal`) matched
+- **Family**: a stack profile (`nestjs`, `angular`, `android`, `minimal`) matched
   by project name pattern in `catalog/projects.json`, determining which skills/
   templates/rules get applied to a project.
 - **Install**: `scripts/Install-AgentHub.ps1` detects installed IDEs and, per

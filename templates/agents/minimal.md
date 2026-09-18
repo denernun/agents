@@ -2,9 +2,9 @@
 
 ## Agent instructions
 > Keep this file short — stack guides live in `D:\AGENTS` skills (on demand).
-- Chat in **Portuguese**; code in **English** unless the stack is Delphi.
+- Chat in **Portuguese**; code in **English**.
 - Prefer skill **codegraph** (`codegraph_explore`) before broad Grep/Glob when the graph MCP is configured.
-- Load the stack skill that matches this repo (nestjs / angular / delphi / android) from `D:\AGENTS`.
+- Load the stack skill that matches this repo (nestjs / angular / android) from `D:\AGENTS`.
 
 ## Eficiência de execução
 - Entregue o resultado primeiro; não repita o pedido nem narre passos rotineiros.

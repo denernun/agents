@@ -83,29 +83,6 @@
       "cursorRule": "stack-pointer-angular.mdc",
       "extraRules": []
     },
-    "delphi": {
-      "match": [
-        "*-erp"
-      ],
-      "skills": [
-      ],
-      "mcp": [],
-      "agentsTemplate": "delphi.md",
-      "cursorRule": "stack-pointer-delphi.mdc",
-      "extraRules": [],
-      "disabledCommonSkills": [
-        "using-agent-skills",
-        "git-workflow-and-versioning",
-        "code-review-and-quality",
-        "security-and-hardening",
-        "observability-and-instrumentation",
-        "unlazy",
-        "spec-driven-development",
-        "planning-and-task-breakdown",
-        "incremental-implementation"
-      ],
-      "disabledSkillsUntilSelected": true
-    },
     "android": {
       "match": [
         "mobiclass-apk",
@@ -146,7 +123,6 @@
   "commonSkills": [
     "using-agent-skills",
     "git-workflow-and-versioning",
-    "code-review-and-quality",
     "security-and-hardening",
     "observability-and-instrumentation",
     "unlazy",

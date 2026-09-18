@@ -112,12 +112,14 @@ def update(request):
             patch = text_patch['content'].rstrip() + '\n\n'
             new = old[:match.start()] + patch + old[match.start():]
             new_state = {'path': str(path), 'text': new}
-        elif text_patch and text_patch['marker'] in old:
+        elif text_patch and exists and text_patch['marker'] in old:
             return {'changed': False, 'messages': []}
         recognized = adopt and ('D:\\AGENTS' in old or 'AgentHub' in old or 'Install-AgentHub' in old)
         if not text_patch and exists and old != previous and not recognized:
             return {'changed': False, 'messages': ['Preserved manual file: ' + str(path)]}
-        if not text_patch:
+        # No patch requested, or a patch was requested but the file does not
+        # exist yet (nothing to surgically patch): write the full text fresh.
+        if not text_patch or not exists:
             new = '' if remove else request['text']
             new_state = {'path': str(path), 'text': new}
     elif request.get('format') == 'toml':

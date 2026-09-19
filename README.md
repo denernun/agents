@@ -408,8 +408,12 @@ O install baixa o submodule `vendor/superpowers` e cria junctions
 cada `Install-AgentHub.ps1`). O hook/plugin oficial do Superpowers **não** é
 usado — só os `SKILL.md`, carregados sob demanda.
 
-> **Trocar a lista depois:** editar `superpowersSkills` (ou `mattPocockSkills`,
-> ou as `skills` de uma família) e rodar `Install-AgentHub.ps1` de novo. O
+> **Trocar a lista depois:** editar `superpowersSkills` (ou `addyosmaniSkills`,
+> `mattPocockSkills`, `commonSkills`, ou as `skills` de uma família) e rodar
+> `Install-AgentHub.ps1` de novo. Cada pacote upstream tem sua própria chave no
+> catálogo, e o mesmo nome não pode aparecer em duas — `skills/<nome>` só
+> aponta para um lugar, e o install aborta com a lista dos nomes disputados
+> antes de escrever qualquer coisa. O
 > install cria as junctions novas **e remove** as que saíram do catálogo
 > (prune, igual ao que já fazia com MCP). Skills feitas à mão na pasta do
 > projeto (pasta real, ou junction apontando para fora de `D:\AGENTS\skills`)

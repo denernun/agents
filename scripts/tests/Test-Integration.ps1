@@ -105,6 +105,48 @@ Assert ((Get-Item (Join-Path $copyLink 'SKILL.md')).LastWriteTimeUtc -eq $stamp)
 Set-Content (Join-Path $copyTarget 'SKILL.md') "---`nname: test`ndescription: Changed.`n---`nNew body."
 Assert (-not (Test-CopyUpToDate -LinkPath $copyLink -TargetPath $copyTarget)) 'Changed source not detected'
 
+# --- Vendor provenance: one catalog key per upstream package, no shared names
+$lists=Get-UniversalSkillLists -Catalog $cat
+Assert (@($lists.Keys) -contains 'catalog.addyosmaniSkills') 'Addy Osmani selection lost its own catalog key'
+Assert (@($lists['catalog.addyosmaniSkills']) -contains 'using-agent-skills') 'Addy Osmani list is empty'
+Assert (@($lists['catalog.commonSkills']) -notcontains 'using-agent-skills') 'Addy Osmani skill still duplicated in commonSkills'
+Assert-NoSkillNameCollisions -Lists $lists
+$clash=[ordered]@{ 'catalog.a'=@('shared','x'); 'catalog.b'=@('shared') }
+$collided=$false
+$clashMessage=''
+try { Assert-NoSkillNameCollisions -Lists $clash } catch { $collided=$true; $clashMessage=$_.Exception.Message }
+Assert $collided 'A name claimed by two catalog lists was accepted'
+Assert ($clashMessage -match 'shared' -and $clashMessage -match 'catalog\.b') 'Collision error does not name the skill and the winning list'
+Assert-NoSkillNameCollisions -Lists ([ordered]@{ 'catalog.a'=@('dup','dup') })
+
+# --- Every project gets the universal lists plus its family and ECC adapters
+$angularSkills=@(Get-ProjectSkillNames -Catalog $cat -FamilyCfg $cat.families.angular -Family 'angular' -ProjectName 'sample-admin')
+foreach ($expected in @('using-agent-skills','unlazy','tdd','systematic-debugging','angular-coreui','contract-first')) {
+  Assert ($angularSkills -contains $expected) "Angular project lost $expected"
+}
+Assert (@($angularSkills).Count -eq @($angularSkills | Select-Object -Unique).Count) 'Resolved skill list has duplicates'
+$optedOut=[pscustomobject]@{ skills=@('codegraph'); disabledCommonSkills=@('tdd','unlazy') }
+$reduced=@(Get-ProjectSkillNames -Catalog $cat -FamilyCfg $optedOut -Family 'minimal' -ProjectName 'sample')
+Assert ($reduced -notcontains 'tdd' -and $reduced -notcontains 'unlazy') 'disabledCommonSkills no longer covers every universal list'
+Assert ($reduced -contains 'codegraph') 'Family skill dropped by the opt-out filter'
+
+# --- A name that moved between vendor packages is reported, not swapped quietly
+$vendorA=Join-Path $HubPath 'vendor/pkg-a/skills/moved'
+$vendorB=Join-Path $HubPath 'vendor/pkg-b/skills/moved'
+foreach ($dir in @($vendorA,$vendorB)) {
+  New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  Set-Content (Join-Path $dir 'SKILL.md') "---`nname: moved`ndescription: Moved skill.`n---`nBody."
+}
+Assert ((Get-VendorPackageName -Path $vendorA -HubPath $HubPath) -eq 'pkg-a') 'Vendor package not derived from path'
+Assert ($null -eq (Get-VendorPackageName -Path (Join-Path $HubPath 'skills/test') -HubPath $HubPath)) 'Native hub skill reported as vendor'
+$movedLink=Join-Path $HubPath 'skills/moved'
+New-JunctionOrCopy -LinkPath $movedLink -TargetPath $vendorA
+# New-JunctionOrCopy is a simple function, so -WarningVariable is unavailable:
+# capture the warning stream instead.
+$repointWarning=@(& { New-JunctionOrCopy -LinkPath $movedLink -TargetPath $vendorB } 3>&1 | ForEach-Object { [string]$_ })
+Assert ($repointWarning -match 'disputed between vendor packages') 'Repoint across vendor packages stayed silent'
+Assert ((Get-Item $movedLink -Force).Target -contains $vendorB) 'Repoint did not take effect'
+
 Write-Host 'Integration checks passed. Fixtures retained under .audit-output for inspection.'
 
 # Explicit success signal: $LASTEXITCODE would otherwise leak from the last

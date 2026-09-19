@@ -24,7 +24,7 @@ foreach ($root in $Roots) {
     if ($cat.excludeProjectNames -contains $project.Name) { continue }
     if (-not ((Test-Path (Join-Path $project.FullName '.git')) -or (Test-Path (Join-Path $project.FullName 'AGENTS.md')) -or (Test-Path (Join-Path $project.FullName 'package.json')))) { continue }
     $family=Get-ProjectFamily -Name $project.Name -Families $families -RepoPath $project.FullName -Overrides (Get-JsonProperty $cat 'projectFamilies')
-    $skills=@($cat.commonSkills)+@($cat.mattPocockSkills)+@($cat.superpowersSkills)+@($families[$family].skills)+@(Get-EccSkillNames -Catalog $cat -Family $family -ProjectName $project.Name)
+    $skills=@(Get-ProjectSkillNames -Catalog $cat -FamilyCfg $families[$family] -Family $family -ProjectName $project.Name)
     $expected=@(Get-ProjectMcpServerNames -ProjectName $project.Name -FamilyCfg $families[$family] -Catalog $cat)
     if (-not (Get-NestSwaggerMcpVars $project.FullName)) { $expected=@($expected | Where-Object { $_ -ne 'openapi' }) }
     foreach ($ide in $Ides) {

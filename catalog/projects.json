@@ -5,7 +5,7 @@
     "MOBICLASS",
     "SHOPCLASS",
     "CRMCLASS",
-	"CLOUDCLASS"
+	  "CLOUDCLASS"
   ],
   "mcp": {
     "common": [
@@ -60,10 +60,10 @@
         "*-dash",
         "*-app",
         "*-cob",
-        "*-connect",
+        "*-conn",
         "*-cota",
         "*-mkt",
-        "*-suporte"
+        "*-help"
       ],
       "skills": [
         "angular-coreui",
@@ -102,9 +102,7 @@
     },
     "android": {
       "match": [
-        "mobiclass-apk",
-        "mobiclass-leitor",
-        "mobiclass-comanda"
+        "mobiclass-apk"
       ],
       "skills": [
         "claude-android-ninja",
@@ -138,11 +136,13 @@
     }
   },
   "commonSkills": [
+    "unlazy"
+  ],
+  "addyosmaniSkills": [
     "using-agent-skills",
     "git-workflow-and-versioning",
     "security-and-hardening",
     "observability-and-instrumentation",
-    "unlazy",
     "spec-driven-development",
     "planning-and-task-breakdown",
     "incremental-implementation"

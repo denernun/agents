@@ -6,9 +6,15 @@
 
 .DESCRIPTION
   - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin)
-  - Mirrors vendor skills into hub skills/ (addyosmani commonSkills;
-    mattpocock process skills from catalog.mattPocockSkills;
-    obra/superpowers process skills from catalog.superpowersSkills)
+  - Mirrors vendor skills into hub skills/, one catalog key per upstream
+    package so the provenance of every skill is explicit:
+    catalog.addyosmaniSkills, catalog.mattPocockSkills,
+    catalog.superpowersSkills. catalog.commonSkills holds the cross-cutting
+    skills that are not part of a multi-skill vendor package (standalone
+    vendors and native hub skills). All four lists apply to every project.
+    Warns when the same skill name is claimed by more than one of those lists
+    (hub skills/<name> is a flat namespace: one of the mirrors would win
+    silently).
   - Creates junctions from hub skills into each project (and prunes stale
     hub-managed skill junctions no longer assigned to the project)
   - Writes slim AGENTS.md (preserves ## Local section)
@@ -258,8 +264,35 @@ function Get-PresentIdes {
   return , @($found | Select-Object -Unique)
 }
 
+function Assert-NoSkillNameCollisions {
+  # Fails before anything is written when two catalog lists claim the same
+  # skill name. Each list is mirrored into hub skills/<name> in turn, so a
+  # shared name means the later mirror repoints the junction and every project
+  # silently gets the other package's content. Cheap, deterministic, and does
+  # not need the vendor clones - so it also works on a fresh machine and under
+  # -DryRun. Duplicates *within* one list are harmless (they dedupe) and are
+  # ignored here.
+  param([System.Collections.Specialized.OrderedDictionary]$Lists)
+  $owners = [ordered]@{}
+  foreach ($entry in $Lists.GetEnumerator()) {
+    foreach ($name in @($entry.Value | Select-Object -Unique)) {
+      if (-not $name) { continue }
+      if (-not $owners.Contains($name)) { $owners[$name] = @() }
+      $owners[$name] += $entry.Key
+    }
+  }
+  $conflicts = @($owners.GetEnumerator() | Where-Object { $_.Value.Count -gt 1 })
+  if ($conflicts.Count -eq 0) { return }
+  $detail = @($conflicts | ForEach-Object {
+    # Mirrors run in list order, so the last claimant is the one that wins.
+    "$($_.Key) claimed by $($_.Value -join ', ') (would resolve to $(@($_.Value)[-1]))"
+  })
+  throw "Skill name claimed by more than one catalog list: $($detail -join '; '). hub skills/<name> can only point at one package - keep each name in a single list."
+}
+
 function Ensure-VendorAgentSkills {
-  # Clone or init the addyosmani/agent-skills submodule used by commonSkills.
+  # Clone or init the addyosmani/agent-skills submodule used by
+  # catalog.addyosmaniSkills.
   param([string]$HubPath, [switch]$DryRun)
   $vendor = Join-Path $HubPath 'vendor\addyosmani-agent-skills'
   $url = 'https://github.com/addyosmani/agent-skills.git'
@@ -515,6 +548,45 @@ function Get-CatalogFamilies {
   return $families
 }
 
+function Get-UniversalSkillLists {
+  # The catalog lists that apply to every project, keyed by catalog property so
+  # the provenance of a skill is a lookup rather than a guess. One key per
+  # upstream multi-skill package; commonSkills holds the cross-cutting skills
+  # that do not belong to one (standalone vendors, native hub skills). Order is
+  # mirror order, which is also collision-resolution order.
+  param([object]$Catalog)
+  $lists = [ordered]@{}
+  foreach ($key in @('commonSkills', 'addyosmaniSkills', 'mattPocockSkills', 'superpowersSkills')) {
+    $lists["catalog.$key"] = @(Get-JsonProperty $Catalog $key)
+  }
+  return $lists
+}
+
+function Get-ProjectSkillNames {
+  # Single source of truth for "which skills does this project get": the
+  # universal lists minus the family opt-outs, plus the family's own skills and
+  # the ECC adapters that match. Install and Test-AgentHub used to assemble
+  # this expression separately, so adding a catalog list made the audit report
+  # skills as missing that were never meant to be there.
+  param([object]$Catalog, [object]$FamilyCfg, [string]$Family, [string]$ProjectName)
+  # disabledCommonSkills opts a family out of the universal lists - all of
+  # them, not just commonSkills. Before the vendor lists were split apart,
+  # "common" was simply where the Addy Osmani selection happened to live, so
+  # the filter silently covered more ground than its name suggests.
+  $disabled = @(Get-JsonProperty $FamilyCfg 'disabledCommonSkills')
+  $names = [System.Collections.Generic.List[string]]::new()
+  foreach ($list in (Get-UniversalSkillLists -Catalog $Catalog).Values) {
+    foreach ($name in @($list)) {
+      if ($name -and $disabled -notcontains $name) { $names.Add($name) }
+    }
+  }
+  foreach ($name in @($FamilyCfg.skills)) { if ($name) { $names.Add($name) } }
+  foreach ($name in @(Get-EccSkillNames -Catalog $Catalog -Family $Family -ProjectName $ProjectName)) {
+    $names.Add($name)
+  }
+  return @($names | Select-Object -Unique)
+}
+
 function Get-ProjectFamily {
   param([string]$Name, [System.Collections.IDictionary]$Families, [string]$RepoPath, [object]$Overrides)
   if ($Overrides) {
@@ -604,6 +676,18 @@ function Test-CopyUpToDate {
   return $true
 }
 
+function Get-VendorPackageName {
+  # <hub>\vendor\<package>\... -> <package>. Returns $null for anything else,
+  # which is how callers tell a vendor mirror apart from a native hub skill or
+  # a project-side link.
+  param([string]$Path, [string]$HubPath)
+  if (-not $Path -or -not $HubPath) { return $null }
+  $root = [IO.Path]::GetFullPath((Join-Path $HubPath 'vendor')).TrimEnd('\','/') + [IO.Path]::DirectorySeparatorChar
+  $full = try { [IO.Path]::GetFullPath($Path) } catch { return $null }
+  if (-not $full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { return $null }
+  return ($full.Substring($root.Length) -split '[\\/]')[0]
+}
+
 function New-JunctionOrCopy {
   param([string]$LinkPath, [string]$TargetPath, [switch]$DryRun, [switch]$ForceCopy)
   if (-not (Test-Path $TargetPath)) {
@@ -632,6 +716,15 @@ function New-JunctionOrCopy {
       }
       else {
         if (@($item.Target) -contains $TargetPath) { return }
+        # Second line of defence behind Assert-NoSkillNameCollisions: that check
+        # only sees the catalog, so it cannot catch a name that moved between
+        # upstream packages. Repointing from one vendor package to another is
+        # never routine - say so instead of swapping the content in silence.
+        $fromVendor = Get-VendorPackageName -Path (@($item.Target) | Select-Object -First 1) -HubPath $HubPath
+        $toVendor = Get-VendorPackageName -Path $TargetPath -HubPath $HubPath
+        if ($fromVendor -and $toVendor -and $fromVendor -ne $toVendor) {
+          Write-Warning "Skill name disputed between vendor packages: $LinkPath was $fromVendor, now $toVendor. Confirm which package should own this name in catalog/projects.json."
+        }
         if (-not (Test-HubOwnedLink -Path $LinkPath -HubPath $HubPath)) { Write-Warning "Preserved external link: $LinkPath"; return }
         if (-not $DryRun) {
           Remove-HubLink -Path $LinkPath -Root $parent -HubPath $HubPath
@@ -1535,8 +1628,8 @@ function Link-ProjectSkills {
 
 function Remove-StaleProjectSkills {
   # Prunes skill junctions the hub linked in a previous run but that are no
-  # longer assigned to this project (skill dropped from catalog.commonSkills /
-  # a family / mattPocockSkills / superpowersSkills, or renamed). Mirrors how
+  # longer assigned to this project (skill dropped from one of the universal
+  # catalog lists or from a family, or renamed). Mirrors how
   # Write-McpJsonMerged prunes stale MCP servers.
   #
   # Only removes an entry when it is hub-managed: either a junction whose
@@ -1834,18 +1927,11 @@ if ($ProjectPath.Count -gt 0) {
 }
 $families = Get-CatalogFamilies -Catalog $catalog
 
-$commonSkills = @()
-if ($catalog.PSObject.Properties.Name -contains 'commonSkills') {
-  $commonSkills = @($catalog.commonSkills)
-}
-$mattPocockSkills = @()
-if ($catalog.PSObject.Properties.Name -contains 'mattPocockSkills') {
-  $mattPocockSkills = @($catalog.mattPocockSkills)
-}
-$superpowersSkills = @()
-if ($catalog.PSObject.Properties.Name -contains 'superpowersSkills') {
-  $superpowersSkills = @($catalog.superpowersSkills)
-}
+$universalSkillLists = Get-UniversalSkillLists -Catalog $catalog
+$commonSkills = @($universalSkillLists['catalog.commonSkills'])
+$addyosmaniSkills = @($universalSkillLists['catalog.addyosmaniSkills'])
+$mattPocockSkills = @($universalSkillLists['catalog.mattPocockSkills'])
+$superpowersSkills = @($universalSkillLists['catalog.superpowersSkills'])
 
 # Guard: verify metadata and body for every native hub skill (not the
 # vendor-mirrored ones) has real content before linking anything into
@@ -1854,7 +1940,9 @@ if ($catalog.PSObject.Properties.Name -contains 'superpowersSkills') {
 # strip that skill's instructions everywhere it's used.
 $hubSkillsRoot = Join-Path $HubPath 'skills'
 $allSkillNamesInUse = [System.Collections.Generic.HashSet[string]]::new()
-foreach ($s in $commonSkills) { [void]$allSkillNamesInUse.Add($s) }
+foreach ($s in @($commonSkills + $addyosmaniSkills + $mattPocockSkills + $superpowersSkills)) {
+  [void]$allSkillNamesInUse.Add($s)
+}
 foreach ($prop in $catalog.families.PSObject.Properties) {
   foreach ($s in @($prop.Value.skills)) { [void]$allSkillNamesInUse.Add($s) }
 }
@@ -1865,21 +1953,24 @@ foreach ($name in $allSkillNamesInUse) {
   $item = Get-Item $skillDir -Force
   $isReparse = [bool]($item.Attributes -band [IO.FileAttributes]::ReparsePoint)
   if ($isReparse) { continue } # vendor mirror; validated by Test-SkillTargetHasContent when re-linked below
+  # Copy fallback of a vendor mirror (junction unavailable): upstream content,
+  # not ours to validate or fix with "git checkout" in the hub.
+  if (Test-Path (Join-Path $skillDir '.agenthub-managed')) { continue }
   if (-not (Test-HubSkill -Path $skillDir)) { $emptySkills += $name }
 }
 if ($emptySkills.Count -gt 0) {
   throw "Native hub skill folder(s) have missing or invalid SKILL.md metadata/body: $($emptySkills -join ', '). Refusing to link empty skills into every project. Restore content first, e.g.: git -C `"$HubPath`" checkout -- $(($emptySkills | ForEach-Object { "skills/$_" }) -join ' ')"
 }
 
-# These skills are standalone vendors and do not live under
-# vendor/addyosmani-agent-skills/skills. Keep them in $commonSkills so they
-# are linked into projects, but do not ask the Addy Osmani mirror to resolve
-# them (which would produce a misleading "Vendor skill missing" warning).
-$standaloneVendorSkills = @('claude-android-ninja', 'unlazy', 'browser-harness')
-$addyosmaniCommonSkills = @($commonSkills | Where-Object {
-  $standaloneVendorSkills -notcontains $_
-})
-Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $addyosmaniCommonSkills -DryRun:$DryRun
+# Hub skills/ is a flat namespace: skills/<name> can only point at one place.
+# When two vendor lists claim the same name, the mirrors run in order and the
+# last one silently repoints the junction, so a project ends up with upstream
+# content nobody chose. Only one such collision exists across the three
+# packages today (test-driven-development, in addyosmani and superpowers) and
+# it is selected in neither - which is exactly the kind of thing that stops
+# being true without anyone noticing.
+Assert-NoSkillNameCollisions -Lists $universalSkillLists
+Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $addyosmaniSkills -DryRun:$DryRun
 Ensure-VendorMattPocockSkillMirrors -HubPath $HubPath -SkillNames $mattPocockSkills -DryRun:$DryRun
 Ensure-VendorSuperpowersSkillMirrors -HubPath $HubPath -SkillNames $superpowersSkills -DryRun:$DryRun
 if ($allSkillNamesInUse.Contains('claude-android-ninja')) {
@@ -1967,7 +2058,10 @@ if ($ProjectPath.Count -gt 0) { Write-Host "Targets: $($ProjectPath -join ', ') 
 else { Write-Host "Roots: $($Roots -join ', ')" }
 if ($GlobalSkills -and $detected -contains 'Codex') {
   & (Join-Path $PSScriptRoot 'Sync-Codegraph.ps1') -HubPath $HubPath -Global -AdoptLegacySkills:$AdoptLegacyConfigs -DryRun:$DryRun
-  foreach ($name in @($commonSkills + $mattPocockSkills + $superpowersSkills + @(Get-EccSkillNames -Catalog $catalog -Maintenance) | Select-Object -Unique)) {
+  $globalSkillNames = @()
+  foreach ($list in $universalSkillLists.Values) { $globalSkillNames += @($list) }
+  $globalSkillNames += @(Get-EccSkillNames -Catalog $catalog -Maintenance)
+  foreach ($name in @($globalSkillNames | Where-Object { $_ } | Select-Object -Unique)) {
     $target = Join-Path $HubPath "skills/$name"
     if (-not (Test-HubSkill $target)) { throw "Invalid global skill: $name" }
     New-JunctionOrCopy -LinkPath (Join-Path $env:USERPROFILE ".agents/skills/$name") -TargetPath $target -DryRun:$DryRun
@@ -2022,12 +2116,7 @@ foreach ($proj in $projectDirs) {
     Write-Host "`n=== $($proj.Name) [$family] ==="
     $stats.projects++
 
-    $disabledCommonSkills = @()
-    if ($cfg.PSObject.Properties.Name -contains 'disabledCommonSkills') {
-      $disabledCommonSkills = @($cfg.disabledCommonSkills)
-    }
-    $projectCommonSkills = @($commonSkills | Where-Object { $disabledCommonSkills -notcontains $_ })
-    $skillNames = @($projectCommonSkills) + @($cfg.skills) + @($mattPocockSkills) + @($superpowersSkills) + @(Get-EccSkillNames -Catalog $catalog -Family $family -ProjectName $proj.Name)
+    $skillNames = @(Get-ProjectSkillNames -Catalog $catalog -FamilyCfg $cfg -Family $family -ProjectName $proj.Name)
     Link-ProjectSkills -RepoPath $proj.FullName -HubPath $HubPath -SkillNames $skillNames -Ides $detected -DryRun:$DryRun
     if ($detected -contains 'Codex') {
       foreach ($old in Get-ChildItem (Join-Path $proj.FullName '.codex/skills') -Directory -ErrorAction SilentlyContinue) {

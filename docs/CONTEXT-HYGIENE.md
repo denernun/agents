@@ -384,3 +384,76 @@ a rodar **capturou uma regressão real** introduzida nesta rodada
 (`OrderedDictionary` não tem `ContainsKey`), num caminho que o install não
 exercita. Cobertura nova para registro de IDE, ordem de família, detecção de
 projeto e idempotência da cópia.
+
+## Revisão 2026-09-18c — procedência das skills vendor e colisão de nomes
+
+Pergunta que originou a revisão: "todas as skills de vendor estão sendo
+instaladas? existe uma lista que separe quais são de cada pacote? como a
+sobreposição é tratada?" Responder exigiu escavar o catálogo e os três clones
+vendor — o que já era a resposta: **não havia** uma lista por pacote.
+
+### Números (para contexto)
+
+De 82 skills disponíveis nos pacotes multi-skill, 30 entram: 15 de 37 do
+`mattpocock/skills`, 8 de 25 do `addyosmani/agent-skills`, 7 de 14 do
+`obra/superpowers`. Mais 3 vendors single-skill (`unlazy`, `browser-harness`,
+`claude-android-ninja`). Efetivo por projeto: 38 (nestjs), 40 (angular),
+36 (delphi/android/minimal).
+
+### 1. Um key de catálogo por pacote upstream
+
+Antes: `mattPocockSkills` e `superpowersSkills` tinham chave própria, mas a
+seleção do Addy Osmani estava diluída em `commonSkills` junto com os vendors
+standalone — o install precisava de um filtro `$standaloneVendorSkills` só para
+não procurar `unlazy` dentro do repo do Addy e avisar "Vendor skill missing".
+
+Agora `commonSkills` guarda só o que **não** vem de pacote multi-skill
+(`unlazy`) e existe `addyosmaniSkills`. `Get-UniversalSkillLists` devolve as
+quatro listas indexadas pela chave de catálogo, então a procedência de uma skill
+é consulta, não arqueologia.
+
+### 2. Uma função resolve a lista por projeto
+
+`Get-ProjectSkillNames` substitui a expressão que `Install-AgentHub.ps1` e
+`Test-AgentHub.ps1` montavam **em separado** — divergência garantida a cada
+lista nova. De quebra, `disabledCommonSkills` agora filtra todas as listas
+universais, não só `commonSkills`: antes da separação, "common" era só onde a
+seleção do Addy Osmani por acaso morava, e o filtro cobria muito mais terreno
+do que o nome sugere.
+
+### 3. Nome disputado por dois pacotes aborta o install
+
+`skills/<nome>` é namespace plano: se duas listas reivindicam o mesmo nome, os
+mirrors rodam em ordem e o último **repontava a junction em silêncio** — os 36
+repos ganhariam conteúdo de um pacote que ninguém escolheu.
+
+- `Assert-NoSkillNameCollisions` roda antes de qualquer escrita, não precisa dos
+  clones vendor (funciona em máquina nova e em `-DryRun`) e aborta nomeando a
+  skill, as listas em conflito e qual venceria. Duplicata *dentro* de uma lista
+  é inofensiva e ignorada.
+- Segunda linha de defesa em `New-JunctionOrCopy`: repontar de `vendor/<A>` para
+  `vendor/<B>` emite aviso, cobrindo o caso que o catálogo não vê (uma skill que
+  mudou de pacote upstream).
+
+Hoje existe **uma** colisão real entre os três pacotes — `test-driven-development`,
+no addyosmani e no superpowers — e ela não está selecionada em nenhum. Que é
+exatamente o tipo de coisa que deixa de ser verdade sem ninguém perceber.
+
+### Desduplicação semântica continua sendo curadoria
+
+O que impede TDD/debug/plano/spec duplicados não é código: é o que **ficou fora**
+do catálogo (`test-driven-development` ×2, `diagnosing-bugs`,
+`debugging-and-error-recovery`, `writing-plans`, `executing-plans`,
+`implement-spec`, `requesting-code-review`, `using-superpowers`…). O README
+documenta o porquê na seção do Superpowers. As sobreposições que coexistem de
+propósito (`code-review` × `code-review-and-quality` × `review-changes` ×
+`receiving-code-review`; `spec-driven-development` × `to-spec`) seguem
+desambiguadas só pela `description` — nada verifica isso.
+
+### Validação
+
+Suíte verde (`Run-Tests.ps1`: 29 pytest + 2 integrações). Install real nos 36
+projetos: **0 warning, 0 link alterado, 0 arquivo reescrito, 0 colisão** — a
+reorganização produziu conjunto efetivo idêntico. Contagens por projeto
+inalteradas (38/40/36). `Test-AgentHub.ps1`: 180 linhas, 0 skill faltando, 0
+config inválida. `Inventory-AgentFiles.ps1`: 526 linhas, nada acima de 2 KB.

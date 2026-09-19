@@ -43,8 +43,16 @@ D:\IA\agents/
   (glob patterns against project folder name), `skills` (list to link),
   `mcp` (extra MCP servers on top of `mcp.common`), `agentsTemplate`,
   `cursorRule`, `extraRules`. Top-level `mcp.common` / `mcp.skipIdes` /
-  `mcp.extra` select servers per repo and per IDE. Family resolution order in
-  `Install-AgentHub.ps1` is nestjs → angular → android → minimal (first match wins).
+  `mcp.extra` select servers per repo and per IDE. Family resolution order is
+  the order the families appear in the catalog (first match wins), with the
+  catch-all last — `Get-CatalogFamilies` reads it, nothing is hardcoded.
+- **Vendor skill provenance** (`catalog/projects.json`): one key per upstream
+  package — `addyosmaniSkills`, `mattPocockSkills`, `superpowersSkills` — plus
+  `commonSkills` for cross-cutting skills that aren't from a multi-skill
+  package. All four apply to every project; `Get-ProjectSkillNames` is the only
+  place that resolves the final per-project list. A name may appear in exactly
+  one list: `skills/<name>` points at a single package, so `Install` aborts on
+  a duplicate instead of letting the last mirror win.
 - **Templates use placeholders**: `{{PROJECT}}`, `{{REPO}}`,
   `{{HUB}}`, `{{CONTEXT7_API_KEY}}` — substituted by `Install-AgentHub.ps1`
   when writing into target repos.

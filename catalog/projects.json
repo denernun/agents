@@ -13,7 +13,9 @@
       "context7",
       "filesystem"
     ],
-    "skipIdes": {},
+    "skipIdes": {
+      "chrome-devtools": ["Codex"]
+    },
     "extra": [
       {
         "match": [
@@ -21,7 +23,8 @@
           "*-ajuda"
         ],
         "servers": [
-          "playwright"
+          "playwright",
+          "chrome-devtools"
         ]
       }
     ]
@@ -69,6 +72,8 @@
         "angular-coreui",
         "coreui-styling",
         "browser-harness",
+        "frontend-ui-engineering",
+        "browser-testing-with-devtools",
         "codegraph",
         "debug-issue",
         "explore-codebase",
@@ -77,7 +82,8 @@
       ],
       "mcp": [
         "playwright",
-        "coreui"
+        "coreui",
+        "chrome-devtools"
       ],
       "agentsTemplate": "angular.md",
       "cursorRule": "stack-pointer-angular.mdc",
@@ -123,6 +129,7 @@
       ],
       "skills": [
         "browser-harness",
+        "frontend-ui-engineering",
         "codegraph",
         "debug-issue",
         "explore-codebase",
@@ -145,7 +152,13 @@
     "observability-and-instrumentation",
     "spec-driven-development",
     "planning-and-task-breakdown",
-    "incremental-implementation"
+    "incremental-implementation",
+    "api-and-interface-design",
+    "performance-optimization",
+    "documentation-and-adrs",
+    "ci-cd-and-automation",
+    "shipping-and-launch",
+    "deprecation-and-migration"
   ],
   "mattPocockSkills": [
     "grilling",

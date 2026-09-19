@@ -457,3 +457,67 @@ projetos: **0 warning, 0 link alterado, 0 arquivo reescrito, 0 colisão** — a
 reorganização produziu conjunto efetivo idêntico. Contagens por projeto
 inalteradas (38/40/36). `Test-AgentHub.ps1`: 180 linhas, 0 skill faltando, 0
 config inválida. `Inventory-AgentFiles.ps1`: 526 linhas, nada acima de 2 KB.
+
+## Revisão 2026-09-18d — chrome-devtools MCP e skills de frontend/API do Addy Osmani
+
+Depois de auditar item a item as 17 skills do Addy Osmani que estavam de fora
+(a análise real, não a lista genérica da revisão anterior), 8 mostraram cobrir
+território que **nenhuma** skill ativa ocupava. Entraram; as demais ficaram fora
+com motivo verificado.
+
+### MCP novo: chrome-devtools
+
+`mcp/chrome-devtools.template.{json,toml}` — `npx -y chrome-devtools-mcp@latest`
+(pacote oficial do ChromeDevTools/Google; headless é o default, sem flag).
+Ligado na família `angular` e no bloco `extra` de `*-www` / `*-ajuda`. **Omitido
+do Codex** (`mcp.skipIdes.chrome-devtools = ["Codex"]`), pela mesma razão do
+playwright: precisa de um Chrome de verdade na máquina.
+
+### Skills que entraram
+
+Comuns a todo projeto (em `addyosmaniSkills`), porque preenchem lacunas reais:
+`api-and-interface-design` (as ativas `api-design`/`contract-first` são
+específicas de NestJS/Angular ERPCLASS), `performance-optimization` (nada ativo
+cobria perf), `documentation-and-adrs` (ADR não era foco de nenhuma),
+`ci-cd-and-automation`, `shipping-and-launch`, `deprecation-and-migration`.
+
+Por família (dependem do chrome-devtools): `frontend-ui-engineering` em `angular`
+e `minimal` (UI acessível/WCAG); `browser-testing-with-devtools` **só** em
+`angular`, onde o MCP está garantido — deixá-la em `minimal` a linkaria em
+projetos sem o MCP, ferramenta inexistente.
+
+### Bug que isso revelou: mirror não resolvia skill de família
+
+Uma skill vendor atribuída via `families.<f>.skills` (não pela lista vendor
+top-level) **nunca ganhava a junction** `skills/<nome>` — o mirror do Addy Osmani
+só resolvia `addyosmaniSkills`. Primeiro install real: 16 projetos falharam com
+"Invalid SKILL.md: skills/frontend-ui-engineering" (o isolamento por projeto
+segurou, os outros 20 configuraram). Corrigido com `Select-VendorProvidedSkills`,
+que descobre a procedência pela pasta que contém o `SKILL.md` em vez de uma
+segunda cópia do mapa: o mirror passa a resolver a união da lista declarada com
+qualquer nome em uso que o clone vendor realmente forneça. Vale para os três
+pacotes. Cobertura nova no `Test-Integration.ps1` (layout plano e o aninhado do
+mattpocock).
+
+### Ficaram fora, com motivo verificado
+
+`test-driven-development` (= `tdd` do Matt Pocock; e é a única colisão física real,
+com o superpowers), `debugging-and-error-recovery` (= `debug-issue` +
+`systematic-debugging`), `code-simplification` (= `refactor-safely` +
+`improve-codebase-architecture`), `context-engineering` (segundo meta-roteador,
+conflita com `using-agent-skills`), `interview-me` / `idea-refine` (= `grill-me` /
+`grilling`), `doubt-driven-development` e `source-driven-development`
+(sobreposição parcial, evitando um terceiro "questione-se" e redundância com o
+MCP context7), `browser-testing-with-devtools` em `minimal` (sem o MCP lá).
+`constraint-driven-development` não entrou: é a mais opinativa (grava
+`CONSTRAINTS.md` e vigia o diff), deixada para decisão explícita do usuário.
+
+### Validação
+
+`Run-Tests.ps1` verde (29 pytest + integrações, com o teste novo de skill de
+família). Install real: 36 projetos, 0 falha, 0 warning. Verificado no disco:
+`erpclass-admin` (angular) tem as duas skills de UI + chrome-devtools no Cursor e
+ausente no Codex; `cloudclass-www` tem `frontend-ui-engineering` e chrome-devtools
+(via extra) mas **não** `browser-testing-with-devtools`; `erpclass-api` (nestjs)
+recebe as 6 comuns e nenhuma das de navegador. `Test-AgentHub`: 180 linhas, 0
+faltando. `Inventory`: 526 linhas, nada acima de 2 KB.

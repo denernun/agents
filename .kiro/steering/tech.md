@@ -33,6 +33,7 @@ stack-specific coding rules.
 - **openapi** — `npx -y @ivotoby/openapi-mcp-server --tools dynamic`. NestJS only when `src/main.ts` already has Swagger. Spec URL from local port + `/swagger/json` (or the project's `jsonDocumentUrl`). Omitted from Codex. API must be running. No JWT in git.
 - **playwright** — `npx -y @playwright/mcp --headless`. Angular family plus `*-www` / `*-ajuda`. Omitted from Codex (`mcp.skipIdes`).
 - **coreui** — `npx -y @coreui/docs-mcp --framework angular`. Angular family. CoreUI component docs (props, events, examples) from coreui.io.
+- **chrome-devtools** — `npx -y chrome-devtools-mcp@latest` (headless by default). Angular family plus `*-www` / `*-ajuda`. Live-browser inspection (DOM, console, network, perf traces) for the `frontend-ui-engineering` / `browser-testing-with-devtools` skills. Omitted from Codex (`mcp.skipIdes`). Needs Google Chrome / Chrome for Testing on the machine.
 
 ## Supported IDEs/agents
 

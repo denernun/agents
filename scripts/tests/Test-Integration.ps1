@@ -137,6 +137,21 @@ foreach ($dir in @($vendorA,$vendorB)) {
   New-Item -ItemType Directory -Path $dir -Force | Out-Null
   Set-Content (Join-Path $dir 'SKILL.md') "---`nname: moved`ndescription: Moved skill.`n---`nBody."
 }
+# --- A vendor skill assigned through a family (not the top-level vendor list)
+# must still be resolved by the mirror, or skills/<name> is never created.
+$famVendor=Join-Path $HubPath 'vendor/fam-pkg/skills/fam-only'
+New-Item -ItemType Directory -Path $famVendor -Force | Out-Null
+Set-Content (Join-Path $famVendor 'SKILL.md') "---`nname: fam-only`ndescription: Family-assigned vendor skill.`n---`nBody."
+$flatProvided=@(Select-VendorProvidedSkills -HubPath $HubPath -VendorRelativePath 'vendor/fam-pkg' -Candidates @('fam-only','not-there'))
+Assert ($flatProvided -contains 'fam-only') 'Mirror did not resolve a family-assigned vendor skill'
+Assert ($flatProvided -notcontains 'not-there') 'Mirror claimed a skill the vendor does not provide'
+$nestVendor=Join-Path $HubPath 'vendor/nest-pkg/skills/category/nested-skill'
+New-Item -ItemType Directory -Path $nestVendor -Force | Out-Null
+Set-Content (Join-Path $nestVendor 'SKILL.md') "---`nname: nested-skill`ndescription: Nested vendor skill.`n---`nBody."
+$nestProvided=@(Select-VendorProvidedSkills -HubPath $HubPath -VendorRelativePath 'vendor/nest-pkg' -Candidates @('nested-skill') -Nested)
+Assert ($nestProvided -contains 'nested-skill') 'Mirror did not resolve a nested (mattpocock-layout) family skill'
+Assert (@(Select-VendorProvidedSkills -HubPath $HubPath -VendorRelativePath 'vendor/does-not-exist' -Candidates @('x')).Count -eq 0) 'Missing vendor clone should yield nothing, not throw'
+
 Assert ((Get-VendorPackageName -Path $vendorA -HubPath $HubPath) -eq 'pkg-a') 'Vendor package not derived from path'
 Assert ($null -eq (Get-VendorPackageName -Path (Join-Path $HubPath 'skills/test') -HubPath $HubPath)) 'Native hub skill reported as vendor'
 $movedLink=Join-Path $HubPath 'skills/moved'

@@ -383,6 +383,31 @@ function Ensure-VendorStandaloneSkill {
   New-JunctionOrCopy -LinkPath (Join-Path $HubPath "skills\$SkillName") -TargetPath $vendor -DryRun:$DryRun
 }
 
+function Select-VendorProvidedSkills {
+  # Which of the candidate skill names does this vendor clone actually provide?
+  # Lets a vendor skill be assigned through a family's "skills" list, not just
+  # the top-level vendor list, without hardcoding a second copy of the mapping:
+  # the folder that holds SKILL.md is the source of truth for provenance.
+  # Silent when the clone is missing (a fresh machine mirrors on the declared
+  # list first, then re-resolves); never invents names the vendor lacks.
+  param(
+    [string]$HubPath,
+    [string]$VendorRelativePath,
+    [System.Collections.IEnumerable]$Candidates,
+    [switch]$Nested  # mattpocock nests one level: skills/<category>/<name>
+  )
+  $skillsRoot = Join-Path (Join-Path $HubPath ($VendorRelativePath -replace '/', '\')) 'skills'
+  if (-not (Test-Path $skillsRoot)) { return }
+  $provided = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  $searchDepth = if ($Nested) { 2 } else { 1 }
+  foreach ($md in Get-ChildItem $skillsRoot -Recurse -Depth $searchDepth -Filter 'SKILL.md' -File -ErrorAction SilentlyContinue) {
+    [void]$provided.Add($md.Directory.Name)
+  }
+  foreach ($name in $Candidates) {
+    if ($name -and $provided.Contains($name)) { $name }
+  }
+}
+
 function Get-MattPocockSkillPath {
   # mattpocock/skills nests skills one level deeper: skills/<category>/<name>.
   # Resolve the category folder dynamically so catalog entries stay plain names.
@@ -1970,9 +1995,18 @@ if ($emptySkills.Count -gt 0) {
 # it is selected in neither - which is exactly the kind of thing that stops
 # being true without anyone noticing.
 Assert-NoSkillNameCollisions -Lists $universalSkillLists
-Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames $addyosmaniSkills -DryRun:$DryRun
-Ensure-VendorMattPocockSkillMirrors -HubPath $HubPath -SkillNames $mattPocockSkills -DryRun:$DryRun
-Ensure-VendorSuperpowersSkillMirrors -HubPath $HubPath -SkillNames $superpowersSkills -DryRun:$DryRun
+# A vendor skill can be assigned through a family's "skills" list, not only the
+# top-level vendor list - frontend-ui-engineering and browser-testing-with-devtools
+# live on the angular/minimal families. The mirror still has to resolve those, or
+# skills/<name> is never created and every project that wants it fails validation.
+# Mirror the union of the declared list and any in-use name the vendor clone
+# actually provides; each helper ignores names it can't find.
+$addyosmaniMirror = @($addyosmaniSkills) + @(Select-VendorProvidedSkills -HubPath $HubPath -VendorRelativePath 'vendor/addyosmani-agent-skills' -Candidates $allSkillNamesInUse)
+$mattPocockMirror = @($mattPocockSkills) + @(Select-VendorProvidedSkills -HubPath $HubPath -VendorRelativePath 'vendor/mattpocock-skills' -Candidates $allSkillNamesInUse -Nested)
+$superpowersMirror = @($superpowersSkills) + @(Select-VendorProvidedSkills -HubPath $HubPath -VendorRelativePath 'vendor/superpowers' -Candidates $allSkillNamesInUse)
+Ensure-VendorSkillMirrors -HubPath $HubPath -SkillNames @($addyosmaniMirror | Where-Object { $_ } | Select-Object -Unique) -DryRun:$DryRun
+Ensure-VendorMattPocockSkillMirrors -HubPath $HubPath -SkillNames @($mattPocockMirror | Where-Object { $_ } | Select-Object -Unique) -DryRun:$DryRun
+Ensure-VendorSuperpowersSkillMirrors -HubPath $HubPath -SkillNames @($superpowersMirror | Where-Object { $_ } | Select-Object -Unique) -DryRun:$DryRun
 if ($allSkillNamesInUse.Contains('claude-android-ninja')) {
   Ensure-VendorStandaloneSkill `
     -HubPath $HubPath `

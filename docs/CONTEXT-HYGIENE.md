@@ -509,8 +509,17 @@ conflita com `using-agent-skills`), `interview-me` / `idea-refine` (= `grill-me`
 `grilling`), `doubt-driven-development` e `source-driven-development`
 (sobreposição parcial, evitando um terceiro "questione-se" e redundância com o
 MCP context7), `browser-testing-with-devtools` em `minimal` (sem o MCP lá).
-`constraint-driven-development` não entrou: é a mais opinativa (grava
-`CONSTRAINTS.md` e vigia o diff), deixada para decisão explícita do usuário.
+
+`constraint-driven-development` entrou depois, por escolha explícita do usuário
+(revisão seguinte). É a mais opinativa (grava `CONSTRAINTS.md` e vigia o diff
+contra afrouxamento), por isso ficou fora do conjunto inicial até haver decisão.
+
+### Limpeza: memorix.template.toml removido
+
+`mcp/memorix.template.toml` era órfão: o servidor `memorix` foi aposentado
+(substituído por `ai-memory`) e só permanece em `$retiredMcpServers` no install
+para *podar* entradas antigas de mcp.json. O pruning usa o nome, nunca o arquivo
+— e não havia sequer um `.json` par. Removido.
 
 ### Validação
 

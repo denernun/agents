@@ -158,7 +158,8 @@
     "documentation-and-adrs",
     "ci-cd-and-automation",
     "shipping-and-launch",
-    "deprecation-and-migration"
+    "deprecation-and-migration",
+    "constraint-driven-development"
   ],
   "mattPocockSkills": [
     "grilling",

@@ -612,15 +612,25 @@
   margin: 0;
   font-size: 0.875rem;
 
+  // Solid header bar lives on the row, not each `th`, so it paints as one
+  // continuous band across the header instead of restarting per cell (visible
+  // seam when columns have very different widths, e.g. a wide label column
+  // next to a narrow actions column). Uses the dedicated --ds-table-header-*
+  // tokens (a clearly visible indigo tint), not the faint 3–14% gradient that
+  // made the header nearly invisible on white/dark surfaces.
+  thead tr {
+    background: var(--ds-table-header-bg);
+  }
+
   thead th {
     padding: 0.625rem var(--ds-pad-card);
     font-size: 0.6875rem;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--ds-text-muted);
-    background: var(--ds-gradient-header-primary);
-    border-bottom: 2px solid var(--ds-border);
+    color: var(--ds-table-header-text);
+    background: transparent;
+    border-bottom: 2px solid var(--ds-table-header-border);
     white-space: nowrap;
   }
 

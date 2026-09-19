@@ -5,6 +5,11 @@
   --ds-surface: var(--cui-body-bg, #ffffff);
   --ds-surface-muted: var(--cui-tertiary-bg, #f1f5f9);
   --ds-surface-header: var(--cui-secondary-bg, #f8fafc);
+  // Data-grid header bar — a solid, clearly visible indigo tint (not the faint
+  // 3–14% gradient). Header text stays high-contrast, not muted.
+  --ds-table-header-bg: #e0e5f7;
+  --ds-table-header-text: #43506b;
+  --ds-table-header-border: #c3cbe6;
   --ds-border: var(--cui-border-color, #e2e8f0);
   --ds-text: var(--cui-body-color, #1e293b);
   --ds-text-muted: var(--cui-secondary-color, #64748b);
@@ -93,6 +98,11 @@ body.c-dark-theme {
   --ds-surface: var(--cui-body-bg, #212631);
   --ds-surface-muted: var(--cui-tertiary-bg, #2a303c);
   --ds-surface-header: var(--cui-secondary-bg, #2c313a);
+  // Data-grid header bar (dark) — a solid slate-indigo clearly lighter than the
+  // row surface so the header bar reads as a distinct band in dark mode too.
+  --ds-table-header-bg: #353c52;
+  --ds-table-header-text: #c7cfe4;
+  --ds-table-header-border: #4a5578;
   --ds-border: var(--cui-border-color, #3c4b64);
   --ds-text: var(--cui-body-color, #e2e8f0);
   --ds-text-muted: var(--cui-secondary-color, #9da5b1);

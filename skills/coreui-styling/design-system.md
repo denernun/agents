@@ -105,6 +105,9 @@ token `--ds-*`; nada de cor, superficie ou sombra em hex solto nas telas.
 | `--ds-surface`    | `#ffffff`     | Cards e superficies    |
 | `--ds-surface-muted`  | `#f1f5f9` | Areas secundarias      |
 | `--ds-surface-header` | `#f8fafc` | Cabecalhos de painel   |
+| `--ds-table-header-bg`     | `#e0e5f7` | Barra de cabecalho do grid |
+| `--ds-table-header-text`   | `#43506b` | Texto do cabecalho do grid |
+| `--ds-table-header-border` | `#c3cbe6` | Borda inferior do cabecalho |
 | `--ds-border`     | `#e2e8f0`     | Bordas                 |
 | `--ds-text`       | `#1e293b`     | Texto principal        |
 | `--ds-text-muted` | `#64748b`     | Texto secundario       |
@@ -482,8 +485,10 @@ Wrapper de tabela (`table.ds-table` dentro de um `ds-panel`/`app-ui-card`).
 Regras (canonicas):
 
 - **10 linhas por pagina** --- `DS_TABLE_PAGE_SIZE` de `@app/layout/shared`.
-- `th`: `padding .75rem 1.25rem`, uppercase `.6875rem/600`, fundo
-  `--ds-gradient-header-primary`, borda inferior `2px`.
+- `th`: `padding .75rem 1.25rem`, uppercase `.6875rem/700`, texto
+  `--ds-table-header-text`, fundo sólido `--ds-table-header-bg` (barra visível,
+  não o gradiente esmaecido de 3–14%), borda inferior `2px`
+  `--ds-table-header-border`.
 - `td`: `padding .75rem 1.25rem`, `--ds-text`, borda `1px --ds-border`.
 - `--fixed-rows`: altura de linha fixa `2.75rem` (sem texto multi-linha).
 - Hover de linha: fundo `--ds-primary-50`.

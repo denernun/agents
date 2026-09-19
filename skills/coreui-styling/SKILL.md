@@ -10,6 +10,12 @@ description: >-
 
 # CoreUI Shell + Design System
 
+> **This design system is mandatory and non-negotiable for every CLASS Angular
+> front-end.** The rules below are not preferences. New screens must comply, and
+> any screen you touch must be brought into compliance. The only legitimate way
+> to deviate is a **documented exception** (see "Documented exceptions" below) —
+> never an undocumented one-off.
+
 Every Angular front-end in the CLASS families (ERPCLASS, NFECLASS, SHOPCLASS,
 MOBICLASS, CRMCLASS) — `erpclass-dash`, `erpclass-admin`, `erpclass-cob`,
 `erpclass-cota`, `erpclass-suporte`, `erpclass-connect`, `erpclass-mkt`,
@@ -62,6 +68,27 @@ a reference to another project's design.
    is a defect unless it is a documented exception in that project's
    `docs/design_ui.md`, layered in `src/styles/custom/_<feature>.scss`.
 
+## Documented exceptions (the only way to deviate)
+
+A per-project deviation is legitimate **only** if it is recorded in that
+project's `docs/design_ui.md`. Nothing here is overridden by an undocumented
+one-off. A valid exception entry must state, minimally:
+
+- **What** deviates (component/screen/token/property).
+- **Why** the canonical spec cannot express it.
+- **Where** it lives — a `src/styles/custom/_<feature>.scss` layered on top of
+  the canonical SCSS, still reading `--ds-*` tokens. Never an edit to the four
+  canonical files, never a new token system.
+- **Scope** — limited to that project; it must not silently become the new
+  default for other projects.
+
+If a deviation would be useful everywhere, it is not an exception — promote it
+into this skill (spec + `reference/`) and sync, instead of forking per project.
+
+Precedence when guidance seems to conflict: **this skill (spec + `reference/`)
+wins**; `docs/design_ui.md` may only *narrow* it with a documented exception,
+never contradict or replace it.
+
 ## One card style (mandatory)
 
 There is exactly one card in the system. Every boxed surface — KPI, chart panel,
@@ -104,6 +131,11 @@ cards read these tokens. The content wrapper uses **one** padding level
 **no** `mb-4` on the header — summing the two was producing double margins and
 the excess whitespace. To condense/expand globally, change the three tokens and
 sync; do not restyle per screen.
+
+Do not add ad-hoc spacing utilities (`gap-4`, `mb-4`, `mt-*`, `p-*`) to lay out
+page sections or cards — spacing comes from `ds-section-stack` / the grid
+classes / `--ds-pad-card`. Bootstrap spacing utilities are allowed only *inside*
+a component's own local composition, never to space the page skeleton.
 
 ## Dark mode & typography contract (non-negotiable)
 
@@ -153,6 +185,22 @@ token that flips per theme.
    labels still resolve light tokens from `:root` on `html` → dark text on dark
    chart background (ex.: “Maiores Devedores”).
 
+### Accessibility floor (mandatory)
+
+- Target **WCAG 2.1 AA** contrast: at least **4.5:1** for body text and **3:1**
+  for large text (≥ 24px or ≥ 19px bold), icons, and UI borders — in **both**
+  themes. The `--ds-text` / `--ds-text-muted` / surface tokens are tuned to meet
+  this; hardcoding a color is what breaks it.
+- Every interactive element keeps a visible focus ring (do not remove
+  `:focus-visible` outlines) and is reachable/operable by keyboard.
+- Icons that carry meaning need an accessible label; decorative icons get
+  `aria-hidden="true"` (as in the `ds-alert` example).
+- Form controls have an associated `<label for>`; inputs expose error state to
+  assistive tech, not by color alone.
+
+> Full WCAG conformance also needs manual testing with assistive technology and
+> expert review — the token contract is the automated floor, not the whole story.
+
 ### Verify every time
 
 Toggle light ↔ dark with the header switcher and visually check: page
@@ -195,8 +243,13 @@ tooltip, empty state, alert. Nothing invisible, nothing low-contrast.
 
 ## Page template pattern
 
+Section spacing comes from `ds-section-stack` (driven by `--ds-gap-section`),
+**not** from a hardcoded Bootstrap `gap-*`/`mb-*`. Do not add `gap-4` on the
+wrapper or `mb-4` on children — that reintroduces the double-margin the Density
+section removed. To change section spacing, change `--ds-gap-section` and sync.
+
 ```html
-<div class="w-100 d-flex flex-column gap-4">
+<div class="w-100 ds-section-stack">
   <app-page-header title="..." subtitle="..." icon="fas fa-...">
     <button pageHeaderActions class="btn btn-primary" type="button">...</button>
   </app-page-header>
@@ -209,7 +262,7 @@ tooltip, empty state, alert. Nothing invisible, nothing low-contrast.
   </app-filter-bar>
 
   @if (errorMessage()) {
-    <div class="ds-alert ds-alert--danger mb-4" role="alert">
+    <div class="ds-alert ds-alert--danger" role="alert">
       <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
       <span>{{ errorMessage() }}</span>
     </div>
@@ -339,4 +392,9 @@ Prohibited in grids: `<br />` inside text cells, wrapping long descriptions, var
 - [ ] Toggled light ↔ dark and checked every surface: no dark-on-dark,
       no light-on-light, no out-of-context fonts (cards, text, tables,
       badges, forms, chart axis/legend/tooltip)
+- [ ] Accessibility floor met: AA contrast in both themes, visible focus ring,
+      labels on inputs, aria-hidden on decorative icons
+- [ ] No ad-hoc page spacing (`gap-4` / `mb-4` / `p-*` on the skeleton) —
+      spacing from ds-section-stack / grid / --ds-pad-card
+- [ ] Any deviation is recorded in docs/design_ui.md as a documented exception
 ```

@@ -6,6 +6,11 @@ You are a senior TypeScript engineer specializing in Angular (v22+) and Clean Ar
 
 Generate code, corrections, and refactorings that strictly adhere to the following principles, architecture, and nomenclature rules for Angular apps in this family (admin/dash/app).
 
+> **These rules are mandatory and non-negotiable for every Angular app in this
+> family.** They are not preferences. New code must comply, and any code you
+> touch must be brought into compliance. "Prefer" below means "do this unless a
+> documented, reviewed exception exists" — not "optional".
+
 ## TypeScript & Clean Code Guidelines
 
 ### Basic Principles
@@ -38,7 +43,8 @@ Generate code, corrections, and refactorings that strictly adhere to the followi
 
 ### Data & State Handling
 - Encapsulate data in composite domain types or models (`src/app/data/models/`).
-- Prefer immutability: use `readonly` for non-reassigned properties and `as const` for fixed object/array literals.
+- Signals are the single source of truth for local and application state. Keep writable `signal()` state minimal and derive everything else with `computed()`.
+- Prefer immutability: use `readonly` for non-reassigned properties and `as const` for fixed object/array literals. Update signal state immutably (`update`/`set` with new references), never by mutating the held object.
 - Validate inputs inside domain model/class constructors or factory methods rather than scattering inline checks across services.
 
 ### Classes & OOP
@@ -73,9 +79,28 @@ The project is structured under `src/app/` adhering to Clean Architecture princi
   - Centralized global exception handler (`ErrorHandlerUser`).
 
 ### Angular Modern Features
-- **Standalone Architecture**: Always use standalone components, directives, and pipes. Do not use legacy `@NgModule` declarations.
-- **Zoneless Change Detection**: The app operates with `provideZonelessChangeDetection()`. State updates rely on **Signals** (`signal()`, `computed()`, `effect()`, `input()`, `output()`).
-- **Dependency Injection**: Prefer functional dependency injection using `inject(Service)` instead of constructor injection where appropriate.
+- **Standalone Architecture**: All components, directives, and pipes are standalone. Do not use legacy `@NgModule` declarations.
+  - **Never write `standalone: true`** in a decorator — it is the default since Angular v20 and adding it is flagged as outdated. Only ever write `standalone: false` for a deliberate, documented legacy exception.
+- **Native Control Flow (mandatory)**: Use built-in `@if`, `@for`, `@switch` in templates. Never use the legacy structural directives `*ngIf`, `*ngFor`, `*ngSwitch`. Every `@for` must declare a `track` expression.
+  - Use `@defer` (with `@placeholder` / `@loading` / `@error`) to lazily load heavy, below-the-fold, or interaction-triggered UI.
+- **Change Detection**: Every component must set `changeDetection: ChangeDetectionStrategy.OnPush`. Templates read Signals directly (e.g. `{{ user() }}`); do not call methods that recompute in the template.
+- **Zoneless Change Detection**: The app operates with `provideZonelessChangeDetection()`. State updates rely on **Signals** (`signal()`, `computed()`, `effect()`).
+- **Signal-based component APIs (mandatory)**: Use the signal APIs instead of decorators:
+  - Inputs: `input()` / `input.required()` (not `@Input()`).
+  - Two-way: `model()` (not `@Input()` + `@Output()` pairs).
+  - Outputs: `output()` (not `@Output()` + `EventEmitter`).
+  - Queries: `viewChild()` / `viewChildren()` / `contentChild()` / `contentChildren()` (not the `@ViewChild`/`@ContentChild` decorators).
+  - Declare `signal()` / `computed()` as **class fields**, created once. Never create a signal or computed inside a method — a new instance per call silently breaks reactivity.
+  - Use `computed()` for derived state; do not mirror derivable state into extra writable signals. Reserve `effect()` for side effects (DOM, logging, non-signal sync), never to set other signals.
+- **Async data**: Prefer `httpResource()` / `resource()` for declarative reactive data fetching where it fits; otherwise use the gateway API service with `toSignal()`. Keep RxJS for genuine event/stream pipelines.
+- **Dependency Injection**: Use functional injection with `inject(Service)`. Do not use constructor parameter injection.
+- **Component authoring rules (mandatory)**:
+  - Use the `host` object in the decorator for host bindings/listeners. Do not use `@HostBinding` / `@HostListener`.
+  - Bind classes and styles with `[class.x]` / `[style.x]` (or `[class]` / `[style]` with an object). Do not use `ngClass` / `ngStyle`.
+  - Mark template-only members `protected` and injected/constant members `readonly`.
+  - Keep templates and styles in separate `.html` / `.scss` files for non-trivial components; inline only for tiny presentational components.
+  - Use `NgOptimizedImage` (`ngSrc`) for all static raster images.
+- **Routing**: Standalone route configs only. Lazy-load feature routes with `loadComponent` / `loadChildren`. Guards, resolvers, and interceptors are functional (not class-based).
 - **Import Path Rules** (strict order of preference):
   1. **Same directory** (`./`): When the target file is in the same folder, use `./` relative import. Example: `import { AccountsService } from './accounts.service';`
   2. **One level up** (`../`): When the target is in the immediate parent folder, use `../`. Example: `import { AuthService } from '../auth';`
@@ -153,4 +178,5 @@ bundled `design-system.md`.
 - Follow the **Arrange-Act-Assert (AAA)** convention for unit tests.
 - Explicitly name test variables (`inputX`, `mockX`, `actualX`, `expectedX`).
 - Write unit tests for all public services, repositories, and components.
-- Use test doubles/mocks for external dependencies and HTTP requests.
+- Use test doubles/mocks for external dependencies and HTTP requests (`provideHttpClientTesting`).
+- Assert on signal values by calling the signal (`expect(component.total()).toBe(...)`); trigger change detection with `fixture.detectChanges()` under zoneless.

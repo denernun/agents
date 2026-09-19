@@ -891,6 +891,40 @@ function Write-AgentsFile {
   Write-Host "  wrote AGENTS.md"
 }
 
+function Write-DesignUiFile {
+  # Slim per-project pointer to the coreui-styling skill. The pointer body is
+  # hub-managed; the "## Exceções" section below is project-owned. Uses the same
+  # anchored text_patch mechanism as AGENTS.md: on a fresh file the whole text is
+  # written and owned; once a developer edits the exceptions the file stops being
+  # owned, and the patch becomes a no-op (marker already present) instead of
+  # emitting a permanent "Preserved manual file" warning.
+  param(
+    [string]$RepoPath,
+    [string]$ProjectName,
+    [string]$TemplatePath,
+    [switch]$Force,
+    [switch]$DryRun
+  )
+  if (-not (Test-Path $TemplatePath)) { return }
+  $dest = Join-Path $RepoPath 'docs\design_ui.md'
+  $content = (Get-Content $TemplatePath -Raw -Encoding UTF8).Replace('{{PROJECT}}', $ProjectName)
+  if ($DryRun) {
+    $kb = [math]::Round($content.Length / 1KB, 1)
+    Write-Host ('  [dry] write docs/design_ui.md sizeKb=' + $kb)
+    return
+  }
+  $docsDir = Join-Path $RepoPath 'docs'
+  if (-not (Test-Path $docsDir)) { New-Item -ItemType Directory -Path $docsDir -Force | Out-Null }
+  # Managed pointer = everything above the exceptions heading; that heading is
+  # the anchor and stays project-owned below it.
+  $body = [regex]::Replace($content, '(?s)\r?\n## Exceções.*$', '').TrimEnd()
+  Invoke-HubConfig @{
+    path=$dest; format='text'; text=$content; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun
+    text_patch=@{ marker='# Design UI —'; anchor='^## Exceções documentadas deste projeto\b'; content=$body }
+  }
+  Write-Host "  wrote docs/design_ui.md"
+}
+
 function Get-RepoOriginUrl {
   param([string]$RepoPath)
   # Some managed folders (for example static help sites) are not Git clones.
@@ -2201,6 +2235,12 @@ foreach ($proj in $projectDirs) {
       $tpl = Join-Path $HubPath "templates\agents\$($cfg.agentsTemplate)"
       Write-AgentsFile -RepoPath $proj.FullName -ProjectName $proj.Name -TemplatePath $tpl -Force:$ForceAgents -DryRun:$DryRun
       Write-SlimStubs -RepoPath $proj.FullName -Ides $detected -DryRun:$DryRun
+    }
+
+    # Design-system pointer only for UI families that ship the coreui-styling skill.
+    if (@($cfg.skills) -contains 'coreui-styling') {
+      $designTpl = Join-Path $HubPath 'templates\design-ui.md'
+      Write-DesignUiFile -RepoPath $proj.FullName -ProjectName $proj.Name -TemplatePath $designTpl -Force:$ForceAgents -DryRun:$DryRun
     }
 
     if (-not $SkipMattPocockSetup) {

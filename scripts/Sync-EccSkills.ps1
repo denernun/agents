@@ -12,11 +12,13 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'AgentHub.Common.ps1')
 Import-HubFunctions
 $cat = Get-Content (Join-Path $HubPath 'catalog/projects.json') -Raw | ConvertFrom-Json
-$families = @{}; foreach ($p in $cat.families.PSObject.Properties) { $families[$p.Name] = $p.Value }
+$families = Get-CatalogFamilies -Catalog $cat
 [void](Import-HubDotEnv -HubPath $HubPath)
 $policy = Resolve-IdePolicy -Catalog $cat
 $Ides = Get-DetectedIdes -Override $Ides -Allowed @($policy.Allowed) -Excluded @($policy.Excluded)
-$paths = @{ Cursor='.cursor/skills'; Claude='.claude/skills'; Codex='.agents/skills'; Antigravity='.agents/skills'; OpenCode='.opencode/skills'; VSCode='.github/skills'; Kiro='.kiro/skills'; Devin='.devin/skills' }
+$registry = Get-IdeRegistry
+$paths = @{}
+foreach ($name in $registry.Keys) { $paths[$name] = $registry[$name].Skills }
 foreach ($ide in $Ides) { if (-not $paths.ContainsKey($ide)) { throw "Unknown IDE: $ide" } }
 if (-not $Roots.Count) { $Roots = @($cat.roots | ForEach-Object { Join-Path 'D:/SISTEMAS' $_ } | Where-Object { Test-Path $_ }) }
 $rootsResolved = @($Roots | ForEach-Object {

@@ -162,6 +162,80 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(result['changed'])
         self.assertNotIn('Eficiência', self.path.read_text())
 
+    def test_ownership_is_reclaimed_when_disk_matches_desired(self):
+        # Regression: ownership used to be a one-way ratchet. A single
+        # divergence (another tool rewriting the config, a lost state file) made
+        # the hub treat the entry as a manual edit forever, so it could never be
+        # updated or pruned again even once the payload matched exactly.
+        server = {'command': 'cmd', 'args': ['/c', 'x']}
+        self.call(servers={'s': server}, managed=['s'])
+        # Simulate the state being lost while the file keeps the hub's payload.
+        state = next((self.root / '.agenthub-state').glob('*.json'))
+        state.write_text(json.dumps({'path': str(self.path), 'servers': {}}))
+        result = self.call(servers={'s': server}, managed=['s'])
+        self.assertFalse(any('manual' in m for m in result['messages']))
+        # Ownership restored, so a later removal actually prunes the entry.
+        self.call(servers={}, managed=['s'], remove=True)
+        self.assertEqual(json.loads(self.path.read_text())['mcpServers'], {})
+
+    def test_genuine_manual_server_edit_is_still_preserved(self):
+        # The reclaim above must not swallow real user edits.
+        self.call(servers={'s': {'command': 'hub'}}, managed=['s'])
+        edited = json.loads(self.path.read_text())
+        edited['mcpServers']['s'] = {'command': 'mine'}
+        self.path.write_text(json.dumps(edited))
+        result = self.call(servers={'s': {'command': 'hub'}}, managed=['s'])
+        self.assertTrue(any('manual' in m for m in result['messages']))
+        self.assertEqual(json.loads(self.path.read_text())['mcpServers']['s']['command'], 'mine')
+
+    def test_crlf_payload_is_written_verbatim_and_stays_owned(self):
+        # Regression: atomic() used write_text(), so a CRLF payload (every
+        # template and PowerShell here-string) landed on disk as CR CR LF and
+        # never compared equal to state again. Every tracked file then looked
+        # manually edited and silently stopped being updated.
+        text = '# Title\r\n\r\n## Section\r\n- item\r\n'
+        result = self.call(format='text', text=text)
+        self.assertTrue(result['changed'])
+        self.assertEqual(self.path.read_bytes(), text.encode('utf-8'))
+        self.assertNotIn(b'\r\r\n', self.path.read_bytes())
+        # Second identical run must be a no-op, proving state matches the disk.
+        again = self.call(format='text', text=text)
+        self.assertFalse(again['changed'])
+        self.assertEqual(again['messages'], [])
+
+    def test_owned_text_is_rewritten_when_the_template_changes(self):
+        # A hub-written file must keep tracking the hub: editing a template has
+        # to reach the project on the next run.
+        self.call(format='text', text='v1\r\n')
+        result = self.call(format='text', text='v2\r\n')
+        self.assertTrue(result['changed'])
+        self.assertEqual(self.path.read_bytes(), b'v2\r\n')
+
+    def test_patched_untracked_file_never_becomes_hub_owned(self):
+        # Injecting the managed section into a file the hub did not create must
+        # not promote it to "owned", or the next run would replace its content.
+        original = '# Legacy\r\n\r\n## Skills\r\n- keep\r\n'
+        self.path.write_bytes(original.encode('utf-8'))
+        patch = {'marker': '## Managed', 'anchor': r'^## Skills\b', 'content': '## Managed\n- x'}
+        self.call(format='text', text='REPLACEMENT', text_patch=patch)
+        self.assertIn('## Managed', self.path.read_text(encoding='utf-8'))
+        self.assertIn('- keep', self.path.read_text(encoding='utf-8'))
+        result = self.call(format='text', text='REPLACEMENT', text_patch=patch)
+        self.assertFalse(result['changed'])
+        self.assertNotIn('REPLACEMENT', self.path.read_text(encoding='utf-8'))
+
+    def test_toml_block_is_found_on_a_crlf_file(self):
+        # An LF-only pattern would miss the block on a CRLF file and append a
+        # second one, producing duplicate markers.
+        self.path = self.path.with_suffix('.toml')
+        self.call(format='toml', servers={'x': {'command': 'a'}})
+        crlf = self.path.read_bytes().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+        self.path.write_bytes(crlf)
+        self.call(format='toml', servers={'x': {'command': 'a'}})
+        body = self.path.read_text(encoding='utf-8')
+        self.assertEqual(body.count(config.BEGIN), 1)
+        self.assertEqual(body.count(config.END), 1)
+
     def test_main_decodes_non_utf8_stdin_as_utf8(self):
         # PowerShell pipes UTF-8 bytes; a Windows Python reading stdin with the
         # active code page turns non-ASCII rule text into lone surrogates and

@@ -49,11 +49,26 @@
   # With ai-memory enabled in .env (AI_MEMORY_ENABLED=1). Also pin the
   # project slug per repo (.ai-memory.toml). -SkipAiMemory turns the wiring off.
   .\Install-AgentHub.ps1 -WriteAgents -WriteAiMemoryToml
+
+.EXAMPLE
+  # Install into one repository anywhere on disk. The managed roots under
+  # D:\SISTEMAS are not scanned at all.
+  .\Install-AgentHub.ps1 -ProjectPath C:\dev\meu-api -WriteAgents
+
+.EXAMPLE
+  # Same, but the path only holds repositories: each child is configured.
+  .\Install-AgentHub.ps1 -ProjectPath C:\dev -WriteAgents
 #>
 [CmdletBinding()]
 param(
   [string]$HubPath = '',
   [string[]]$Roots = @(),
+  # Install into specific folders anywhere on disk, bypassing the managed roots
+  # under D:\SISTEMAS entirely. A path that is itself a repository is configured
+  # directly; a path that only contains repositories has its children
+  # configured. Without this parameter every project under the catalog roots is
+  # processed, which is the normal mode.
+  [string[]]$ProjectPath = @(),
   [string[]]$Ides = @(),
   [switch]$RemoveUnusedIdeFolders,
   [switch]$WriteAgents,
@@ -436,12 +451,79 @@ function Ensure-VendorSuperpowersSkillMirrors {
   }
 }
 
+function Get-IdeRegistry {
+  # THE authoritative map of where each agent keeps its project-level files.
+  # Install, uninstall, the sync scripts and the diagnostics all read this, so
+  # adding an agent or fixing a path is one edit here instead of eight copies
+  # that silently drift apart.
+  #   Skills     - directory the agent discovers project skills in
+  #   Mcp        - project MCP config file
+  #   Property   - JSON property holding the server map, or 'toml'
+  #   CopySkills - agent does not follow directory junctions (Kiro), so copy
+  return [ordered]@{
+    Cursor      = @{ Skills = '.cursor/skills';   Mcp = '.cursor/mcp.json';        Property = 'mcpServers'; CopySkills = $false }
+    VSCode      = @{ Skills = '.github/skills';   Mcp = '.vscode/mcp.json';        Property = 'servers';    CopySkills = $false }
+    Kiro        = @{ Skills = '.kiro/skills';     Mcp = '.kiro/settings/mcp.json'; Property = 'mcpServers'; CopySkills = $true  }
+    Claude      = @{ Skills = '.claude/skills';   Mcp = '.mcp.json';               Property = 'mcpServers'; CopySkills = $false }
+    Codex       = @{ Skills = '.agents/skills';   Mcp = '.codex/config.toml';      Property = 'toml';       CopySkills = $false }
+    Antigravity = @{ Skills = '.agents/skills';   Mcp = '.agents/mcp_config.json'; Property = 'mcpServers'; CopySkills = $false }
+    OpenCode    = @{ Skills = '.opencode/skills'; Mcp = 'opencode.json';           Property = 'mcp';        CopySkills = $false }
+    Devin       = @{ Skills = '.devin/skills';    Mcp = '.devin/mcp_config.json';  Property = 'mcpServers'; CopySkills = $false }
+    Qoder       = @{ Skills = '.qoder/skills';    Mcp = '.qoder/mcp.json';         Property = 'mcpServers'; CopySkills = $false }
+  }
+}
+
+function Get-IdeSkillRoots {
+  # Distinct skill roots for the given IDEs, carrying whether each must be
+  # populated by copy. Codex and Antigravity deliberately share .agents/skills,
+  # so the result is de-duplicated by path.
+  param([string[]]$Ides)
+  $registry = Get-IdeRegistry
+  $roots = [ordered]@{}
+  foreach ($ide in $Ides) {
+    if (-not $registry.Contains($ide)) { continue }
+    $entry = $registry[$ide]
+    if ($roots.Contains($entry.Skills)) {
+      if ($entry.CopySkills) { $roots[$entry.Skills] = $true }
+      continue
+    }
+    $roots[$entry.Skills] = [bool]$entry.CopySkills
+  }
+  return $roots
+}
+
+function Test-ProjectDirectory {
+  # Does this folder look like a repository the hub should configure? Android
+  # trees are included even when the git root only wraps src/ or Android Studio
+  # metadata, which is why the resolved family is taken into account.
+  param([string]$Path, [string]$Family = '')
+  foreach ($marker in @('AGENTS.md', 'src', 'source', 'package.json', '.git',
+                        'settings.gradle', 'settings.gradle.kts', 'build.gradle', 'app')) {
+    if (Test-Path (Join-Path $Path $marker)) { return $true }
+  }
+  return ($Family -eq 'android')
+}
+
+function Get-CatalogFamilies {
+  # Single source of truth for the family table, in the order the catalog
+  # declares it. An ordinary hashtable does not preserve order, which is why
+  # family precedence used to live in a hardcoded list in the code instead of
+  # in catalog/projects.json.
+  param([object]$Catalog)
+  $families = [ordered]@{}
+  foreach ($prop in $Catalog.families.PSObject.Properties) { $families[$prop.Name] = $prop.Value }
+  return $families
+}
+
 function Get-ProjectFamily {
-  param([string]$Name, [hashtable]$Families, [string]$RepoPath, [object]$Overrides)
+  param([string]$Name, [System.Collections.IDictionary]$Families, [string]$RepoPath, [object]$Overrides)
   if ($Overrides) {
     $entry = $Overrides.PSObject.Properties[$Name]
     if ($entry) {
-      if (-not $Families.ContainsKey([string]$entry.Value)) { throw "Unknown family override for $Name" }
+      # Contains, not ContainsKey: IDictionary is satisfied by both Hashtable
+      # and the OrderedDictionary that Get-CatalogFamilies returns, and only
+      # the former has ContainsKey.
+      if (-not $Families.Contains([string]$entry.Value)) { throw "Unknown family override for $Name" }
       return [string]$entry.Value
     }
   }
@@ -460,9 +542,20 @@ function Get-ProjectFamily {
       }
     }
   }
-  foreach ($key in @('nestjs', 'angular', 'android')) {
-    foreach ($pattern in $Families[$key].match) { if ($Name -like $pattern) { return $key } }
+  # Match in catalog order, but always leave a catch-all ("*") for last no
+  # matter where it is declared: otherwise a family declared above it could
+  # never be reached. Adding a family to the catalog is now enough - no code
+  # change - and removing one cannot leave a dangling name behind.
+  $catchAll = $null
+  foreach ($key in $Families.Keys) {
+    $patterns = @($Families[$key].match)
+    if ($patterns -contains '*') {
+      if (-not $catchAll) { $catchAll = $key }
+      continue
+    }
+    foreach ($pattern in $patterns) { if ($Name -like $pattern) { return $key } }
   }
+  if ($catchAll) { return $catchAll }
   return 'minimal'
 }
 
@@ -483,6 +576,34 @@ function Test-SkillTargetHasContent {
   return ($totalBytes -gt 0)
 }
 
+function Test-CopyUpToDate {
+  # True when $LinkPath already holds a byte-identical copy of $TargetPath.
+  # Copy-based roots (Kiro) would otherwise delete and re-copy every skill on
+  # every run - the single biggest source of I/O and of churned mtimes.
+  param([string]$LinkPath, [string]$TargetPath)
+  if (-not (Test-Path -LiteralPath $LinkPath -PathType Container)) { return $false }
+  $marker = Join-Path $LinkPath '.agenthub-managed'
+  if (-not (Test-Path -LiteralPath $marker)) { return $false }
+  $srcRoot = (Resolve-Path -LiteralPath $TargetPath).Path.TrimEnd('\')
+  $dstRoot = (Resolve-Path -LiteralPath $LinkPath).Path.TrimEnd('\')
+  $src = @(Get-ChildItem -LiteralPath $srcRoot -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -ne '.agenthub-managed' })
+  $dst = @(Get-ChildItem -LiteralPath $dstRoot -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -ne '.agenthub-managed' })
+  if ($src.Count -ne $dst.Count) { return $false }
+  $dstMap = @{}
+  foreach ($f in $dst) { $dstMap[$f.FullName.Substring($dstRoot.Length).TrimStart('\')] = $f }
+  foreach ($f in $src) {
+    $rel = $f.FullName.Substring($srcRoot.Length).TrimStart('\')
+    if (-not $dstMap.ContainsKey($rel)) { return $false }
+    $other = $dstMap[$rel]
+    if ($other.Length -ne $f.Length) { return $false }
+    if ((Get-FileHash -LiteralPath $f.FullName -Algorithm SHA256).Hash -ne
+        (Get-FileHash -LiteralPath $other.FullName -Algorithm SHA256).Hash) { return $false }
+  }
+  return $true
+}
+
 function New-JunctionOrCopy {
   param([string]$LinkPath, [string]$TargetPath, [switch]$DryRun, [switch]$ForceCopy)
   if (-not (Test-Path $TargetPath)) {
@@ -493,6 +614,9 @@ function New-JunctionOrCopy {
     Write-Warning "Skill target is empty (0 bytes of content): $TargetPath -- refusing to link $LinkPath. Fix the source (e.g. 'git checkout -- <path>' in the hub or vendor submodule) and re-run."
     return
   }
+  # Already an identical hub-owned copy: nothing to do. Checked before any
+  # removal so a copy root stays idempotent instead of re-copying every run.
+  if ($ForceCopy -and (Test-CopyUpToDate -LinkPath $LinkPath -TargetPath $TargetPath)) { return }
   $parent = Split-Path -Parent $LinkPath
   if (-not (Test-Path $parent)) {
     if (-not $DryRun) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
@@ -674,7 +798,7 @@ function Set-FileFromTemplateIfMissing {
     Write-Host "  [dry] setup Matt Pocock: write $Destination"
     return $true
   }
-  Set-Content -LiteralPath $Destination -Value (Get-Content -LiteralPath $Template -Raw -Encoding UTF8) -Encoding UTF8
+  Write-HubText -Path $Destination -Content (Get-Content -LiteralPath $Template -Raw -Encoding UTF8)
   return $true
 }
 
@@ -686,26 +810,29 @@ function Update-MattPocockAgentSkillsBlock {
     return $false
   }
 
+  # Backticks are doubled: inside a double-quoted here-string a single backtick
+  # is PowerShell's escape character and would be swallowed, emitting the paths
+  # as plain text instead of markdown code spans.
   $triageSection = ''
   if ($TriageInstalled) {
-    $triageSection = @"
+    $triageSection = @'
 
 ### Triage labels
 
 Uses the default Matt Pocock label vocabulary. See `docs/agents/triage-labels.md`.
-"@
+'@
   }
   $block = @"
 ## Agent skills
 
 ### Issue tracker
 
-Issues and specs use the configured tracker. See `docs/agents/issue-tracker.md`.
+Issues and specs use the configured tracker. See ``docs/agents/issue-tracker.md``.
 $triageSection
 
 ### Domain docs
 
-Single-context layout at the repository root. See `docs/agents/domain.md`.
+Single-context layout at the repository root. See ``docs/agents/domain.md``.
 "@
   $block = $block.TrimEnd()
 
@@ -716,12 +843,21 @@ Single-context layout at the repository root. See `docs/agents/domain.md`.
   } else {
     $updated = $raw.TrimEnd() + "`r`n`r`n" + $block + "`r`n"
   }
+  # Both this function and Write-AgentsFile own parts of AGENTS.md, so their
+  # trailing whitespace has to agree exactly. The replace branch above leaves a
+  # blank line at EOF (needed only when another "## " section follows) while
+  # Write-AgentsFile normalises to a single newline: without this, each run
+  # would undo the other and AGENTS.md would be rewritten twice, forever.
+  $updated = $updated.TrimEnd() + "`r`n"
   if ($updated -eq $raw) { return $false }
   if ($DryRun) {
     Write-Host '  [dry] setup Matt Pocock: update AGENTS.md Agent skills block'
     return $true
   }
-  Set-Content -LiteralPath $agentsPath -Value $updated -Encoding UTF8
+  # Must go through the tracked writer: a raw Set-Content here would leave the
+  # file different from the recorded state, and the very next run would classify
+  # the hub's own AGENTS.md as a manual edit and stop updating it.
+  Write-HubText -Path $agentsPath -Content $updated
   return $true
 }
 
@@ -766,11 +902,11 @@ function Ensure-MattPocockRepoSetup {
     if ($DryRun) {
       Write-Host "  [dry] setup Matt Pocock: write $contextPath"
     } else {
-      Set-Content -LiteralPath $contextPath -Encoding UTF8 -Value @"
+      Write-HubText -Path $contextPath -Content @'
 # Domain Context
 
 This document is the project's evolving glossary and domain context. Add terms and decisions through the `domain-modeling` skill when they are resolved.
-"@
+'@
     }
     $changed = $true
   }
@@ -1125,8 +1261,10 @@ function Write-McpConfigs {
     [object]$SkipIdes,
     [switch]$DryRun
   )
-  # New IDEs: add a switch arm below. Server payloads (including mongodb
-  # launched via node + global entry, not npx) come from mcp/*.template.json.
+  # New IDEs: add an entry to Get-IdeRegistry, not a branch here. Server
+  # payloads (including mongodb launched via node + global entry, not npx)
+  # come from mcp/*.template.json.
+  $registry = Get-IdeRegistry
   $allServers = Merge-McpJsonTemplates -HubPath $Vars['HUB'] -Vars $Vars -ServerNames $ServerNames
   if ([string]::IsNullOrWhiteSpace($Vars['CONTEXT7_API_KEY'])) {
     $ctx = $allServers['context7']
@@ -1149,50 +1287,24 @@ function Write-McpConfigs {
     # PowerShell 5.1. Flatten to a plain hashtable before serializing.
     $plain = @{}
     foreach ($k in $ideServers.Keys) { $plain[$k] = $ideServers[$k] }
-    switch ($ide) {
-      'Cursor' {
-        $path = Join-Path $RepoPath '.cursor\mcp.json'
-        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-      }
-      'VSCode' {
-        $path = Join-Path $RepoPath '.vscode\mcp.json'
-        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'servers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-      }
-      'Kiro' {
-        $path = Join-Path $RepoPath '.kiro\settings\mcp.json'
-        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-      }
-      'Qoder' {
-        $path = Join-Path $RepoPath '.qoder\mcp.json'
-        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-      }
-      'OpenCode' {
-        # Project config lives at <repo>\opencode.json (opencode.ai/docs/config),
-        # and "mcp" is a flat map of servers (opencode.ai/docs/mcp-servers).
-        $ocServers = ConvertTo-OpenCodeMcpServers -Servers $plain
-        Write-OpenCodeConfig -RepoPath $RepoPath -McpServers $ocServers -ManagedServers $ManagedServers -DryRun:$DryRun
-      }
-      'Antigravity' {
-        # Antigravity (IDE/CLI) reads workspace MCP config from .agents\mcp_config.json
-        # (global fallback is ~/.gemini/config/mcp_config.json). It does NOT use
-        # a project-level ".antigravity" folder for MCP.
-        $path = Join-Path $RepoPath '.agents\mcp_config.json'
-        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-      }
-      'Claude' {
-        # Claude Code project MCP is <repo>\.mcp.json (code.claude.com/docs/en/mcp).
-        $path = Join-Path $RepoPath '.mcp.json'
-        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-      }
-      'Codex' {
-        Invoke-HubConfig @{path=(Join-Path $RepoPath '.codex/config.toml'); format='toml'; servers=$plain; dry=[bool]$DryRun}
-      }
-      'Devin' {
-        # Devin CLI (v3000.3+) reads .devin\mcp_config.json (docs.devin.ai
-        # cli/extensibility/mcp/configuration). Older .devin\mcp.json is leftover.
-        $path = Join-Path $RepoPath '.devin\mcp_config.json'
-        Write-McpJsonMerged -Path $path -HubServers $plain -ServersProperty 'mcpServers' -ManagedServerNames $ManagedServers -DryRun:$DryRun
-      }
+    # Path and property come from Get-IdeRegistry; only the two genuinely
+    # different formats need their own branch. Notes on the non-obvious paths:
+    #   OpenCode    - <repo>\opencode.json, "mcp" is a flat server map
+    #                 (opencode.ai/docs/config, /docs/mcp-servers)
+    #   Antigravity - .agents\mcp_config.json, never a ".antigravity" folder
+    #   Claude Code - <repo>\.mcp.json (code.claude.com/docs/en/mcp)
+    #   Devin       - .devin\mcp_config.json (older .devin\mcp.json is leftover)
+    $entry = $registry[$ide]
+    if (-not $entry) { continue }
+    if ($entry.Property -eq 'toml') {
+      Invoke-HubConfig @{path=(Join-Path $RepoPath ($entry.Mcp -replace '/', '\')); format='toml'; servers=$plain; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun}
+    }
+    elseif ($entry.Property -eq 'mcp') {
+      $ocServers = ConvertTo-OpenCodeMcpServers -Servers $plain
+      Write-OpenCodeConfig -RepoPath $RepoPath -McpServers $ocServers -ManagedServers $ManagedServers -DryRun:$DryRun
+    }
+    else {
+      Write-McpJsonMerged -Path (Join-Path $RepoPath ($entry.Mcp -replace '/', '\')) -HubServers $plain -ServersProperty $entry.Property -ManagedServerNames $ManagedServers -DryRun:$DryRun
     }
   }
 }
@@ -1401,46 +1513,21 @@ function Link-ProjectSkills {
     [string[]]$Ides,
     [switch]$DryRun
   )
-  # Each root records whether it must be populated by copy instead of junction.
-  # Kiro does not follow directory junctions when discovering skills (its docs
-  # only describe copying skill folders), so its root is copy-only.
-  $skillRoots = [System.Collections.Generic.List[object]]::new()
-  if ($Ides -contains 'Cursor') { [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.cursor\skills'); Copy = $false }) }
-  if ($Ides -contains 'VSCode') {
-    # GitHub Copilot (VS Code / Copilot CLI) discovers project skills at
-    # .github\skills\<name>\SKILL.md
-    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.github\skills'); Copy = $false })
+  # Roots and the junction-vs-copy decision both come from Get-IdeRegistry, so
+  # a new agent needs no change here. Kiro is flagged CopySkills because it does
+  # not follow directory junctions when discovering skills.
+  $skillRoots = Get-IdeSkillRoots -Ides $Ides
+  # Validate each skill once, not once per IDE root: Test-HubSkill parses the
+  # SKILL.md, and doing it per root repeated the same work up to 8 times.
+  foreach ($skill in $SkillNames) {
+    $target = Join-Path $HubPath "skills\$skill"
+    if (-not (Test-HubSkill $target)) { throw "Invalid SKILL.md: $target" }
   }
-  if ($Ides -contains 'Antigravity' -or $Ides -contains 'Codex') {
-    # Shared discovery directory for Codex and Antigravity. workspace skills live under .agents\skills (see
-    # codelabs.developers.google.com/autonomous-ai-developer-pipelines-antigravity).
-    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.agents\skills'); Copy = $false })
-  }
-  if ($Ides -contains 'Kiro') {
-    # Kiro discovers project-level skills at .kiro\skills\<name>\SKILL.md but
-    # does NOT follow junctions there, so copy the folders instead.
-    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.kiro\skills'); Copy = $true })
-  }
-  if ($Ides -contains 'OpenCode') {
-    # OpenCode discovers skills at .opencode\skills (docs.opencode.ai/docs/skills).
-    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.opencode\skills'); Copy = $false })
-  }
-  if ($Ides -contains 'Claude') {
-    # Claude Code discovers project skills at .claude\skills\<name>\SKILL.md
-    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.claude\skills'); Copy = $false })
-  }
-  if ($Ides -contains 'Devin') {
-    # Devin discovers SKILL.md under .devin\skills (docs.devin.ai/product-guides/skills).
-    [void]$skillRoots.Add(@{ Path = (Join-Path $RepoPath '.devin\skills'); Copy = $false })
-  }
-
-  foreach ($rootInfo in $skillRoots) {
-    $root = $rootInfo.Path
+  foreach ($relative in $skillRoots.Keys) {
+    $root = Join-Path $RepoPath ($relative -replace '/', '\')
+    $forceCopy = [bool]$skillRoots[$relative]
     foreach ($skill in $SkillNames) {
-      $target = Join-Path $HubPath "skills\$skill"
-      $link = Join-Path $root $skill
-      if (-not (Test-HubSkill $target)) { throw "Invalid SKILL.md: $target" }
-      New-JunctionOrCopy -LinkPath $link -TargetPath $target -DryRun:$DryRun -ForceCopy:$rootInfo.Copy
+      New-JunctionOrCopy -LinkPath (Join-Path $root $skill) -TargetPath (Join-Path $HubPath "skills\$skill") -DryRun:$DryRun -ForceCopy:$forceCopy
     }
     Remove-StaleProjectSkills -SkillRoot $root -HubPath $HubPath -KeepNames $SkillNames -DryRun:$DryRun
   }
@@ -1710,24 +1797,33 @@ else { Write-Warning ('No {0}.env - using catalog ides/excludeIdes. Copy .env.ex
 $catalogPath = Join-Path $HubPath 'catalog\projects.json'
 $catalog = Get-Content $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
-$defaultSistemas = 'D:\SISTEMAS'
-# Family folders under D:\SISTEMAS whose direct children are managed repos.
-# Driven by catalog.roots (Uninstall-AgentHub.ps1 reads the same key); the
-# hardcoded list is only a fallback for an older catalog without it. Other
-# D:\SISTEMAS folders are not managed.
-$defaultProjectRoots = @('ERPCLASS', 'MOBICLASS', 'NFECLASS', 'SHOPCLASS')
+# Container of the managed family folders. Overridable per machine so the hub
+# is not welded to one drive letter.
+$defaultSistemas = if ($env:AGENTHUB_SISTEMAS) { $env:AGENTHUB_SISTEMAS } else { 'D:\SISTEMAS' }
+# Family folders whose direct children are managed repos. Comes from
+# catalog.roots (Uninstall-AgentHub.ps1 reads the same key); anything else under
+# the container is not managed. No hardcoded fallback: a stale copy here silently
+# skipped whole product lines.
+$defaultProjectRoots = @()
 if (($catalog.PSObject.Properties.Name -contains 'roots') -and (@($catalog.roots).Count -gt 0)) {
   $defaultProjectRoots = @($catalog.roots)
+} elseif ($ProjectPath.Count -eq 0) {
+  throw "catalog/projects.json has no 'roots'. Add them, or target folders explicitly with -ProjectPath."
 }
 
-if ($Roots.Count -eq 0) {
+if ($ProjectPath.Count -gt 0) {
+  # Explicit targets win outright: the managed roots are not scanned at all.
+  if ($Roots.Count -gt 0) {
+    Write-Warning '-ProjectPath was given, so -Roots and the catalog roots are ignored.'
+  }
+  $Roots = @()
+} elseif ($Roots.Count -eq 0) {
   $Roots = @($defaultProjectRoots |
     ForEach-Object { Join-Path $defaultSistemas $_ } |
     Where-Object { Test-Path $_ })
 } else {
-  # Accept D:\SISTEMAS as a convenient container root too. The main loop
-  # intentionally scans only one level, so expand it to the managed family
-  # folders before enumerating project repositories.
+  # Accept the container itself as a convenient root too. Project enumeration
+  # scans only one level, so expand it to the managed family folders first.
   $Roots = @($Roots | ForEach-Object {
     $root = $_
     $managedChildren = @($defaultProjectRoots |
@@ -1736,10 +1832,7 @@ if ($Roots.Count -eq 0) {
     if ($managedChildren.Count -gt 0) { $managedChildren } else { $root }
   })
 }
-$families = @{}
-foreach ($prop in $catalog.families.PSObject.Properties) {
-  $families[$prop.Name] = $prop.Value
-}
+$families = Get-CatalogFamilies -Catalog $catalog
 
 $commonSkills = @()
 if ($catalog.PSObject.Properties.Name -contains 'commonSkills') {
@@ -1822,8 +1915,7 @@ $qoderOptIn = [bool]$catalog.qoderOptIn
 $detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -Excluded $excludeIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn) -AllowMissing:$AllowMissing
 if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides, AGENTHUB_IDES in .env, or catalog.ides.' }
 if ($catalog.PSObject.Properties['ecc']) {
-  $eccRoots = @{Cursor='.cursor/skills'; Claude='.claude/skills'; Codex='.agents/skills'; Antigravity='.agents/skills'; OpenCode='.opencode/skills'; VSCode='.github/skills'; Kiro='.kiro/skills'; Devin='.devin/skills'}
-  foreach ($rel in @($detected | Where-Object { $eccRoots.ContainsKey($_) } | ForEach-Object { $eccRoots[$_] } | Select-Object -Unique)) {
+  foreach ($rel in @((Get-IdeSkillRoots -Ides $detected).Keys)) {
     Sync-EccSkillLinks -HubPath $HubPath -SkillRoot (Join-Path $HubPath $rel) -Catalog $catalog -Names @(Get-EccSkillNames -Catalog $catalog -Maintenance) -DryRun:$DryRun
   }
 }
@@ -1871,7 +1963,8 @@ if ($catalog.mcp) { $mcpSkipIdes = $catalog.mcp.skipIdes }
 
 Write-Host "Hub: $HubPath"
 Write-Host "IDEs: $($detected -join ', ')"
-Write-Host "Roots: $($Roots -join ', ')"
+if ($ProjectPath.Count -gt 0) { Write-Host "Targets: $($ProjectPath -join ', ') (catalog roots ignored)" }
+else { Write-Host "Roots: $($Roots -join ', ')" }
 if ($GlobalSkills -and $detected -contains 'Codex') {
   & (Join-Path $PSScriptRoot 'Sync-Codegraph.ps1') -HubPath $HubPath -Global -AdoptLegacySkills:$AdoptLegacyConfigs -DryRun:$DryRun
   foreach ($name in @($commonSkills + $mattPocockSkills + $superpowersSkills + @(Get-EccSkillNames -Catalog $catalog -Maintenance) | Select-Object -Unique)) {
@@ -1885,26 +1978,45 @@ if ($DryRun) { Write-Host 'DRY RUN - no changes' }
 
 $exclude = @($catalog.excludeProjectNames)
 $stats = @{ projects = 0; linked = 0 }
+# One bad repository must not abort the rest. A malformed package.json, a
+# hand-corrupted mcp.json or an invalid SKILL.md used to throw straight out of
+# this loop, leaving the projects before it configured, the ones after it
+# untouched, and no summary of what happened - the main way the fleet drifted.
+# Failures are now collected per project and reported at the end; the exit code
+# reflects them so automation still notices.
+$failures = [System.Collections.Generic.List[object]]::new()
 
-foreach ($root in $Roots) {
-  Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-    $proj = $_
-    if ($exclude -contains $proj.Name) { return }
+# Resolve the exact set of project folders first, so the loop below has one job.
+$projectDirs = [System.Collections.Generic.List[object]]::new()
+if ($ProjectPath.Count -gt 0) {
+  foreach ($raw in $ProjectPath) {
+    if (-not (Test-Path -LiteralPath $raw -PathType Container)) {
+      throw "-ProjectPath not found (or not a directory): $raw"
+    }
+    $item = Get-Item -LiteralPath $raw
+    if (Test-ProjectDirectory -Path $item.FullName) {
+      Write-Host "  target is a repository: $($item.FullName)"
+      [void]$projectDirs.Add($item)
+    } else {
+      # Not a repo itself: treat it as a container of repos.
+      $children = @(Get-ChildItem -LiteralPath $item.FullName -Directory -ErrorAction SilentlyContinue)
+      Write-Host "  target is a container: $($item.FullName) ($($children.Count) subfolder(s))"
+      foreach ($child in $children) { [void]$projectDirs.Add($child) }
+    }
+  }
+} else {
+  foreach ($root in $Roots) {
+    foreach ($child in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
+      [void]$projectDirs.Add($child)
+    }
+  }
+}
+
+foreach ($proj in $projectDirs) {
+    if ($exclude -contains $proj.Name) { continue }
+    try {
     $family = Get-ProjectFamily -Name $proj.Name -Families $families -RepoPath $proj.FullName -Overrides (Get-JsonProperty $catalog 'projectFamilies')
-    # skip non-repos without AGENTS and without src/source (Android Gradle
-    # trees and the android family are included even when the git root is
-    # only a wrapper around src/ or Android Studio metadata).
-    $looksLikeProject = (Test-Path (Join-Path $proj.FullName 'AGENTS.md')) -or
-      (Test-Path (Join-Path $proj.FullName 'src')) -or
-      (Test-Path (Join-Path $proj.FullName 'source')) -or
-      (Test-Path (Join-Path $proj.FullName 'package.json')) -or
-      (Test-Path (Join-Path $proj.FullName '.git')) -or
-      (Test-Path (Join-Path $proj.FullName 'settings.gradle')) -or
-      (Test-Path (Join-Path $proj.FullName 'settings.gradle.kts')) -or
-      (Test-Path (Join-Path $proj.FullName 'build.gradle')) -or
-      (Test-Path (Join-Path $proj.FullName 'app')) -or
-      ($family -eq 'android')
-    if (-not $looksLikeProject) { return }
+    if (-not (Test-ProjectDirectory -Path $proj.FullName -Family $family)) { continue }
 
     $cfg = $families[$family]
     Write-Host "`n=== $($proj.Name) [$family] ==="
@@ -1982,8 +2094,20 @@ foreach ($root in $Roots) {
       Remove-LegacyAgentPaths -RepoPath $proj.FullName -DryRun:$DryRun
     }
     $stats.linked++
-  }
+    } catch {
+      $failures.Add([pscustomobject]@{ Project = $proj.Name; Path = $proj.FullName; Message = $_.Exception.Message })
+      Write-Warning ("  {0}: FAILED, continuing with the other projects - {1}" -f $proj.Name, $_.Exception.Message)
+    }
 }
 
-Write-Host "`nDone. Projects: $($stats.projects)"
+Write-Host ("`nDone. Projects configured: {0}; failed: {1}" -f $stats.linked, $failures.Count)
 Write-Host "Tip: commit slim AGENTS.md per repo; junctions are local (re-run this script on each machine)."
+if ($failures.Count -gt 0) {
+  Write-Host ''
+  Write-Host 'Projects that failed (fix the cause and re-run; the others are already configured):'
+  foreach ($failure in $failures) {
+    Write-Host ("  - {0} [{1}]" -f $failure.Project, $failure.Path)
+    Write-Host ("      {0}" -f $failure.Message)
+  }
+  exit 1
+}

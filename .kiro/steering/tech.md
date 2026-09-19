@@ -16,6 +16,7 @@ inclusion: always
 |---|---|---|
 | nestjs | NestJS + TypeScript, Clean Architecture, DDD | `*-api`, `*-auth`, `*-sync`, `*-hook`, `*-cob-api` |
 | angular | Angular 22+, CoreUI, Clean Architecture | `*-admin`, `*-dash`, `*-app`, `*-cob` |
+| delphi | Delphi 12 / VCL, Firebird, FireDAC/UniDAC, ACBr, Horse | `*-erp` |
 | android | Java + XML Views (MOBICLASS APKs); skill vendor `claude-android-ninja` | `mobiclass-apk`, `mobiclass-leitor`, `mobiclass-comanda` |
 | minimal | fallback, no specific stack | `*` |
 
@@ -61,17 +62,34 @@ Run from `D:\IA\agents\scripts` (PowerShell):
 # One-time migration of legacy/incorrect paths from older script versions
 .\Install-AgentHub.ps1 -MigrateLegacyPaths -WriteAgents
 
+# Install/clean a folder anywhere on disk; D:\SISTEMAS is then ignored entirely
+.\Install-AgentHub.ps1 -ProjectPath C:\dev\meu-api -WriteAgents
+
 # Remove junctions/generated files (safe by default; -Full removes everything Install writes)
 .\Uninstall-AgentHub.ps1 -DryRun
 .\Uninstall-AgentHub.ps1 -Full
+
+# Clean reset: drop everything the hub wrote (incl. stale state) and rebuild
+.\Uninstall-AgentHub.ps1 -Full -PruneState
+.\Install-AgentHub.ps1 -WriteAgents
+
+# Repair state desynchronised by the old CR CR LF writer bug (dry-run default)
+python agenthub_repair_state.py --hub .. ; python agenthub_repair_state.py --hub .. --apply
 
 # Audit always-on file sizes across all product roots (flags anything > 2 KB)
 .\Inventory-AgentFiles.ps1
 ```
 
-There are no build, lint, or test commands for this repo — it has no
-application code, only scripts/templates/docs. Validate changes by running
-`Install-AgentHub.ps1 -DryRun` and `Inventory-AgentFiles.ps1`.
+This repo has no application code, so there is no build or lint step, but it
+**does** have tests. Run them before committing:
+
+```powershell
+.\Run-Tests.ps1            # pytest + the PowerShell integration tests, one verdict
+```
+
+Also validate with `Install-AgentHub.ps1 -DryRun` and `Inventory-AgentFiles.ps1`.
+A repeated install must report 0 rewrites and 0 `Preserved ...` warnings; anything
+else means the state tracking drifted again (see `docs/CONTEXT-HYGIENE.md`).
 
 ## Key constraint: context hygiene
 

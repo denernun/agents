@@ -14,9 +14,16 @@ import uuid
 
 
 def atomic(path, text):
+    """Write text verbatim. newline='' is required: without it Python turns
+    every '\\n' into os.linesep, and a payload that already carries CRLF (every
+    template and here-string coming from PowerShell) lands on disk as CR CR LF.
+    Reading that back through universal newlines yields '\\n\\n', which never
+    equals the CRLF stored in state, so every tracked file would look manually
+    edited forever and stop being updated."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.tmp-' + uuid.uuid4().hex)
-    temporary.write_text(text, encoding='utf-8')
+    with open(temporary, 'w', encoding='utf-8', newline='') as stream:
+        stream.write(text)
     os.replace(temporary, path)
 
 
@@ -37,13 +44,19 @@ def read_previous(path):
 
     An unclean shutdown can leave a freshly written file allocated but filled
     with NUL bytes. Such a file has no user content, so it is treated as absent
-    and rewritten, instead of failing the parse or being preserved as garbage."""
+    and rewritten, instead of failing the parse or being preserved as garbage.
+
+    newline='' matters as much as it does in atomic(): reading with universal
+    newlines would collapse the CRLF on disk to '\\n' and never match the CRLF
+    held in state, reintroducing the "everything looks manually edited" bug
+    from the other direction."""
     if not path.exists():
         return None
     raw = path.read_bytes()
     if not raw or not raw.strip(b'\x00'):
         return None
-    return path.read_text(encoding='utf-8-sig')
+    with open(path, 'r', encoding='utf-8-sig', newline='') as stream:
+        return stream.read()
 
 
 def legacy(name, value):
@@ -82,6 +95,14 @@ BEGIN = '# BEGIN AgentHub MCP'
 END = '# END AgentHub MCP'
 
 
+def unify(text):
+    """Line endings normalised to LF, for comparing content regardless of the
+    style an editor happened to leave behind."""
+    if text is None:
+        return None
+    return text.replace('\r\n', '\n')
+
+
 def update(request):
     path = Path(request['path']).absolute()
     root = Path(request['hub']).absolute() / '.agenthub-state'
@@ -102,7 +123,23 @@ def update(request):
     if request.get('format') == 'text':
         previous = state.get('text')
         text_patch = request.get('text_patch')
-        if text_patch and exists and text_patch['marker'] not in old:
+        # Adoption is an explicit, user-invoked request (-AdoptLegacyConfigs) and
+        # only ever targets paths the hub itself generates, so it must not depend
+        # on finding a marker string in the body: templates such as
+        # decorator-placement.mdc legitimately mention neither the hub nor its
+        # path, and requiring one left those files permanently stuck as "manual"
+        # with no way to hand them back. The pre-write backup under
+        # .agenthub-state/backups is the recovery path.
+        recognized = adopt
+        # "Owned" means the bytes on disk are exactly what we recorded writing.
+        # Only then may the hub replace the file wholesale; anything else is
+        # either absent (write it) or user-modified (preserve it).
+        owned = exists and previous is not None and old == previous
+        if text_patch and exists and not owned and not recognized:
+            # Untracked/legacy file: never clobber it. Inject the section once,
+            # anchored, or leave it alone if it is already there.
+            if text_patch['marker'] in old:
+                return {'changed': False, 'messages': []}
             matches = list(re.finditer(text_patch['anchor'], old, flags=re.MULTILINE))
             if len(matches) != 1:
                 return {'changed': False, 'messages': [
@@ -111,25 +148,35 @@ def update(request):
             match = matches[0]
             patch = text_patch['content'].rstrip() + '\n\n'
             new = old[:match.start()] + patch + old[match.start():]
-            new_state = {'path': str(path), 'text': new}
-        elif text_patch and exists and text_patch['marker'] in old:
-            return {'changed': False, 'messages': []}
-        recognized = adopt and ('D:\\AGENTS' in old or 'AgentHub' in old or 'Install-AgentHub' in old)
-        if not text_patch and exists and old != previous and not recognized:
-            return {'changed': False, 'messages': ['Preserved manual file: ' + str(path)]}
-        # No patch requested, or a patch was requested but the file does not
-        # exist yet (nothing to surgically patch): write the full text fresh.
-        if not text_patch or not exists:
+            # Deliberately does NOT claim ownership: this file was not created
+            # by the hub, so it must never become a candidate for wholesale
+            # rewriting. The injected marker makes the next run a no-op.
+            new_state = dict(state)
+            new_state['path'] = str(path)
+        else:
+            # Absent, hub-owned, or adopted: write the full desired text. This is
+            # what makes a template edit in the hub reach every project on the
+            # next run instead of being silently skipped.
+            if exists and not owned and not recognized:
+                return {'changed': False, 'messages': ['Preserved manual file: ' + str(path)]}
             new = '' if remove else request['text']
             new_state = {'path': str(path), 'text': new}
     elif request.get('format') == 'toml':
         parsed = tomllib.loads(old)
-        pattern = re.compile(r'(?ms)^# BEGIN AgentHub MCP\n.*?^# END AgentHub MCP(?:\n|$)')
+        # \r? everywhere: the file keeps whatever line endings an editor left,
+        # and an LF-only pattern would silently fail to find an existing block
+        # on a CRLF file, then append a second one.
+        pattern = re.compile(r'(?ms)^# BEGIN AgentHub MCP\r?\n.*?^# END AgentHub MCP(?:\r?\n|$)')
         blocks = list(pattern.finditer(old))
         if old.count(BEGIN) != len(blocks) or old.count(END) != len(blocks) or len(blocks) > 1:
             raise ValueError('Invalid AgentHub TOML markers')
         block = blocks[0].group() if blocks else ''
-        if block and block != state.get('block'):
+        # Compare on content, not on line-ending style, so a CRLF round-trip
+        # through an editor is not mistaken for a manual edit. Without `adopt`
+        # an unrecognised block is preserved; with it the block is rebuilt, which
+        # is the only way to recover a file whose state was lost (otherwise the
+        # block stays untouchable forever, exactly like the JSON ratchet).
+        if block and unify(block) != unify(state.get('block')) and not adopt:
             # Other local tools can append their own MCP table inside the
             # AgentHub marker block. Treat that exactly like a manual edit:
             # preserve it and let the wider install continue rather than
@@ -183,6 +230,16 @@ def update(request):
             for name, value in current.items():
                 if name in managed and name not in owned and legacy(name, value):
                     owned[name] = value
+        # Reclaim entries that are already byte-identical to what we are about to
+        # write. Ownership only records authorship, and losing it used to be
+        # permanent: one divergence (another tool reformatting the file, a state
+        # file lost) left the entry flagged "manual" forever, so the hub could
+        # neither update nor prune it again even once the payload matched. If the
+        # value on disk is exactly our intended payload it is not a foreign edit,
+        # so adopting it changes nothing on disk and restores manageability.
+        for name, value in current.items():
+            if name not in owned and name in desired and value == desired[name]:
+                owned[name] = value
         next_owned = {}
         for name, value in list(current.items()):
             if name in owned and value == owned[name]:

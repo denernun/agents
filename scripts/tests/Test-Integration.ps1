@@ -13,7 +13,7 @@ $repo=Join-Path $testRoot 'sample-app'
 New-Item -ItemType Directory -Path $repo | Out-Null
 Set-Content (Join-Path $repo 'package.json') '{"dependencies":{"@angular/core":"20"}}'
 $cat=Get-Content (Join-Path $sourceHub 'catalog/projects.json') -Raw | ConvertFrom-Json
-$families=@{};foreach($p in $cat.families.PSObject.Properties){$families[$p.Name]=$p.Value}
+$families = Get-CatalogFamilies -Catalog $cat
 function Assert($condition, $message) { if(-not $condition){throw $message} }
 Assert ((Get-ProjectFamily -Name 'sample-app' -Families $families -RepoPath $repo) -eq 'angular') 'Angular app misclassified'
 Assert ((Get-ProjectFamily -Name 'sample-app' -Families $families -RepoPath $repo -Overrides ([pscustomobject]@{'sample-app'='minimal'})) -eq 'minimal') 'Override not applied'
@@ -67,4 +67,46 @@ Ensure-CodegraphInit -RepoPath $emptyProject -Skills @('codegraph')
 Ensure-CodegraphInit -RepoPath $emptyProject -Skills @('codegraph')
 Assert ($script:initCalls -eq 1) 'Empty index skipped or existing index rebuilt'
 Assert ([string][Environment]::GetEnvironmentVariable('DO_NOT_TRACK','Process') -eq [string]$prior) 'Initialization changed caller environment'
+
+# --- IDE registry: one source of truth for paths and the copy-vs-junction rule
+$registry=Get-IdeRegistry
+Assert ($registry.Contains('Kiro')) 'Registry lost Kiro'
+Assert ($registry['Kiro'].CopySkills) 'Kiro must be copy-based: it does not follow junctions'
+Assert (-not $registry['Cursor'].CopySkills) 'Cursor should stay junction-based'
+# Codex and Antigravity deliberately share .agents/skills: the root must appear once.
+$sharedRoots=Get-IdeSkillRoots -Ides @('Codex','Antigravity')
+Assert (@($sharedRoots.Keys).Count -eq 1) 'Shared .agents/skills root was not de-duplicated'
+Assert ((Get-IdeSkillRoots -Ides @('Kiro'))['.kiro/skills']) 'Kiro root lost its copy flag'
+
+# --- Family resolution comes from the catalog, and a catch-all is always last
+$ordered=[ordered]@{
+  fallback=[pscustomobject]@{ match=@('*') }
+  specific=[pscustomobject]@{ match=@('*-api') }
+}
+Assert ((Get-ProjectFamily -Name 'x-api' -Families $ordered) -eq 'specific') 'Catch-all declared first must not win'
+Assert ((Get-ProjectFamily -Name 'whatever' -Families $ordered) -eq 'fallback') 'Catch-all not used as fallback'
+
+# --- Project detection used by -ProjectPath and by the main loop
+$notRepo=Join-Path $testRoot 'plain-folder'
+New-Item -ItemType Directory -Path $notRepo -Force | Out-Null
+Assert (-not (Test-ProjectDirectory -Path $notRepo)) 'Empty folder must not look like a project'
+Assert (Test-ProjectDirectory -Path $repo) 'Folder with package.json must look like a project'
+Assert (Test-ProjectDirectory -Path $notRepo -Family 'android') 'Android family must be accepted without markers'
+
+# --- Copy roots must be idempotent: the second pass may not re-copy
+$copyTarget=Join-Path $HubPath 'skills/test'
+$copyLink=Join-Path $testRoot 'copy-dest/test'
+New-JunctionOrCopy -LinkPath $copyLink -TargetPath $copyTarget -ForceCopy
+Assert (Test-Path (Join-Path $copyLink 'SKILL.md')) 'ForceCopy did not materialise the skill'
+Assert (Test-CopyUpToDate -LinkPath $copyLink -TargetPath $copyTarget) 'Fresh copy reported as out of date'
+$stamp=(Get-Item (Join-Path $copyLink 'SKILL.md')).LastWriteTimeUtc
+New-JunctionOrCopy -LinkPath $copyLink -TargetPath $copyTarget -ForceCopy
+Assert ((Get-Item (Join-Path $copyLink 'SKILL.md')).LastWriteTimeUtc -eq $stamp) 'Identical copy was rewritten'
+Set-Content (Join-Path $copyTarget 'SKILL.md') "---`nname: test`ndescription: Changed.`n---`nNew body."
+Assert (-not (Test-CopyUpToDate -LinkPath $copyLink -TargetPath $copyTarget)) 'Changed source not detected'
+
 Write-Host 'Integration checks passed. Fixtures retained under .audit-output for inspection.'
+
+# Explicit success signal: $LASTEXITCODE would otherwise leak from the last
+# native call (python/git) and report failure on a passing run.
+exit 0

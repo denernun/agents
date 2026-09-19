@@ -56,3 +56,7 @@ Assert ($scan.package -eq 'ecc-agentshield@1.6.0' -and -not $scan.mutates) 'Scan
 $gateOutput = & node (Join-Path $source 'vendor/ecc/scripts/eval-harness.js') gate run missing.json 2>&1
 Assert ($LASTEXITCODE -eq 1 -and "$gateOutput" -match 'gate.isolation_required') 'ECC execution refusal was not preserved'
 Write-Host 'ECC integration checks passed'
+
+# Explicit success signal: $LASTEXITCODE would otherwise leak from the last
+# native call (python/git) and report failure on a passing run.
+exit 0

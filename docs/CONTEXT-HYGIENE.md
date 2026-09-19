@@ -279,3 +279,108 @@ Rodado: `Install-AgentHub.ps1 -WriteAgents` → 38 projetos, EXIT 0. Também
 corrigido um `UnboundLocalError` em `agenthub_config.py` que abortava o install
 quando um `text_patch` era pedido para um `AGENTS.md` ainda inexistente
 (cloudclass-*): agora escreve o arquivo do zero nesse caso.
+
+## Revisão 2026-09-18b — rastreamento de estado consertado, Delphi de volta, reset e alvo avulso
+
+Auditoria motivada por "por que tantos problemas a cada `Install`". A resposta foi
+medida, não suposta: **o rastreador de estado estava quebrado e falhava em
+silêncio**. Os avisos `Preserved manual ...` não eram edições suas — era o
+instalador se enganando, e o efeito colateral é que ele havia **parado de
+atualizar** os arquivos always-on dos 38 repos.
+
+### 1. O bug que congelou 133 arquivos
+
+`agenthub_config.atomic()` gravava com `write_text()` sem `newline=''`. O payload
+que vem do PowerShell já tem CRLF, e o Python traduzia de novo: o disco recebia
+**CR CR LF**. Na leitura, universal newlines devolvia `\n\n`, que nunca era igual
+ao CRLF guardado no estado. Resultado medido: **0 de 133** arquivos de texto
+batiam com o snapshot; 366 arquivos de estado contra apenas 31 backups (backup só
+é escrito quando há escrita real — elas haviam cessado).
+
+Corrigido nos dois lados (`atomic` e `read_previous` usam `newline=''`). Novo
+`scripts/agenthub_repair_state.py` repara o legado: classifica cada arquivo em
+`repairable` / `resync-only` / `manual-edit` / `already-in-sync` e só mexe no que
+é provadamente conteúdo do hub — edição manual de verdade é preservada e
+reportada. Dry-run por padrão; `--apply` para gravar.
+
+### 2. A posse dos MCP era catraca de mão única
+
+Se o valor em disco divergisse uma vez, a entrada era marcada "manual" **para
+sempre**: o hub não conseguia mais atualizar nem podar. Medido: 132 de 228
+configs com `owned = {}` enquanto o disco tinha os 4-5 servidores do hub (afetava
+justo os 4 clientes que o `ai-memory` reescreve). Agora entradas já idênticas ao
+payload pretendido são readotadas — não altera o disco, só devolve a capacidade
+de gerenciar. Edição real do usuário continua preservada.
+
+Mesmo impasse existia em dois outros lugares, ambos corrigidos: `recognized`
+exigia um marcador no corpo do texto (o `decorator-placement.mdc` não tem
+nenhum), e o branch TOML não tinha caminho de adoção.
+
+### 3. Uma falha em um projeto derrubava os 38
+
+O loop principal não tinha `try/catch`. Um `package.json` malformado abortava a
+execução inteira, deixando metade da frota configurada e metade intocada — o
+mecanismo de drift. Agora cada projeto é isolado, falhas são acumuladas e
+listadas no fim com causa e caminho, e o exit code reflete.
+
+### 4. O catálogo virou fonte de verdade
+
+Famílias eram resolvidas por lista hardcoded no código (foi o que quebrou quando
+o Delphi saiu). Agora `Get-CatalogFamilies` devolve as famílias **na ordem do
+JSON** e o catch-all (`*`) vai sempre para o fim. Adicionar família é editar só o
+catálogo.
+
+O mapa IDE → pastas/MCP existia em 8 cópias divergentes. Agora há um único
+`Get-IdeRegistry` (Skills / Mcp / Property / CopySkills), lido por install,
+uninstall, os sync e os diagnósticos.
+
+### 5. Idempotência
+
+A cópia de skills do Kiro era refeita a cada execução (~40 skills × 38 repos) —
+o maior custo de I/O e a causa de o install estourar timeout. `Test-CopyUpToDate`
+compara por caminho relativo + tamanho + SHA256 e pula. Também corrigido um
+**flip-flop**: `Write-AgentsFile` e `Update-MattPocockAgentSkillsBlock` disputavam
+o `AGENTS.md` (um terminava com 2 CRLF, o outro normalizava para 1), reescrevendo
+76 arquivos em toda execução, para sempre.
+
+Execução repetida agora: **0 reescritas, 0 cópias, 0 avisos**.
+
+### 6. Delphi de volta, com skills
+
+Família `delphi` reinserida (`*-erp`), com a skill `delphi-erpclass` escrita a
+partir do código real (~2.275 `.pas`, ~1.255 `.dfm`; estrutura de `source/`;
+convenção de unit com namespace pontuado; `Global.pas`/`Funcoes.pas` como legado
+a não expandir; a armadilha de encoding ANSI/UTF-8; e referência aos
+`source/docs/*.txt` do próprio projeto em vez de duplicá-los).
+
+Diferença importante em relação à configuração antiga: **não** foi recriado o
+`disabledCommonSkills`/`disabledSkillsUntilSelected`, que deixava o projeto
+praticamente sem skills. O `erpclass-erp` passou de 22 para 36 skills.
+
+### 7. Reset e alvo avulso
+
+- `Uninstall-AgentHub.ps1 -Full -PruneState` seguido de `Install-AgentHub.ps1
+  -WriteAgents` é um reset limpo validado: remove junctions **e** as cópias do
+  Kiro, MCP, pointers e os registros de estado órfãos, e o reinstall volta ao
+  estado íntegro **sem nenhum aviso falso**. `AGENTS.md` sobrevive de propósito
+  (carrega a seção `## Local`); use `-ForceAgents` para substituí-lo.
+- `-ProjectPath <pasta>` instala/limpa em qualquer pasta do disco e **ignora
+  `D:\SISTEMAS` por completo**. Se a pasta é um repo, configura ela; se só contém
+  repos, configura os filhos. Sem o parâmetro, o comportamento normal (varrer os
+  roots do catálogo) é preservado.
+- `$env:AGENTHUB_SISTEMAS` sobrescreve o container padrão, para o hub não ficar
+  preso a uma letra de drive.
+
+### 8. Testes
+
+`scripts/Run-Tests.ps1` é o comando único (pytest + os dois testes de integração
+PowerShell), com exit code confiável. Dois defeitos de teste corrigidos: o
+`Test-Ecc.ps1` imprimia "passed" deixando `$LASTEXITCODE=1` vazado de uma chamada
+nativa, e três testes do stocktake quebravam quando o stdin do processo pai está
+redirecionado (`stdin=subprocess.DEVNULL`).
+
+O `Test-Integration.ps1` estava quebrado desde a remoção do Delphi — e ao voltar
+a rodar **capturou uma regressão real** introduzida nesta rodada
+(`OrderedDictionary` não tem `ContainsKey`), num caminho que o install não
+exercita. Cobertura nova para registro de IDE, ordem de família, detecção de
+projeto e idempotência da cópia.

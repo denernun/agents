@@ -83,6 +83,23 @@
       "cursorRule": "stack-pointer-angular.mdc",
       "extraRules": []
     },
+    "delphi": {
+      "match": [
+        "*-erp"
+      ],
+      "skills": [
+        "delphi-erpclass",
+        "codegraph",
+        "debug-issue",
+        "explore-codebase",
+        "refactor-safely",
+        "review-changes"
+      ],
+      "mcp": [],
+      "agentsTemplate": "delphi.md",
+      "cursorRule": "stack-pointer-delphi.mdc",
+      "extraRules": []
+    },
     "android": {
       "match": [
         "mobiclass-apk",

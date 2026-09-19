@@ -8,9 +8,8 @@ Import-HubFunctions
 $cat = Get-Content (Join-Path $HubPath 'catalog/projects.json') -Raw | ConvertFrom-Json
 $policy = Resolve-IdePolicy $cat
 $ides = Get-DetectedIdes -Allowed @($policy.Allowed) -Excluded @($policy.Excluded)
-$paths = @{Cursor='.cursor/skills'; Claude='.claude/skills'; Codex='.agents/skills'; Antigravity='.agents/skills'; OpenCode='.opencode/skills'; VSCode='.github/skills'; Kiro='.kiro/skills'; Devin='.devin/skills'}
-$relPaths = @($ides | ForEach-Object { $paths[$_] } | Select-Object -Unique)
-$families = @{}; foreach ($p in $cat.families.PSObject.Properties) { $families[$p.Name]=$p.Value }
+$relPaths = @((Get-IdeSkillRoots -Ides $ides).Keys)
+$families = Get-CatalogFamilies -Catalog $cat
 $script:checked = 0
 $script:failures = @()
 function Check-Scope([string]$Root, [string[]]$Names) {

@@ -10,14 +10,14 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'AgentHub.Common.ps1')
 Import-HubFunctions
 $cat = Get-Content (Join-Path $HubPath 'catalog/projects.json') -Raw | ConvertFrom-Json
-$families=@{}; foreach ($prop in $cat.families.PSObject.Properties) { $families[$prop.Name]=$prop.Value }
+$families = Get-CatalogFamilies -Catalog $cat
 if (-not $Roots.Count) { $Roots=@($cat.roots | ForEach-Object { Join-Path 'D:/SISTEMAS' $_ } | Where-Object { Test-Path $_ }) }
 $Roots=@($Roots | ForEach-Object {
   $root=$_
   $children=@($cat.roots | ForEach-Object { Join-Path $root $_ } | Where-Object { Test-Path $_ })
   if ($children.Count) { $children } else { $root }
 } | Select-Object -Unique)
-$map=@{Cursor=@('.cursor/skills','.cursor/mcp.json','mcpServers');Claude=@('.claude/skills','.mcp.json','mcpServers');Codex=@('.agents/skills','.codex/config.toml','toml');Antigravity=@('.agents/skills','.agents/mcp_config.json','mcpServers');OpenCode=@('.opencode/skills','opencode.json','mcp');VSCode=@('.github/skills','.vscode/mcp.json','servers');Kiro=@('.kiro/skills','.kiro/settings/mcp.json','mcpServers');Devin=@('.devin/skills','.devin/mcp_config.json','mcpServers')}
+$map = Get-IdeRegistry
 $rows=@()
 foreach ($root in $Roots) {
   foreach ($project in Get-ChildItem -LiteralPath $root -Directory) {
@@ -28,24 +28,24 @@ foreach ($root in $Roots) {
     $expected=@(Get-ProjectMcpServerNames -ProjectName $project.Name -FamilyCfg $families[$family] -Catalog $cat)
     if (-not (Get-NestSwaggerMcpVars $project.FullName)) { $expected=@($expected | Where-Object { $_ -ne 'openapi' }) }
     foreach ($ide in $Ides) {
-      if (-not $map.ContainsKey($ide)) { throw "Unknown IDE: $ide" }
+      if (-not $map.Contains($ide)) { throw "Unknown IDE: $ide" }
       $entry=$map[$ide]; $missing=@(); $servers=@(); $disabled=@(); $syntax='missing'
       $ideExpected=@($expected | Where-Object {
         $skip=Get-JsonProperty $cat.mcp.skipIdes $_
         @($skip) -notcontains $ide
       })
-      foreach ($name in $skills) { if (-not (Test-HubSkill (Join-Path $project.FullName "$($entry[0])/$name"))) { $missing += $name } }
-      $path=Join-Path $project.FullName $entry[1]
+      foreach ($name in $skills) { if (-not (Test-HubSkill (Join-Path $project.FullName "$($entry.Skills)/$name"))) { $missing += $name } }
+      $path=Join-Path $project.FullName $entry.Mcp
       if (Test-Path -LiteralPath $path) {
         try {
-          if ($entry[2] -eq 'toml') {
+          if ($entry.Property -eq 'toml') {
             $request=@{action='inspect-toml';path=$path} | ConvertTo-Json -Compress
             $reply=$request | & (Get-HubPython) (Join-Path $PSScriptRoot 'agenthub_config.py') | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0) { throw 'Invalid TOML' }
             $servers=@($reply.servers); $disabled=@($reply.disabled)
           } else {
             $obj=Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
-            $entries=$obj.($entry[2]); $servers=@($entries.PSObject.Properties.Name)
+            $entries=$obj.($entry.Property); $servers=@($entries.PSObject.Properties.Name)
             foreach ($prop in $entries.PSObject.Properties) { if ($prop.Value.disabled -eq $true -or $prop.Value.enabled -eq $false) { $disabled += $prop.Name } }
           }
           $syntax='valid'

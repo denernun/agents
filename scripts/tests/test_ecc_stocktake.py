@@ -46,25 +46,25 @@ class StocktakeTests(unittest.TestCase):
     def test_cli_protects_skill_sources_and_writes_external_snapshot(self):
         source = self.skill / 'SKILL.md'
         original = source.read_bytes()
-        rejected = subprocess.run([sys.executable, str(SCRIPT), '--hub', str(self.hub), '--output', str(source)], capture_output=True)
+        rejected = subprocess.run([sys.executable, str(SCRIPT), '--hub', str(self.hub), '--output', str(source)], capture_output=True, stdin=subprocess.DEVNULL)
         self.assertEqual(rejected.returncode, 1)
         self.assertEqual(source.read_bytes(), original)
         output = self.hub / 'audit.json'
-        accepted = subprocess.run([sys.executable, str(SCRIPT), '--hub', str(self.hub), '--output', str(output)], capture_output=True)
+        accepted = subprocess.run([sys.executable, str(SCRIPT), '--hub', str(self.hub), '--output', str(output)], capture_output=True, stdin=subprocess.DEVNULL)
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
         self.assertEqual(json.loads(output.read_text())['status'], 'inventoried')
 
     def test_previous_roots_must_match(self):
         previous = self.hub / 'old.json'
         previous.write_text(json.dumps(stocktake.inventory([self.hub / 'missing'])))
-        result = subprocess.run([sys.executable, str(SCRIPT), '--hub', str(self.hub), '--previous', str(previous)], capture_output=True)
+        result = subprocess.run([sys.executable, str(SCRIPT), '--hub', str(self.hub), '--previous', str(previous)], capture_output=True, stdin=subprocess.DEVNULL)
         self.assertEqual(result.returncode, 1)
 
     def test_incomplete_current_snapshot_never_reports_removals(self):
         previous = self.hub / 'old.json'
         previous.write_text(json.dumps(stocktake.inventory([self.skills])))
         (self.skill / 'SKILL.md').write_text('Malformed metadata')
-        result = subprocess.run([sys.executable, str(SCRIPT), '--hub', str(self.hub), '--previous', str(previous)], capture_output=True)
+        result = subprocess.run([sys.executable, str(SCRIPT), '--hub', str(self.hub), '--previous', str(previous)], capture_output=True, stdin=subprocess.DEVNULL)
         self.assertEqual(result.returncode, 1)
         self.assertIn(b'comparison refused', result.stderr)
         self.assertEqual(result.stdout, b'')

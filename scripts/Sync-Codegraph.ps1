@@ -76,9 +76,10 @@ foreach ($project in $Projects) {
   }
   # Add the graph skill wherever the hub already installed navigation skills.
   # Kiro does not follow junctions in .kiro/skills, so copy there instead.
-  foreach ($relative in @('.agents/skills','.cursor/skills','.claude/skills','.opencode/skills','.github/skills','.kiro/skills','.devin/skills')) {
+  $graphRoots = Get-IdeSkillRoots -Ides @((Get-IdeRegistry).Keys)
+  foreach ($relative in $graphRoots.Keys) {
     if (Test-Path (Join-Path $repo "$relative/explore-codebase")) {
-      $forceCopy = $relative -eq '.kiro/skills'
+      $forceCopy = [bool]$graphRoots[$relative]
       New-JunctionOrCopy -LinkPath (Join-Path $repo "$relative/codegraph") -TargetPath (Join-Path $HubPath 'skills/codegraph') -DryRun:$DryRun -ForceCopy:$forceCopy
     }
   }

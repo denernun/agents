@@ -88,22 +88,14 @@ function Write-HubText {
 
 function Remove-HubIdeArtifacts {
   param([string]$RepoPath, [string]$Ide, [string[]]$ActiveIdes = @(), [switch]$DryRun)
-  $map = @{
-    Cursor=@('.cursor/skills', '.cursor/mcp.json', 'mcpServers')
-    Claude=@('.claude/skills', '.mcp.json', 'mcpServers')
-    Codex=@('.agents/skills', '.codex/config.toml', 'toml')
-    Antigravity=@('.agents/skills', '.agents/mcp_config.json', 'mcpServers')
-    OpenCode=@('.opencode/skills', 'opencode.json', 'mcp')
-    VSCode=@('.github/skills', '.vscode/mcp.json', 'servers')
-    Kiro=@('.kiro/skills', '.kiro/settings/mcp.json', 'mcpServers')
-    Devin=@('.devin/skills', '.devin/mcp_config.json', 'mcpServers')
-    Qoder=@('.qoder/skills', '.qoder/mcp.json', 'mcpServers')
-  }
-  if (-not $map.ContainsKey($Ide)) { return }
-  $entry = $map[$Ide]
-  $sharedInUse = $entry[0] -eq '.agents/skills' -and @($ActiveIdes | Where-Object { $_ -in @('Codex','Antigravity') }).Count -gt 0
+  $registry = Get-IdeRegistry
+  if (-not $registry.Contains($Ide)) { return }
+  $entry = $registry[$Ide]
+  # .agents/skills is shared by Codex and Antigravity: only clear it when
+  # neither of them is still active.
+  $sharedInUse = $entry.Skills -eq '.agents/skills' -and @($ActiveIdes | Where-Object { $_ -in @('Codex','Antigravity') }).Count -gt 0
   if (-not $sharedInUse) {
-    $root = Join-Path $RepoPath $entry[0]
+    $root = Join-Path $RepoPath $entry.Skills
     foreach ($item in Get-ChildItem -LiteralPath $root -Directory -Force -ErrorAction SilentlyContinue) {
       Remove-HubLink -Path $item.FullName -Root $RepoPath -HubPath $HubPath -DryRun:$DryRun
     }
@@ -113,14 +105,21 @@ function Remove-HubIdeArtifacts {
       Remove-HubLink -Path $item.FullName -Root $RepoPath -HubPath $HubPath -DryRun:$DryRun
     }
   }
-  $path = Join-Path $RepoPath $entry[1]
+  $path = Join-Path $RepoPath $entry.Mcp
   if (Test-Path -LiteralPath $path) {
     $request = @{path=$path; remove=$true; dry=[bool]$DryRun}
-    if ($entry[2] -eq 'toml') { $request.format='toml' } else { $request.property=$entry[2] }
+    if ($entry.Property -eq 'toml') { $request.format='toml' } else { $request.property=$entry.Property }
     Invoke-HubConfig $request
   }
+  # Cursor's rule files are whatever templates/rules currently holds, so they
+  # are enumerated instead of listed: a hardcoded list went stale the moment a
+  # family was added or removed (it still named the retired Delphi pointer).
+  $cursorPointers = @('.cursorrules')
+  foreach ($rule in Get-ChildItem -LiteralPath (Join-Path $HubPath 'templates\rules') -Filter '*.mdc' -File -ErrorAction SilentlyContinue) {
+    $cursorPointers += ".cursor/rules/$($rule.Name)"
+  }
   $pointers = @{
-    Cursor=@('.cursorrules','.cursor/rules/stack-pointer-nestjs.mdc','.cursor/rules/stack-pointer-angular.mdc','.cursor/rules/stack-pointer-delphi.mdc','.cursor/rules/stack-pointer-android.mdc','.cursor/rules/decorator-placement.mdc')
+    Cursor = $cursorPointers
     Claude=@('CLAUDE.md'); VSCode=@('.github/copilot-instructions.md')
     Antigravity=@('.agents/rules/stack-pointer.md'); Kiro=@('.kiro/steering/stack-pointer.md')
   }

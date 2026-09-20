@@ -118,7 +118,7 @@ TypeORM / PostgreSQL
 | **Decorators**            | `src/decorators/`                 | Decorators customizados (`@User`, `@Device`, `@Role`, `@Logger`)               |
 | **Pipes**                 | `src/pipes/`                      | Pipes customizados                                                             |
 | **Exceptions**            | `src/exceptions/`                 | `BaseException` e derivadas transversais                                       |
-| **Metrics**               | `src/metrics/`                    | Pyroscope, tracing                                                             |
+| **Metrics**               | `src/metrics/`                    | Prometheus RED + health, Pyroscope, tracing — **obrigatório em todo serviço**  |
 | **Helper**                | `src/helper/`                     | Utilidades puras (`toDate`, `toInteger`, `ColumnIntTransformer`)               |
 | **Core**                  | `src/app.*.ts`                    | `AppModule`, `AppException` (global filter), `AppInterceptor`, `AppMiddleware` |
 
@@ -293,6 +293,8 @@ Checklist, template TypeScript e auditoria de **erpclass-kb** / **erpclass-bot**
 ### 2.10 Bootstrap — `src/main.ts` (estrutura padrão da família)
 
 **Referência canônica: `erpclass-dash-api/src/main.ts`** (o mais completo, com RMQ). Para um serviço **sem fila**, o template mais próximo é `erpclass-kb/src/main.ts`. `erpclass-api`, `erpclass-auth`, `erpclass-bot`, `erpclass-cob-api`, `erpclass-cota-api`, `erpclass-hook`, `erpclass-sync`, `nfeclass-api`, `mobiclass-api`, `crmclass-api` e `erpclass-connect-api` seguem todos o mesmo conceito. Todo serviço NestJS novo **deve** partir dessa estrutura.
+
+> **Métricas/observabilidade (`src/metrics/` — Prometheus RED + `GET /health`, Pyroscope, tracing) são obrigatórias em todo serviço novo, sem exceção — decisão fixa, não uma opção de escopo.** Isso vale **independente** de o serviço ter TypeORM/Postgres, RabbitMQ, ou qualquer outra peça de infra: um bootstrap mínimo (ex.: um serviço só-webhook, sem banco e sem fila) ainda leva `MetricsModule` completo. Nenhum agente deve remover, adiar ou tornar opcional essa peça ao criar um serviço novo, mesmo que o pedido do usuário descreva um "primeiro corte enxuto" — se o pedido não menciona métricas explicitamente, isso não é permissão para omiti-las. Ver `metricas.md` (checklist completo) e §2.7/§2.8 (módulo global).
 
 Ordem obrigatória dentro de `main.ts`:
 
@@ -565,6 +567,7 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 - [ ] Exceções de negócio como classes derivadas de `BaseException`, mensagens em português.
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).
 - [ ] `src/main.ts` segue a estrutura padrão da família (§2.10): OTel antes dos imports do Nest, import lazy de `NestFactory`/`AppModule`, logger Winston + `app.useLogger`, CORS explícito (sem `cors: true`), Swagger só em `development`, `trust proxy`. Referência: `erpclass-dash-api/src/main.ts`.
+- [ ] `MetricsModule` (Prometheus RED + `GET /health`) presente no `AppModule` — obrigatório em todo serviço novo, mesmo sem TypeORM/RabbitMQ (§2.10). Checklist completo: [metricas.md](metricas.md).
 - [ ] Swagger: checklist em [swagger.md](swagger.md) — `@ApiTags` + `@ApiOperation` + `@ApiResponse` (200/201, 400, 401/403 se autenticado); Bearer/`apiKey` no DocumentBuilder. Plugin CLI com `dtoFileNameSuffix` completo. Sem `@ApiProperty` nos DTOs (exceto gaps do plugin).
 - [ ] Testes (§5.1/§5.2): unitários de Application/Database, mais integração de Repository/Migration
       se a mudança tocou essas camadas — suíte rodada e **passando**, não só escrita.

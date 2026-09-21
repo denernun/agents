@@ -43,6 +43,34 @@ Nome de domínio em **português** quando o domínio já é português (`cliente
 `pedidos`, `comissoes`) — o vocabulário técnico (`Repository`, `Database`,
 `getById`) continua em inglês. Ver SKILL.md §1.2.
 
+## 2.1 Projeto com mais de uma persona e/ou mais de um banco
+
+Sinal de alerta: a mesma palavra (`admin`, `operator`, `internal`, ...)
+nomeando duas coisas diferentes no projeto — normalmente uma persona
+(quem chama a API) e um banco (onde o dado mora). Caso real, documentado em
+`cloudclass-api` [ADR-0006]:
+
+- **`application/` e `controllers/` dividem por PERSONA** — quem consome a
+  API decide o lado, não o banco. `application/admin/`, `controllers/admin/`
+  para o operador/suporte; `application/app/`, `controllers/app/` para o
+  usuário final. Uma feature cujo dado mora no banco "app" mas que só o
+  operador acessa (ex.: um catálogo de referência usado só num formulário
+  administrativo) ainda fica do lado `admin` nessas duas camadas — é a
+  persona que decide.
+- **`domain/` divide por BANCO** — `domain/admin/{entities,repositories,
+  database,migrations}/` para o banco administrativo, `domain/app/{...}/`
+  para o banco do produto. Infra genuinamente compartilhada entre os dois
+  bancos (`base.entity.ts`, `repository.base.ts`, `database.base.ts`,
+  `database.interface.ts`, um `UserInterface` só de leitura do JWT) fica na
+  raiz de `domain/`, fora dos dois lados — mover isso para dentro de um dos
+  dois criaria uma dependência de "admin" para "app" (ou vice-versa) só para
+  reusar uma classe base.
+- **Nunca reuse a mesma palavra para os dois eixos.** Se o projeto já chama
+  a persona de "operator" e o banco de "admin" (ou qualquer par parecido),
+  escolha uma palavra e migre a outra — não deixe as duas convivendo.
+
+[ADR-0006]: (cloudclass-api) docs/adr/0006-admin-app-persona-e-database-split.md
+
 ## 3. Mapa de arquivos (13 arquivos por feature+agregado)
 
 Exemplo: feature `accountings`, agregado `accounting`.

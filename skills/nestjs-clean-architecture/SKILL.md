@@ -8,7 +8,9 @@ Gere código, correções e refatorações que sigam **rigorosamente** as diretr
 
 - Interaja em **português** no chat.
 - Escreva **todo o código, identificadores, comentários e JSDoc em inglês**.
-- Em caso de conflito entre "boas práticas genéricas" e "padrões observados no projeto", **os padrões do projeto vencem**.
+- **Este skill é a autoridade de arquitetura, e vence o código vizinho.** Onde o código existente diverge do que está aqui, o **código** é o legado — não o skill. Nunca justifique uma escolha com "é assim que o módulo ao lado faz": valide contra este documento e contra o modelo obrigatório [estrutura-padrao.md](estrutura-padrao.md) **antes** de copiar qualquer coisa.
+- **Divergência nunca é silenciosa.** Precisou fugir do padrão? Reporte, explique o custo/benefício, **peça confirmação** e registre em `docs/adr/` do repo. Divergência não registrada é bug, não estilo.
+- Em conflito entre "boas práticas genéricas" de fora e o que está aqui, **este documento vence** — ele reflete a arquitetura acordada da família.
 
 ---
 
@@ -341,6 +343,14 @@ Ordem obrigatória dentro de `main.ts`:
 
 ## 3. Fluxo para Criar uma Nova Feature
 
+> 🧱 **Use o modelo: [estrutura-padrao.md](estrutura-padrao.md).** Ele é
+> **obrigatório em todos os projetos** e traz os 13 arquivos da feature com
+> esqueleto pronto para copiar, o wiring nos módulos globais, o checklist de PR
+> e as armadilhas que já custaram retrabalho (entidade fora do `entities` do
+> DataSource, `cache` com o cliente errado, paginação sem desempate, artefato
+> não registrado). **Copie de lá, nunca do módulo vizinho** — o vizinho pode ser
+> legado. Os passos abaixo são o roteiro; o modelo é o molde.
+
 > ⚠️ **Nenhuma feature está completa sem Swagger.** Mesmo que o pedido do usuário mencione só "cria o controller de X" ou "adiciona a rota Y", o passo 5 abaixo **inclui** `@ApiTags`/`@ApiOperation`/`@ApiResponse`/`@ApiBearerAuth` — não é um extra opcional a acrescentar depois. Antes de considerar a feature pronta, confira o checklist de [swagger.md](swagger.md).
 
 Ordem **de dentro para fora** (domínio → infraestrutura → aplicação → apresentação):
@@ -419,7 +429,7 @@ Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CON
 ## 5. Testing
 
 - Framework: **Vitest** (`npm test` / `test:watch` / `test:cov`). Referência: `erpclass-kb` e `erpclass-auth` — `vitest.config.mts` + `unplugin-swc` (decorator metadata) + `test/setup.ts`. Specs `*.spec.ts` ao lado do código. **Não use Jest.**
-- **Pin da família: `vitest` + `@vitest/coverage-v8` em `4.1.11` (exato, sem `^`).** Não subir para Vitest 5.x: com `import { describe, it, expect, vi } from 'vitest'` o runner quebra (`TypeError: Cannot read properties of undefined (reading 'config')`). `globals: true` no `vitest.config.mts` + APIs globais (sem import de `vitest`) é o padrão; `vi` no setup se o projeto ainda usa `jest.fn` legado.
+- **Versão de `vitest` + `@vitest/coverage-v8`: exata (sem `^`) e uniforme dentro do repositório.** ERPCLASS está em `4.1.11`; CloudClass está em `5.0.0`. **Vitest 5.x funciona:** a auditoria de 2026-09-20 rodou `cloudclass-api` (189 testes), `cloudclass-auth` (258) e `cloudclass-hook` (26) verdes em `5.0.0`, incluindo specs que fazem `import { describe, it, expect, vi } from 'vitest'`. A versão anterior deste texto afirmava que 5.x quebrava o runner (`TypeError: Cannot read properties of undefined (reading 'config')`) — não se reproduz, e o pin em `4.1.11` deixa de ser obrigatório. Ressalva real do 5.x: o reporter `basic` foi removido, então `--reporter=basic` falha na partida. `globals: true` no `vitest.config.mts` + APIs globais é o padrão; `vi` no setup se o projeto ainda usa `jest.fn` legado.
 - Mocks: `vi.fn()` / `vi.clearAllMocks()` (API compatível com o antigo `jest.fn`).
 - **Arrange-Act-Assert** para testes unitários; **Given-When-Then** para testes de aceitação de módulo.
 - Nomenclatura de variáveis de teste: `inputX`, `mockX`, `actualX`, `expectedX`.

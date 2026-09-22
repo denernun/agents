@@ -15,6 +15,9 @@
   --ds-text-muted: var(--cui-secondary-color, #64748b);
   --ds-primary: #6366f1;
   --ds-primary-hover: #4f46e5;
+  // Text/icon color on a solid --ds-primary surface. Same in both themes, as
+  // with ds-badge--*: the solid accent does not flip with the color mode.
+  --ds-primary-contrast: #ffffff;
   --ds-primary-soft: rgb(99 102 241 / 0.12);
   --ds-success: #10b981;
   --ds-info: #3b82f6;

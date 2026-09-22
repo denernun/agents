@@ -113,6 +113,7 @@ token `--ds-*`; nada de cor, superficie ou sombra em hex solto nas telas.
 | `--ds-text-muted` | `#64748b`     | Texto secundario       |
 | `--ds-primary`    | `#6366f1`     | Acoes principais       |
 | `--ds-primary-hover` | `#4f46e5`  | Hover da primaria      |
+| `--ds-primary-contrast` | `#ffffff` | Texto/icone sobre superficie solida `--ds-primary` (igual nos dois temas) |
 | `--ds-primary-soft`  | `rgb(99 102 241 / .12)` | Fundo suave da primaria |
 | `--ds-success`    | `#10b981`     | Sucesso                |
 | `--ds-info`       | `#3b82f6`     | Informacao             |
@@ -1758,6 +1759,19 @@ respeita dark mode. So faz sentido incluir em projetos com a dependencia
 | `ds-search-field`  | Busca global no header                          |
 | `ds-header-account`| Seletor de empresa no header                    |
 | `ds-kbd`           | Badge de atalho (Ctrl+K)                        |
+| `ds-form-section`  | Bloco de campos agrupados dentro de um painel   |
+| `ds-form-section__title` | Titulo (caption) do bloco de campos       |
+
+Um grupo de campos dentro do corpo de um painel usa `ds-form-section` — nunca
+um `border rounded-3 p-3` improvisado. Superficie, borda e raio vem de tokens,
+entao o bloco continua legivel nos dois temas:
+
+```html
+<section class="ds-form-section">
+  <h6 class="ds-form-section__title">Identificacao</h6>
+  <div class="row g-3">...</div>
+</section>
+```
 
 ### Componentes (`_ds-components.scss`)
 

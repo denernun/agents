@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, HostListener, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
 /**
  * Presentational modal shell with backdrop, Escape-to-close, and footer slot.
@@ -8,6 +8,7 @@ import { ChangeDetectionStrategy, Component, HostListener, input, output } from 
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'ds-modal-host',
+    '(document:keydown.escape)': 'onEscape()',
   },
   template: `
     <div class="ds-modal-backdrop" (click)="onBackdropClick()" aria-hidden="true"></div>
@@ -30,7 +31,6 @@ export class UiModalComponent {
 
   readonly titleId: string = `ds-modal-title-${Math.random().toString(36).slice(2, 9)}`;
 
-  @HostListener('document:keydown.escape')
   public onEscape(): void {
     this.closed.emit();
   }

@@ -57,17 +57,26 @@ nomeando duas coisas diferentes no projeto — normalmente uma persona
   operador acessa (ex.: um catálogo de referência usado só num formulário
   administrativo) ainda fica do lado `admin` nessas duas camadas — é a
   persona que decide.
-- **`domain/` divide por BANCO** — `domain/admin/{entities,repositories,
-  database,migrations}/` para o banco administrativo, `domain/app/{...}/`
-  para o banco do produto. Infra genuinamente compartilhada entre os dois
-  bancos (`base.entity.ts`, `repository.base.ts`, `database.base.ts`,
-  `database.interface.ts`, um `UserInterface` só de leitura do JWT) fica na
-  raiz de `domain/`, fora dos dois lados — mover isso para dentro de um dos
-  dois criaria uma dependência de "admin" para "app" (ou vice-versa) só para
-  reusar uma classe base.
+- **`domain/` divide por BANCO, em três pastas** — `domain/admin/{entities,
+  repositories,database,migrations}/` para o banco administrativo,
+  `domain/app/{...}/` para o banco do produto, `domain/shared/{entities,
+  repositories,database}/` para a infra genuinamente compartilhada entre os
+  dois (`base.entity.ts`, `repository.base.ts`, `database.base.ts`,
+  `database.interface.ts`, um `UserInterface` só de leitura do JWT, o
+  `DatabaseModule` raiz que importa `admin/database` + `app/database` juntos).
+  `domain/shared/` **nunca leva regra de negócio** — só classe base técnica
+  sem dono de feature. Uma constante/função de negócio de UMA feature (ex.:
+  duração de trial, cálculo de desconto) não vai para `shared` mesmo que outra
+  feature futura vá importá-la — fica junto da feature dona, do mesmo jeito
+  que `MembershipApplication` já lê `CompanyRepository` direto hoje.
 - **Nunca reuse a mesma palavra para os dois eixos.** Se o projeto já chama
   a persona de "operator" e o banco de "admin" (ou qualquer par parecido),
   escolha uma palavra e migre a outra — não deixe as duas convivendo.
+- **Simetria de nomes nos dois bancos, sem exceção**: se o admin tem
+  `connection.admin.ts`/`connectionAdmin`/`POSTGRES_SOURCE_ADMIN`, o lado app
+  usa exatamente o mesmo padrão — `connection.app.ts`/`connectionApp`/
+  `POSTGRES_SOURCE_APP`, nunca um nome histórico tipo `connection.source.ts`/
+  `POSTGRES_SOURCE` sobrevivendo sozinho depois que o par ganhou nome novo.
 
 [ADR-0006]: (cloudclass-api) docs/adr/0006-admin-app-persona-e-database-split.md
 

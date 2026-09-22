@@ -32,6 +32,14 @@ export function computeDateRangePreset(preset: DateRangePreset): readonly [Date,
   }
 }
 
+function rangeKey(start: Date, end: Date): string {
+  // Calendar-day identity — ngx-bootstrap may rewrite the same range with
+  // different millisecond precision, which must not count as a new emit.
+  const startDay = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
+  const endDay = `${end.getFullYear()}-${end.getMonth()}-${end.getDate()}`;
+  return `${startDay}:${endDay}`;
+}
+
 /**
  * Date-range filter used on every dashboard/list page that filters by
  * period: a quick-select shortcuts dropdown (Hoje / 7 dias / 30 dias / Mês
@@ -40,6 +48,10 @@ export function computeDateRangePreset(preset: DateRangePreset): readonly [Date,
  * pages — see design-system.md §"ngx-bootstrap suite" for the full contract
  * (global `BsDatepickerConfig`/`BsDaterangepickerConfig`, `containerClass:
  * 'ds-datepicker'`, locale registration).
+ *
+ * Emits only when the range actually changes. Programmatic preset/model writes
+ * suppress the ngx-bootstrap `bsValueChange` echo that would otherwise storm
+ * the parent with duplicate loads (and trip API rate limits).
  */
 @Component({
   selector: 'app-date-range-filter',
@@ -83,6 +95,10 @@ export class DateRangeFilterComponent implements OnInit {
 
   protected rangeValue: Date[] = [];
 
+  /** Ignores picker echoes while we write `rangeValue` ourselves. */
+  private suppressPickerEmit = false;
+  private lastEmittedKey: string | null = null;
+
   public ngOnInit(): void {
     this.applyPreset(this.initialPreset());
   }
@@ -91,22 +107,44 @@ export class DateRangeFilterComponent implements OnInit {
     this.applyPreset(preset);
   }
 
-  protected onPickerChange(dates: Date[]): void {
-    if (dates?.[0] && dates?.[1]) {
-      this.rangeValue = dates;
-      this.emit();
+  protected onPickerChange(dates: Date[] | undefined): void {
+    if (this.suppressPickerEmit) {
+      return;
     }
+    if (!dates?.[0] || !dates?.[1]) {
+      return;
+    }
+    if (rangeKey(dates[0], dates[1]) === this.lastEmittedKey) {
+      return;
+    }
+    this.suppressPickerEmit = true;
+    this.rangeValue = dates;
+    this.emitIfChanged();
+    setTimeout(() => {
+      this.suppressPickerEmit = false;
+    });
   }
 
   private applyPreset(preset: DateRangePreset): void {
+    this.suppressPickerEmit = true;
     this.rangeValue = [...computeDateRangePreset(preset)];
-    this.emit();
+    this.emitIfChanged();
+    // ngx-bootstrap may echo `bsValueChange` after the model write settles.
+    setTimeout(() => {
+      this.suppressPickerEmit = false;
+    });
   }
 
-  private emit(): void {
+  private emitIfChanged(): void {
     const [start, end] = this.rangeValue;
-    if (start && end) {
-      this.rangeChange.emit([start, end]);
+    if (!start || !end) {
+      return;
     }
+    const key = rangeKey(start, end);
+    if (key === this.lastEmittedKey) {
+      return;
+    }
+    this.lastEmittedKey = key;
+    this.rangeChange.emit([start, end]);
   }
 }

@@ -14,17 +14,19 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       @if (title()) {
         <div class="ds-panel__header">
           <div class="ds-panel__heading">
-            <h3 class="ds-panel__title">
-              @if (icon()) {
-                <span class="ds-panel__title-icon"><i [class]="icon()"></i></span>
-              }
-              {{ title() }}
-            </h3>
-            @if (subtitle()) {
-              <p class="ds-panel__subtitle">{{ subtitle() }}</p>
+            @if (icon()) {
+              <span class="ds-panel__title-icon"><i [class]="icon()"></i></span>
             }
+            <div class="min-w-0">
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <h3 class="ds-panel__title mb-0">{{ title() }}</h3>
+                <ng-content select="[uiCardActions]" />
+              </div>
+              @if (subtitle()) {
+                <p class="ds-panel__subtitle">{{ subtitle() }}</p>
+              }
+            </div>
           </div>
-          <ng-content select="[uiCardActions]" />
         </div>
       }
       <div class="ds-panel__body" [class.ds-panel__body--flush]="noPadding()">

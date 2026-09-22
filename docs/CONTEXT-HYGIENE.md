@@ -530,3 +530,30 @@ ausente no Codex; `cloudclass-www` tem `frontend-ui-engineering` e chrome-devtoo
 (via extra) mas **não** `browser-testing-with-devtools`; `erpclass-api` (nestjs)
 recebe as 6 comuns e nenhuma das de navegador. `Test-AgentHub`: 180 linhas, 0
 faltando. `Inventory`: 526 linhas, nada acima de 2 KB.
+
+## Revisão 2026-09-21 — Claude Code passa a ler `AGENTS.md` nativamente (fallback ≥ 2.1.277)
+
+A Revisão 2026-08-20 (linha "Não gravar CLAUDE.md extra: o Claude Code já lê
+AGENTS.md") era aspiracional, não verificada: na prática, versões do Claude
+Code anteriores à 2.1.277 **ignoravam** `AGENTS.md` e só liam `CLAUDE.md`. Prova
+encontrada no disco: `CRMCLASS/crmclass-www/CLAUDE.md` continha só `@AGENTS.md`
+— um workaround manual (sintaxe de import do Claude Code) criado para forçar o
+carregamento do `AGENTS.md` enquanto o fallback nativo não existia.
+
+A partir da versão **2.1.277** do Claude Code, quando não há `CLAUDE.md` no
+projeto o agente passa a procurar e usar `AGENTS.md` automaticamente
+(confirmado nesta máquina com `claude --version` → `2.1.278`). Isso torna a
+afirmação da Revisão 2026-08-20 finalmente verdadeira, sem exigir nenhuma
+mudança no `Install-AgentHub.ps1`:
+
+- O instalador **nunca** teve uma função `Write-ClaudePointer` — só escreve
+  `AGENTS.md` (todas as famílias) e a entrada `Claude=@('CLAUDE.md')` em
+  `AgentHub.Common.ps1` (cleanup de pointers legados quando o IDE é desativado).
+- Os templates em `templates/agents/*.md` já são agnósticos de ferramenta
+  (idioma, skills, MCP) — servem como always-on tanto para Codex/Antigravity
+  quanto para Claude, sem ajuste.
+- O workaround `crmclass-www/CLAUDE.md` (`@AGENTS.md`) ficou redundante e deve
+  ser removido manualmente (não é um arquivo gerenciado pelo hub).
+
+Comportamento pode ser alterado por projeto com `/config` no Claude Code, caso
+algum repo precise voltar a exigir `CLAUDE.md` explícito.

@@ -7,6 +7,7 @@
 // .ds-search-field   → header/search bar with icon + shortcut
 // .ds-header-account → header company selector
 // .ds-kbd            → keyboard shortcut badge (Ctrl+K, etc.)
+// .ds-form-section   → grouped field block inside a panel body (fieldset box)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Text inputs ─────────────────────────────────────────────────────────────
@@ -330,4 +331,25 @@ $ds-select-font-size: 0.875rem;
   padding: 0.75rem 1.25rem;
   border-top: 1px solid var(--ds-border);
   background: var(--ds-surface-header, var(--ds-surface-muted));
+}
+
+// ── Form section (grouped field block inside a panel body) ──────────────────
+// Boxed group of related fields. Never a bespoke `border rounded-3 p-3`:
+// surface, border and radius come from tokens so both themes stay legible.
+.ds-form-section {
+  padding: var(--ds-pad-card);
+  color: var(--ds-text);
+  background: var(--ds-surface-muted);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-card);
+}
+
+.ds-form-section__title {
+  margin: 0 0 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ds-text-muted);
 }

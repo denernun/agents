@@ -205,10 +205,10 @@
     "Codex",
     "OpenCode",
     "Antigravity",
-    "Kiro",
     "VSCode"
   ],
   "excludeIdes": [
+    "Kiro",
     "Devin"
   ],
   "excludeProjectNames": [

@@ -200,6 +200,29 @@ administrativa, muita informacao por tela).
 Evitar `gap-4` / `mb-4` / `p-4` avulsos nas telas; o ritmo vertical vem do
 page-header + grids (`--ds-gap-section`), nao de margens soltas.
 
+**Esqueleto de pagina (obrigatorio): `ds-section-stack`.** Raiz de toda
+pagina e todo agrupamento vertical de secoes = `<div class="w-100
+ds-section-stack">` --- nunca `d-flex flex-column gap-4` (1.5rem de gap
+**somado** ao `margin-bottom` de 1rem dos grids = 2.5rem entre secoes, o
+espacamento duplo/desalinhado). O `ds-section-stack` usa `gap
+--ds-gap-section` e **zera** o `margin-bottom` de filhos diretos
+(`ds-kpi-grid`, `ds-dashboard-grid`, `ds-filter-panel`, `ds-alert`) e do
+ultimo bloco renderizado dentro de um componente filho (`app-page-header`,
+`app-filter-bar`, um componente cujo template e um `ds-kpi-grid`), entao
+gap e margem nunca somam. Alertas dentro do stack **sem** `mb-*`.
+
+Titulo de secao entre blocos = `ds-section-heading` (nunca `h2.fs-6
+fw-semibold` avulso):
+
+```html
+<div class="w-100 ds-section-stack">
+  <app-page-header title="Vendas" icon="fas fa-chart-line" />
+  <app-dashboard-filter />
+  <div class="ds-section-heading"><h2 class="ds-section-heading__title">Desempenho</h2></div>
+  <div class="ds-dashboard-grid ds-dashboard-grid--two">...</div>
+</div>
+```
+
 Preferir utilities Bootstrap (`gap-*`, `mb-*`, `p-*`) a CSS proprio — dentro
 dos limites dos tokens acima.
 
@@ -423,6 +446,8 @@ KPI com icone de acento, valor, chip de variacao e sparkline opcional.
 | `subtitle`       | `string?`                                       | ---         |
 | `variation`      | `number?` (percentual; sinal define up/down)    | ---         |
 | `variationLabel` | `string?`                                       | ---         |
+| `goodDirection`  | `'up' \| 'down'` (qual direcao e "boa"; define a cor do chip, nao a seta) | `'up'` |
+| `tooltipText`    | `string?` (tooltip no label --- formula/explicacao do KPI) | --- |
 | `icon`           | `string?` (classe FA)                            | ---         |
 | `color`          | `'primary' \| 'success' \| 'info' \| 'warning' \| 'danger' \| 'neutral'` | `'primary'` |
 | `variant`        | `'default' \| 'hero' \| 'metric'`               | `'default'` |
@@ -441,7 +466,9 @@ Classes: `.ds-stat-card` (+ `--<cor>`, `--hero`, `--metric`). `min-height`
 
 Painel de filtros com header titulado. Renderiza um `.ds-panel
 .ds-filter-panel` com `.row.g-3` no corpo (colunas `col-md-*` como
-conteudo projetado).
+conteudo projetado). O espaco abaixo vem de `.ds-filter-panel`
+(`margin-bottom --ds-gap-section`, zerado dentro de `ds-section-stack`) ---
+o template **nao** leva `mb-4`.
 
 | Input     | Tipo      | Default     |
 | --------- | --------- | ----------- |
@@ -482,6 +509,14 @@ Wrapper de tabela (`table.ds-table` dentro de um `ds-panel`/`app-ui-card`).
 | ------------ | --------- | ------- |
 | `alignMiddle`| `boolean` | `true`  |
 | `fixedRows`  | `boolean` | `true`  |
+| `fixedHeight`| `boolean` | `false` (viewport com altura fixa de header + N linhas: `ds-table__viewport--fixed-rows`) |
+| `fixedRowCount` | `number` | `10` |
+
+**Card com abas (grid de altura fixa):** o painel recebe
+`ds-tab-panel--fixed-grid` e o corpo `ds-tab-panel__content` (+ `__empty`,
+`__scroll`, `__summary`, `__pagination`); cada aba usa `app-ui-data-table
+[fixedHeight]="true"` e `app-ui-table-pagination [reserveSpace]="true"`,
+entao trocar de aba ou aba vazia nunca redimensiona o card.
 
 Regras (canonicas):
 
@@ -569,7 +604,12 @@ Container generico (painel / superficie).
 | `icon`      | `string?` | ---     |
 | `noPadding` | `boolean` | `false` |
 
-Slots de rodape: `[uiCardFooter]`.
+Header: `.ds-panel__heading` (coluna: titulo + subtitulo abaixo); o icone
+fica **dentro** de `.ds-panel__title` (linha flex icone + texto) --- mesma
+marcacao de `app-chart-card` e `app-filter-bar`. Acoes do header
+(`[uiCardActions]`) ficam a direita.
+
+Slots: `[uiCardActions]` (header, a direita), `[uiCardFooter]`.
 
 ## 11.8 Ui Button --- `app-ui-button`
 
@@ -598,6 +638,30 @@ fundo `--ds-surface-header`.
 | ---------------- | ------------------- | ------- |
 | `title`          | `string` (required) | ---     |
 | `closeOnBackdrop`| `boolean`           | `true`  |
+| `size`           | `'md' \| 'lg' \| 'xl'` (`ds-modal--lg` / `--xl`) | `'md'` |
+
+**Footer (mandatory pattern).** `<ng-content select="[uiModalFooter]" />` is a
+bare projection slot --- it does **not** style whatever element it projects.
+The element you mark `uiModalFooter` must carry the `ds-modal__footer` class
+itself, or the action buttons render with **zero padding and no top border**,
+flush against the modal's edges (confirmed bug: `d-flex justify-content-end
+gap-2` alone on the footer div left "Cancelar"/"Cadastrar" touching the
+modal's own padding-less edge on every side).
+
+```html
+<app-ui-modal title="..." (closed)="close()">
+  <form>...</form>
+  <div uiModalFooter class="ds-modal__footer">
+    <button type="button" class="btn btn-outline-secondary" (click)="close()">Cancelar</button>
+    <button type="button" class="btn btn-primary" (click)="submit()">Salvar</button>
+  </div>
+</app-ui-modal>
+```
+
+Prohibited: `<div uiModalFooter class="d-flex justify-content-end gap-2">`
+(or any other ad-hoc flex/gap utility combo) in place of `ds-modal__footer` ---
+`ds-modal__footer` already provides the flex layout, gap, padding, and
+`border-top`; do not re-derive it with Bootstrap utilities.
 
 ## 11.10 Ui Dropdown --- `app-ui-dropdown`
 
@@ -809,7 +873,7 @@ Secondary        -> ds-dashboard-grid--two / --three
 Tables / Rankings
 ```
 
-Grids (todos com `gap --ds-gap-grid` = `0.75rem`, `margin-bottom --ds-gap-section` = `1rem`, filhos `height:100%`):
+Grids (todos com `gap --ds-gap-grid` = `0.75rem`, `margin-bottom --ds-gap-section` = `1rem` --- zerado dentro de `ds-section-stack` ---, filhos `height:100%`):
 
 | Classe                        | Colunas (>= breakpoint)                         |
 | ----------------------------- | ---------------------------------------------- |
@@ -1771,6 +1835,21 @@ entao o bloco continua legivel nos dois temas:
   <h6 class="ds-form-section__title">Identificacao</h6>
   <div class="row g-3">...</div>
 </section>
+```
+
+**Campo monetario (obrigatorio).** Nunca `type="number"` para um valor em
+reais --- o usuario tenta digitar `79,90` (formato pt-BR) e o campo so aceita
+digitos, sem separador decimal navegavel (confirmado: usuario digitou `7990`
+num `type="number"` sem mascara e nao conseguia representar `R$ 79,90`). Use
+`type="text" inputmode="decimal" currencyMask` (diretiva `ngx-currency`, ja
+provida globalmente via `provideEnvironmentNgxCurrency` em `app.config.ts` na
+maioria dos apps CLASS) sobre `form-control ds-form-control`. O usuario digita
+os centavos da direita pra esquerda (como um totem de caixa: `7990` vira
+`79,90` a cada tecla) e o `FormControl` recebe o numero ja no formato que o
+backend espera (`79.9`), sem parsing manual no componente:
+
+```html
+<input type="text" inputmode="decimal" currencyMask class="form-control ds-form-control" formControlName="monthlyAmount" placeholder="Ex.: 100,00" />
 ```
 
 ### Componentes (`_ds-components.scss`)

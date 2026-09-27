@@ -1,6 +1,9 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { TooltipModule } from 'ngx-bootstrap/tooltip';
 import { UiSkeletonComponent } from '../../primitives/ui-skeleton';
 import { UiAccentColor } from '../../tokens';
+import { resolveVariationSentiment, type StatCardGoodDirection } from './stat-card-variation.helper';
 
 export type StatCardVariant = 'default' | 'hero' | 'metric';
 
@@ -20,7 +23,7 @@ const STAT_CARD_MODIFIER: Record<UiAccentColor, string> = {
 @Component({
   selector: 'app-stat-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [UiSkeletonComponent],
+  imports: [UiSkeletonComponent, TooltipModule, NgTemplateOutlet],
   host: { class: 'd-flex flex-column h-100' },
   template: `
     @if (loading()) {
@@ -30,8 +33,9 @@ const STAT_CARD_MODIFIER: Record<UiAccentColor, string> = {
     } @else if (variant() === 'hero') {
       <div [class]="cardClass()">
         <div>
-          <p class="ds-stat-card__label">{{ title() }}</p>
+          <p class="ds-stat-card__label" [tooltip]="tooltipText()" placement="top" container="body">{{ title() }}</p>
           <p class="ds-stat-card__value">{{ value() }}</p>
+          <ng-container [ngTemplateOutlet]="variationChip" />
         </div>
         @if (icon()) {
           <i [class]="'ds-stat-card__watermark ' + icon()" aria-hidden="true"></i>
@@ -44,8 +48,9 @@ const STAT_CARD_MODIFIER: Record<UiAccentColor, string> = {
             <i [class]="icon()"></i>
           </div>
         }
-        <p class="ds-stat-card__label">{{ title() }}</p>
+        <p class="ds-stat-card__label" [tooltip]="tooltipText()" placement="top" container="body">{{ title() }}</p>
         <p class="ds-stat-card__value">{{ value() }}</p>
+        <ng-container [ngTemplateOutlet]="variationChip" />
       </div>
     } @else {
       <div [class]="cardClass()">
@@ -57,18 +62,9 @@ const STAT_CARD_MODIFIER: Record<UiAccentColor, string> = {
           } @else {
             <span></span>
           }
-          @if (variation() !== undefined) {
-            <span class="ds-stat-card__variation" [class]="variationClass()">
-              @if (variation()! >= 0) {
-                <i class="fas fa-arrow-up"></i>
-              } @else {
-                <i class="fas fa-arrow-down"></i>
-              }
-              {{ variationLabel() ?? formattedVariation() }}
-            </span>
-          }
+          <ng-container [ngTemplateOutlet]="variationChip" />
         </div>
-        <p class="ds-stat-card__label">{{ title() }}</p>
+        <p class="ds-stat-card__label" [tooltip]="tooltipText()" placement="top" container="body">{{ title() }}</p>
         <p class="ds-stat-card__value">{{ value() }}</p>
         @if (subtitle()) {
           <p class="ds-stat-card__subtitle">{{ subtitle() }}</p>
@@ -80,6 +76,19 @@ const STAT_CARD_MODIFIER: Record<UiAccentColor, string> = {
         }
       </div>
     }
+
+    <ng-template #variationChip>
+      @if (variation() !== undefined) {
+        <span class="ds-stat-card__variation" [class]="variationClass()">
+          @if (variation()! >= 0) {
+            <i class="fas fa-arrow-up"></i>
+          } @else {
+            <i class="fas fa-arrow-down"></i>
+          }
+          {{ variationLabel() ?? formattedVariation() }}
+        </span>
+      }
+    </ng-template>
   `,
 })
 export class StatCardComponent {
@@ -88,11 +97,14 @@ export class StatCardComponent {
   readonly subtitle = input<string | undefined>(undefined);
   readonly variation = input<number | undefined>(undefined);
   readonly variationLabel = input<string | undefined>(undefined);
+  /** Which direction of change is "good" for this indicator; drives chip color, not the arrow. */
+  readonly goodDirection = input<StatCardGoodDirection>('up');
   readonly icon = input<string | undefined>(undefined);
   readonly color = input<UiAccentColor>('primary');
   readonly variant = input<StatCardVariant>('default');
   readonly loading = input<boolean>(false);
   readonly sparkline = input<readonly number[]>([]);
+  readonly tooltipText = input<string | undefined>(undefined);
 
   readonly cardClass = computed((): string => {
     const variant: StatCardVariant = this.variant();
@@ -101,11 +113,8 @@ export class StatCardComponent {
   });
 
   readonly variationClass = computed((): string => {
-    const value: number | undefined = this.variation();
-    if (value === undefined) {
-      return '';
-    }
-    return value >= 0 ? 'ds-stat-card__variation--up' : 'ds-stat-card__variation--down';
+    const sentiment = resolveVariationSentiment(this.variation(), this.goodDirection());
+    return sentiment ? `ds-stat-card__variation--${sentiment}` : '';
   });
 
   readonly formattedVariation = computed((): string => {

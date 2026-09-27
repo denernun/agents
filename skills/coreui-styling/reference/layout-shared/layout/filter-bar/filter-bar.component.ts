@@ -7,7 +7,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   selector: 'app-filter-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="ds-panel ds-filter-panel mb-4">
+    <div class="ds-panel ds-filter-panel">
       <div class="ds-panel__header">
         <h3 class="ds-panel__title">
           <span class="ds-panel__title-icon"><i class="fas fa-filter"></i></span>

@@ -39,15 +39,19 @@
   min-height: 2.75rem;
 }
 
+// Heading = block column (title row + optional subtitle below). The icon lives
+// inside `.ds-panel__title`, which is the flex row — the markup every card
+// component (ui-card, chart-card, filter-bar) uses. Making the heading itself a
+// flex row put the subtitle beside the title instead of under it.
 .ds-panel__heading {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
   min-width: 0;
   flex: 1;
 }
 
 .ds-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
@@ -524,11 +528,28 @@
   }
 }
 
+// Page / section skeleton. The ONLY source of vertical rhythm between sections
+// is this gap (--ds-gap-section). Grids, page header, filter bar and section
+// headings carry a standalone `margin-bottom` for pages that do not use the
+// stack; inside the stack that margin is neutralised, otherwise gap + margin
+// sum into the double spacing that makes screens look misaligned. The same
+// applies one level down, to the last block rendered inside a child component
+// host (e.g. `<app-totais-periodo>` wrapping a `.ds-kpi-grid`).
 .ds-section-stack {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--ds-gap-grid);
+  gap: var(--ds-gap-section);
   @include ds-stretch-grid-children;
+
+  > :is(.ds-kpi-grid, .ds-kpi-row, .ds-dashboard-grid, .ds-filter-panel, .ds-alert),
+  > * > :is(.ds-kpi-grid, .ds-kpi-row, .ds-dashboard-grid, .ds-page-header, .ds-filter-panel, .ds-alert):last-child {
+    margin-bottom: 0;
+  }
+
+  // A section heading sits closer to the section it titles than to the one above.
+  > .ds-section-heading {
+    margin-bottom: calc(var(--ds-gap-grid) - var(--ds-gap-section));
+  }
 }
 
 .ds-grid-contents {
@@ -678,6 +699,16 @@
     vertical-align: middle;
   }
 
+  // Fixed-height viewport (`app-ui-data-table [fixedHeight]`): header + N rows,
+  // so a card does not resize when the row count changes (tabs, pagination).
+  &__viewport--fixed-rows {
+    --ds-table-row-height: 2.75rem;
+    --ds-table-header-height: 2.75rem;
+    height: calc(var(--ds-table-header-height) + var(--ds-table-row-height) * var(--ds-table-fixed-rows, 10));
+    min-height: calc(var(--ds-table-header-height) + var(--ds-table-row-height) * var(--ds-table-fixed-rows, 10));
+    overflow-y: auto;
+  }
+
   // Striped rows (opt-in via modifier)
   &--striped tbody tr:nth-child(even) td {
     background: var(--ds-surface-muted);
@@ -698,6 +729,68 @@
     text-align: center;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+  }
+}
+
+// ── Tabbed panel with fixed grid height ─────────────────────────────────────
+// Card with tabs whose body keeps the height of header + 10 rows, so switching
+// tabs (or an empty tab) never resizes the card.
+.ds-tab-panel--fixed-grid {
+  display: flex;
+  flex-direction: column;
+
+  .ds-tab-panel__content {
+    --ds-table-row-height: 2.75rem;
+    --ds-table-header-height: 2.75rem;
+    --ds-table-fixed-rows: 10;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    height: calc(var(--ds-table-header-height) + var(--ds-table-row-height) * var(--ds-table-fixed-rows));
+    min-height: calc(var(--ds-table-header-height) + var(--ds-table-row-height) * var(--ds-table-fixed-rows));
+
+    > app-ui-data-table {
+      display: block;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    .ds-table__viewport--fixed-rows {
+      height: 100%;
+      min-height: 0;
+    }
+  }
+
+  .ds-tab-panel__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .ds-tab-panel__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .ds-tab-panel__summary {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    padding: 0.5rem var(--ds-pad-card);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ds-text);
+    border-top: 1px solid var(--ds-border);
+    background: var(--ds-surface-muted);
+  }
+
+  .ds-tab-panel__pagination {
+    flex-shrink: 0;
+    min-height: 2.75rem;
   }
 }
 
@@ -857,6 +950,7 @@
 
 // ── Filter panel form tweaks inside dark theme ──────────────────────────────
 .ds-filter-panel {
+  margin-bottom: var(--ds-gap-section);
   overflow: visible;
   position: relative;
   z-index: 30;

@@ -11,3 +11,5 @@ Import:
 ```typescript
 import { PageHeaderComponent, UiCardComponent } from '@app/layout/shared';
 ```
+
+**Cards com abas:** use `ds-tab-panel--fixed-grid` no painel (10 linhas de grid + paginação). Trocar de aba não pode redimensionar o card — ver Controle de Caixa.

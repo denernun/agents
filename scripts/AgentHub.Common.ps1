@@ -32,7 +32,7 @@ function Invoke-HubConfig {
     $result = ($Request | ConvertTo-Json -Depth 50 -Compress) | & $python $script
     if ($LASTEXITCODE -eq 0) { break }
     if (($result -join '').Trim() -or $attempt -ge 2) {
-      throw "Configuration update failed for $($Request.path); file preserved. Check syntax and manual changes."
+      throw "Configuration update failed for $($Request.path); file preserved. Check syntax and manual changes. Detail: $(($result -join ' ').Trim())"
     }
     Start-Sleep -Milliseconds 250
   }

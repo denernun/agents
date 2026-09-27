@@ -276,9 +276,11 @@ def update(request):
 
 
 def main():
-    for stream in (sys.stdin, sys.stdout):
+    # utf-8-sig on stdin: Windows PowerShell 5.1 prepends a BOM when piping to a
+    # native process while the console code page is 65001 (UTF-8).
+    for stream, encoding in ((sys.stdin, 'utf-8-sig'), (sys.stdout, 'utf-8')):
         if hasattr(stream, 'reconfigure'):
-            stream.reconfigure(encoding='utf-8', errors='surrogateescape')
+            stream.reconfigure(encoding=encoding, errors='surrogateescape')
     request = json.load(sys.stdin)
     try:
         if request.get('action') in ('validate-toml', 'inspect-toml'):

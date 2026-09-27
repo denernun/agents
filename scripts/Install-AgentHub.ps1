@@ -1807,7 +1807,37 @@ function Ensure-AiMemory {
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-mcp failed for $slug (exit $LASTEXITCODE)" }
     & $exe @hookArgs
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-hooks failed for $slug (exit $LASTEXITCODE)" }
+    else { Repair-AiMemoryHookQuoting -Slug $slug }
 
+  }
+}
+
+function Repair-AiMemoryHookQuoting {
+  # ai-memory writes hook commands as "\"C:\...\ai-memory.exe\" --data-dir \"...\" hook ...".
+  # Cursor and agy (at least under Orca) hand that to cmd.exe re-escaped as \"...\",
+  # which cmd reads as a literal program name ("'\"C:\...\"' is not recognized"),
+  # breaking every tool call via the fail-closed PreToolUse hook. When no quoted
+  # segment contains a space the quotes are unnecessary, so strip them.
+  param([string]$Slug)
+  $file = switch ($Slug) {
+    'cursor'          { Join-Path $HOME '.cursor\hooks.json' }
+    'antigravity-cli' { Join-Path $HOME '.gemini\config\hooks.json' }
+    default           { $null }
+  }
+  if (-not $file -or -not (Test-Path -LiteralPath $file)) { return }
+
+  $text = [IO.File]::ReadAllText($file)
+  $fixed = [regex]::Replace($text, '"command"\s*:\s*"((?:[^"\\]|\\.)*)"', {
+      param($m)
+      $cmd = $m.Groups[1].Value
+      if ($cmd -notmatch 'ai-memory' -or $cmd -notmatch '\\"') { return $m.Value }
+      $quoted = [regex]::Matches($cmd, '\\"(.*?)\\"') | ForEach-Object { $_.Groups[1].Value }
+      if ($quoted | Where-Object { $_ -match '\s' }) { return $m.Value }
+      return $m.Value.Replace($cmd, $cmd.Replace('\"', ''))
+    })
+  if ($fixed -ne $text) {
+    [IO.File]::WriteAllText($file, $fixed)
+    Write-Host "  ai-memory: unquoted hook commands in $file (cmd.exe escaping workaround)"
   }
 }
 

@@ -424,6 +424,79 @@ Se uma rota pública recebe dados repetidos (ex: heartbeat do ERP), aplique o pa
 
 Use `repository.upsertNative(data, conflictPaths, overwrite)` (INSERT ... ON CONFLICT DO UPDATE) em vez de `save()` para eliminar o SELECT prévio do TypeORM em caminhos quentes.
 
+### 4.5 Todo `GET` de lista pagina — offset ou keyset, nunca "traz tudo"
+
+**Toda listagem cujo tamanho cresce com o dado do tenant é paginada.** Não é
+opcional e não é "otimização para depois" — decida o tipo de paginação na
+hora de criar o endpoint, porque trocar de offset para keyset depois muda o
+contrato (não existe mais `page`/`total`). Auditoria de 2026-09
+(`cloudclass-api`) encontrou o padrão já em uso em ~10 endpoints
+(`findPaginated`) e nenhum caso de keyset — daí esta seção.
+
+**Duas listas nunca precisam paginar:**
+- **Catálogo fixo/quase-fixo** (planos, estados, etapas de um funil único):
+  a contagem tem um teto natural baixo (dezenas), documentado no
+  JSDoc do método (`"Unpaginated on purpose: ..."`, ver
+  `TagRepository.list()`).
+- **Detalhe de UM registro pai** (tags de um lead, etapas de um funil) —
+  não é uma lista que cresce por si, cresce com o número de filhos de uma
+  entidade já unicamente identificada, e esse número tem teto de produto
+  (ex.: `MAX_TAGS_PER_LEAD`).
+
+**Todo o resto que lista registros de um tenant — contatos, leads, tarefas,
+faturas, e a fortiori um catálogo de produtos com 100 mil+ itens — pagina.**
+Escolha entre as duas técnicas assim:
+
+| | Offset (`findPaginated`) | Keyset (`findKeyset`) |
+|---|---|---|
+| Quando usar | Lista com até ~dezenas de milhares de linhas, tela que **precisa de "página 7 de 40"** e salto direto de página | Lista que pode crescer sem teto por tenant (produtos, faturas, log de auditoria) — **navegação sequencial** (próxima/anterior), sem salto |
+| Contrato | `{ data, total, page, limit, totalPages, hasNext, hasPrev }` | `{ data, nextCursor }` — sem `total`/`page` |
+| Custo por página | `O(offset + limit)` — pedir a página 5000 escaneia e descarta as 99 mil linhas antes dela | `O(limit)` sempre — o índice `(coluna, id)` pula direto para o cursor |
+| Onde vive | `RepositoryBase.findPaginated` / `DatabaseBase.findPaginated` (já existente) | `RepositoryBase.findKeyset` / helpers em `src/domain/shared/repositories/keyset-pagination.ts` (`cloudclass-api`, referência para portar) |
+
+Nunca ofereça `total`/contagem exata numa lista keyset — um `COUNT(*)` sem
+filtro seletivo tem o mesmo custo O(n) que o offset profundo que a keyset
+existe para evitar. Se o produto pedir "quantos no total", isso é outra
+query (agregada, cacheada) — nunca parte da resposta paginada.
+
+### 4.6 Keyset (seek) pagination — mecânica
+
+Ver `src/domain/shared/repositories/keyset-pagination.ts` em `cloudclass-api`
+(portar para um projeto novo). Peças:
+
+- **Cursor opaco em base64** (`encodeKeysetCursor`/`decodeKeysetCursor`) —
+  `{ value, id }` da última linha da página anterior. O cliente nunca lê nem
+  monta o cursor, só ecoa o que recebeu. Um cursor corrompido lança
+  `InvalidKeysetCursorError` (erro de domínio, sem `HttpStatus`) — a
+  Application da feature captura e relança sua própria `BaseException` 400
+  (mesmo padrão de `isUniqueViolation`/`getViolatedConstraint` para violação
+  de constraint), nunca deixe um `Error` genérico virar 500.
+- **`applyKeysetCursor(query, alias, column, direction, cursor)`** monta
+  `WHERE (coluna, id) > (:cursorValue, :cursorId)` (ou `<` em `DESC`) — a
+  comparação por tupla com `id` como desempate é o que impede pular ou
+  repetir uma linha quando duas têm o mesmo valor de ordenação.
+- **`coerceKeysetCursorValue`** — uma coluna `timestamp`/`timestamptz`/`date`
+  volta do cursor como string (JSON) e precisa virar `Date` de novo antes de
+  ir para o parâmetro SQL.
+- **`RepositoryBase.findKeyset({ limit, cursor, orderBy, direction, where })`**
+  cobre o caso simples (sem join, filtro de igualdade). Uma lista com join ou
+  filtro mais rico monta seu próprio `createQueryBuilder` usando
+  `applyKeysetCursor`/`buildKeysetPage` diretamente — mesma relação que
+  `findPaginated` já tem com os `buildFilteredQuery()` por feature
+  (`TaskRepository.findManyPaginated`, `LeadRepository.findManyPaginated`).
+- **Nunca combine `relations`/`leftJoinAndSelect` de uma relação
+  um-para-muitos com `take()`/`limit`** — o join multiplica linhas antes do
+  `LIMIT` cortar, truncando uma página no meio de um registro pai (armadilha
+  clássica do TypeORM). Pagine só a entidade pai pela keyset, depois busque
+  a relação em lote (`WHERE parentId IN (...)`) e junte em memória — mesma
+  forma que `LeadRepository.findTagsByLeadIds` já usa para paginação offset;
+  `InvoicesRepository.listBySubscriptionBillingIdKeyset` é a referência para
+  keyset.
+- **DTO de entrada**: `KeysetPaginationQueryDto` (`limit` capado em 100,
+  `cursor?: string`) — cópia local por persona, mesma convenção do
+  `PaginationQueryDto` de cada `*.dto.ts` (não importe de outra persona).
+- **Resposta**: `{ items, nextCursor }`, nunca `total`.
+
 ---
 
 ## 5. Testing
@@ -573,6 +646,10 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 - [ ] JSDoc explicando **o porquê** em métodos públicos e em qualquer lógica de cache/fingerprint.
 - [ ] Nenhum `any`, nenhuma magic number, nenhum campo vazando via `Response` DTO.
 - [ ] Nenhuma relação eager em listas; `relations: [...]` só quando o dado é usado imediatamente.
+- [ ] Todo `GET` de lista que cresce com o dado do tenant pagina — offset (`findPaginated`) ou
+      keyset (`findKeyset`), nunca devolve a tabela inteira (§4.5). Catálogo fixo pequeno documenta
+      no JSDoc por que fica sem paginação.
+- [ ] Resposta keyset é `{ items, nextCursor }` — nunca `total`/`page` (§4.6).
 - [ ] Cache invalidado explicitamente após writes.
 - [ ] Exceções de negócio como classes derivadas de `BaseException`, mensagens em português.
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).

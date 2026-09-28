@@ -1,6 +1,6 @@
 # {{PROJECT}}
 
-NestJS API — Clean Architecture / DDD (ERPCLASS family).
+NestJS API — Clean Architecture / DDD ({{FAMILY}} family).
 
 ## Stack
 - TypeScript + NestJS + TypeORM + PostgreSQL + Redis

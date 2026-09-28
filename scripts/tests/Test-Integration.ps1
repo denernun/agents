@@ -244,6 +244,18 @@ $reduced=@(Get-ProjectSkillNames -Catalog $cat -FamilyCfg $optedOut -Family 'min
 Assert ($reduced -notcontains 'tdd' -and $reduced -notcontains 'unlazy') 'Global workflows leaked back into the project skill set'
 Assert ($reduced -notcontains 'codegraph') 'Global codegraph skill leaked back into the project skill set'
 
+# --- AGENTS.md family label comes from catalog.roots, never hardcoded
+$nestRoot=Join-Path $testRoot 'family-root/CLOUDCLASS/cloudclass-api'
+New-Item -ItemType Directory -Path $nestRoot -Force | Out-Null
+Assert ((Get-ProjectFamilyLabel -RepoPath $nestRoot -Catalog $cat) -eq 'CLOUDCLASS') 'Family label did not resolve the managed root folder'
+$outsideRoot=Join-Path $testRoot 'elsewhere/repo'
+New-Item -ItemType Directory -Path $outsideRoot -Force | Out-Null
+Assert ((Get-ProjectFamilyLabel -RepoPath $outsideRoot -Catalog $cat) -eq '') 'Family label should be empty outside a managed root'
+$templateFixture=Join-Path $testRoot 'agents-nestjs.md'
+Set-Content -LiteralPath $templateFixture -Value "# {{PROJECT}}`n`nNestJS API - Clean Architecture / DDD ({{FAMILY}} family).`n"
+$content=(Get-Content -LiteralPath $templateFixture -Raw).Replace('{{PROJECT}}','cloudclass-api').Replace('{{FAMILY}}','CLOUDCLASS')
+Assert ($content -match '\(CLOUDCLASS family\)') 'AGENTS.md template did not substitute the family label'
+
 # --- A name that moved between vendor packages is reported, not swapped quietly
 $vendorA=Join-Path $HubPath 'vendor/pkg-a/skills/moved'
 $vendorB=Join-Path $HubPath 'vendor/pkg-b/skills/moved'

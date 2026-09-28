@@ -1,6 +1,6 @@
 # {{PROJECT}}
 
-Android app — MOBICLASS (Java + XML Views today).
+Android app — {{FAMILY}} (Java + XML Views today).
 
 ## Stack
 - Java 11, AndroidX AppCompat / Material, XML layouts

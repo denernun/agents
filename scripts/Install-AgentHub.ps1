@@ -742,6 +742,28 @@ function Get-ProjectFamily {
   return 'minimal'
 }
 
+function Get-ProjectFamilyLabel {
+  # The AGENTS.md template names the product family the repo belongs to
+  # (ERPCLASS, CLOUDCLASS, ...). Derive it from catalog.roots instead of
+  # hardcoding it in the template: walk up from the repo and use the deepest
+  # ancestor whose name is one of the managed roots. Falls back to the stack
+  # family key when the repo is not under a managed root (e.g. -ProjectPath
+  # pointing outside D:\SISTEMAS).
+  param([string]$RepoPath, [object]$Catalog)
+  $roots = @(Get-JsonProperty $Catalog 'roots' | Where-Object { $_ })
+  $current = [IO.Path]::GetFullPath($RepoPath)
+  while ($current) {
+    $name = [IO.Path]::GetFileName($current)
+    if ($name) {
+      foreach ($root in $roots) { if ($name -ieq $root) { return $root } }
+    }
+    $parent = [IO.Path]::GetDirectoryName($current)
+    if ([string]::IsNullOrEmpty($parent) -or $parent -eq $current) { break }
+    $current = $parent
+  }
+  return ''
+}
+
 function Test-SkillTargetHasContent {
   # Guards against silently linking an empty/corrupted skill directory into
   # every project. A skill target is a directory that should contain at
@@ -946,6 +968,7 @@ function Write-AgentsFile {
     [string]$RepoPath,
     [string]$ProjectName,
     [string]$TemplatePath,
+    [string]$FamilyLabel = '',
     [switch]$Force,
     [switch]$DryRun
   )
@@ -954,7 +977,7 @@ function Write-AgentsFile {
   if ((Test-Path $dest) -and -not $Force) {
     $local = Get-LocalSection -Path $dest
   }
-  $content = (Get-Content $TemplatePath -Raw -Encoding UTF8).Replace('{{PROJECT}}', $ProjectName)
+  $content = (Get-Content $TemplatePath -Raw -Encoding UTF8).Replace('{{PROJECT}}', $ProjectName).Replace('{{FAMILY}}', $FamilyLabel)
   if ($local) {
     # drop template Local and append preserved
     $content = [regex]::Replace($content, '(?s)## Local\s*\r?\n.*$', '').TrimEnd() + "`r`n`r`n" + $local + "`r`n"
@@ -2575,8 +2598,10 @@ foreach ($proj in $projectDirs) {
       ($family -eq 'android') -and -not (Test-Path $agentsPath)
     )
     if ($writeAgentsHere) {
+      $familyLabel = Get-ProjectFamilyLabel -RepoPath $proj.FullName -Catalog $catalog
+      if (-not $familyLabel) { $familyLabel = $family }
       $tpl = Join-Path $HubPath "templates\agents\$($cfg.agentsTemplate)"
-      Write-AgentsFile -RepoPath $proj.FullName -ProjectName $proj.Name -TemplatePath $tpl -Force:$ForceAgents -DryRun:$DryRun
+      Write-AgentsFile -RepoPath $proj.FullName -ProjectName $proj.Name -TemplatePath $tpl -FamilyLabel $familyLabel -Force:$ForceAgents -DryRun:$DryRun
       Write-SlimStubs -RepoPath $proj.FullName -Ides $detected -DryRun:$DryRun
     }
 

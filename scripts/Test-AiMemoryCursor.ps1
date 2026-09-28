@@ -32,14 +32,63 @@ if ($serverOk) {
 }
 
 $hookOk = Test-AiMemoryCursorPreToolUse -Exe $exe
-$profilePath = [string]$PROFILE
-$profileText = if (Test-Path -LiteralPath $profilePath) { Get-Content -LiteralPath $profilePath -Raw } else { '' }
-$guardIndex = $profileText.IndexOf('[Console]::IsInputRedirected', [StringComparison]::OrdinalIgnoreCase)
-$iconsIndex = $profileText.IndexOf('Import-Module -Name Terminal-Icons', [StringComparison]::OrdinalIgnoreCase)
-$profileGuardOk = ($iconsIndex -lt 0) -or ($guardIndex -ge 0 -and $guardIndex -lt $iconsIndex)
-if (-not $profileGuardOk) {
-  Write-Warning "PowerShell profile does not guard Terminal-Icons before import: $profilePath"
+
+# Cursor also imports Claude Code's user hooks and drops their separate `args`
+# array. A bare `ai-memory install-hooks` / `upgrade` run outside the hub
+# restores that shape; flag it here instead of discovering it inside Orca.
+$claudeDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+$claudeSettingsPath = Join-Path $claudeDir 'settings.json'
+$claudeHooksOk = $true
+$claudeCommands = @()
+if (Test-Path -LiteralPath $claudeSettingsPath) {
+  $claudeSettings = Get-Content -LiteralPath $claudeSettingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($claudeSettings.PSObject.Properties['hooks']) {
+    foreach ($eventProperty in $claudeSettings.hooks.PSObject.Properties) {
+      foreach ($group in @($eventProperty.Value)) {
+        foreach ($hook in @($group.hooks)) {
+          if ([string]$hook.command -notmatch 'ai-memory') { continue }
+          $claudeCommands += [string]$hook.command
+          if ($hook.PSObject.Properties['args'] -or [string]$hook.command -notmatch '^cmd(?:\.exe)?\s+/d\s+/s\s+/c\s') {
+            $claudeHooksOk = $false
+          }
+        }
+      }
+    }
+  }
+}
+if (-not $claudeHooksOk) {
+  Write-Warning "Claude ai-memory hooks in $claudeSettingsPath use a separate args array or no cmd.exe wrapper; Cursor will run them without arguments. Re-run Install-AgentHub.ps1."
+} elseif ($claudeCommands.Count) {
+  Write-Output "Claude ai-memory hooks (imported by Cursor): OK ($($claudeCommands.Count))"
+}
+
+# Orca runs agents in worktrees (~/orca/workspaces/<repo>/<branch>). Without
+# repo-root the hooks name the project after the worktree folder, splitting memory.
+$cursorHooksText = Get-Content -LiteralPath (Join-Path $HOME '.cursor\hooks.json') -Raw -ErrorAction SilentlyContinue
+$strategyOk = [bool]($cursorHooksText -match 'repo-root') -and (-not $claudeCommands.Count -or @($claudeCommands | Where-Object { $_ -notmatch 'repo-root' }).Count -eq 0)
+if ($strategyOk) {
+  Write-Output 'ai-memory project strategy: repo-root (worktrees share the main repo project)'
 } else {
+  Write-Warning 'ai-memory hooks do not bake --project-strategy repo-root; Orca worktrees will be recorded under their folder name. Re-run Install-AgentHub.ps1.'
+}
+
+# Resolve the project from inside a real Orca worktree, when one exists.
+$orcaRoot = Join-Path $HOME 'orca\workspaces'
+$worktree = Get-ChildItem -LiteralPath $orcaRoot -Directory -ErrorAction SilentlyContinue |
+  ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Directory -ErrorAction SilentlyContinue } |
+  Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName '.git') } | Select-Object -First 1
+if ($worktree) {
+  $mainRoot = (& git -C $worktree.FullName rev-parse --path-format=absolute --git-common-dir 2>$null)
+  if ($mainRoot) { $mainRoot = Split-Path -Parent $mainRoot }
+  Write-Output "Orca worktree sample: $($worktree.FullName)"
+  Write-Output "  main repo root: $mainRoot (repo-root project: $(if ($mainRoot) { Split-Path -Leaf $mainRoot } else { '?' }); basename would be: $($worktree.Name))"
+} else {
+  Write-Output "No Orca worktree found under $orcaRoot; worktree project resolution not sampled."
+}
+
+$profilePath = Get-PwshProfilePath
+$profileGuardOk = Test-PowerShellProfileGuard -ProfilePath $profilePath
+if ($profileGuardOk) {
   $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
   if (-not $pwsh) {
     $profileGuardOk = $false
@@ -59,5 +108,5 @@ if (-not $profileGuardOk) {
   }
 }
 
-if (-not $mcpOk -or -not $serverOk -or -not $hookOk -or -not $profileGuardOk) { exit 1 }
+if (-not $mcpOk -or -not $serverOk -or -not $hookOk -or -not $claudeHooksOk -or -not $strategyOk -or -not $profileGuardOk) { exit 1 }
 Write-Output 'Cursor/Orca ai-memory checks: PASS. The hook preflight did not send an event to the memory server.'

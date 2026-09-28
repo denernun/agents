@@ -1583,13 +1583,13 @@ function Write-GlobalMcpConfigs {
   if ([string]::IsNullOrWhiteSpace($Vars['CONTEXT7_API_KEY'])) {
     $context7 = $allServers['context7']
     if ($context7) {
-      $args = [System.Collections.Generic.List[string]]::new()
-      $args.AddRange([string[]]$context7.args)
-      $keyIndex = $args.IndexOf('--api-key')
+      $argList = [System.Collections.Generic.List[string]]::new()
+      $argList.AddRange([string[]]$context7.args)
+      $keyIndex = $argList.IndexOf('--api-key')
       if ($keyIndex -ge 0) {
-        $args.RemoveAt($keyIndex)
-        if ($keyIndex -lt $args.Count) { $args.RemoveAt($keyIndex) }
-        $context7.args = $args.ToArray()
+        $argList.RemoveAt($keyIndex)
+        if ($keyIndex -lt $argList.Count) { $argList.RemoveAt($keyIndex) }
+        $context7.args = $argList.ToArray()
       }
     }
   }
@@ -1605,6 +1605,17 @@ function Write-GlobalMcpConfigs {
       $names = @($names | Where-Object { $_ -ne 'context7' })
       if ($ServerNames -contains 'context7') {
         Write-Host '  Codex Context7 plugin is enabled; not adding a duplicate MCP server.'
+      }
+    }
+    # Same for Claude Code's official Context7 plugin. Dropping the name from
+    # the desired set lets the config writer prune the entry the hub wrote on
+    # an earlier run (only when it is still byte-identical to what we wrote).
+    if (($target.Ides -contains 'Claude') -and ($names -contains 'context7') -and (Test-ClaudeContext7PluginEnabled)) {
+      $names = @($names | Where-Object { $_ -ne 'context7' })
+      Write-Host '  Claude Context7 plugin is enabled; not adding a duplicate MCP server.'
+      if ($names.Count -eq 0) {
+        Invoke-HubConfig @{path=$path; servers=@{}; property=$target.Property; managed=@(); dry=[bool]$DryRun}
+        continue
       }
     }
     if ($names.Count -eq 0) { continue }
@@ -1897,6 +1908,22 @@ function Test-CodexContext7PluginEnabled {
   return ($match.Success -and $match.Groups['body'].Value -match '(?m)^\s*enabled\s*=\s*true\s*$')
 }
 
+function Test-ClaudeContext7PluginEnabled {
+  # Claude Code keeps enabled plugins in settings.json under the config dir
+  # (CLAUDE_CONFIG_DIR, else ~/.claude), e.g. "context7@claude-plugins-official": true.
+  $base = $env:CLAUDE_CONFIG_DIR
+  if (-not $base) { $base = Join-Path $env:USERPROFILE '.claude' }
+  $path = Join-Path $base 'settings.json'
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+  try { $settings = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $false }
+  $plugins = $settings.PSObject.Properties['enabledPlugins']
+  if (-not $plugins -or -not $plugins.Value) { return $false }
+  foreach ($plugin in $plugins.Value.PSObject.Properties) {
+    if ($plugin.Name -like 'context7@*' -and $plugin.Value -eq $true) { return $true }
+  }
+  return $false
+}
+
 function Remove-StaleProjectSkills {
   # Prunes skill junctions the hub linked in a previous run but that are no
   # longer assigned to this project (skill dropped from one of the universal
@@ -2006,9 +2033,13 @@ function Ensure-AiMemory {
   }
 
   Write-Host "ai-memory: server $url ; agents: $($targets -join ', ')"
+  $failures = [System.Collections.Generic.List[string]]::new()
   foreach ($slug in $targets) {
     $mcpArgs  = @('install-mcp', '--client', $slug, '--server-url', "$url/mcp", '--apply')
-    $hookArgs = @('install-hooks', '--agent', $slug, '--server-url', $url, '--apply')
+    # repo-root: every session resolves its project from the main git repo
+    # root, so Orca worktrees (~/orca/workspaces/<repo>/<branch>) and
+    # subdirectories share one memory project instead of one per folder name.
+    $hookArgs = @('install-hooks', '--agent', $slug, '--server-url', $url, '--project-strategy', 'repo-root', '--apply')
     if ($token) {
       $mcpArgs  += @('--auth-token', $token)
       $hookArgs += @('--auth-token', $token)
@@ -2021,14 +2052,58 @@ function Ensure-AiMemory {
     & $exe @mcpArgs
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-mcp failed for $slug (exit $LASTEXITCODE)" }
     & $exe @hookArgs
-    if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-hooks failed for $slug (exit $LASTEXITCODE)" }
-    else {
+    if ($LASTEXITCODE -ne 0) {
+      $failures.Add("install-hooks failed for $slug (exit $LASTEXITCODE)")
+      # The CLI may have rewritten the hook file before failing; still apply
+      # the launch repair so a partial write does not leave Cursor broken.
       Repair-AiMemoryHookQuoting -Slug $slug
-      if ($slug -eq 'cursor') { Test-AiMemoryCursorPreToolUse -Exe $exe }
+      continue
     }
-
+    Repair-AiMemoryHookQuoting -Slug $slug
+    if ($slug -eq 'cursor' -and -not (Test-AiMemoryCursorPreToolUse -Exe $exe)) {
+      $failures.Add('Cursor preToolUse hook preflight failed (see warnings above)')
+    }
   }
-  if (-not $DryRun -and $targets -contains 'cursor') { Repair-AiMemoryClaudeHooksForCursor }
+  if (-not $DryRun -and $targets -contains 'cursor') {
+    Repair-AiMemoryClaudeHooksForCursor
+    [void](Test-PowerShellProfileGuard)
+  }
+  if (-not $DryRun) { Remove-AiMemoryBackupPileup }
+  if ($failures.Count -gt 0) {
+    throw ("ai-memory wiring failed; fix it and re-run, or pass -SkipAiMemory to install without it:`n  - " + ($failures -join "`n  - "))
+  }
+}
+
+function Remove-AiMemoryBackupPileup {
+  # `ai-memory install-hooks/install-mcp --apply` writes `<file>.bak-<epoch>`
+  # next to every config it touches, on every run. Keep only the newest one per
+  # file. Matches the CLI's exact 10-digit epoch suffix, so hand-made backups
+  # (`.bak`, `.bak-20260927`, `.bak-before-x`) are never touched.
+  param([string[]]$Paths)
+  if (-not $Paths) {
+    $claudeDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }
+    $Paths = @(
+      (Join-Path $claudeDir 'settings.json'),
+      (Resolve-IdeUserConfigPath -PathSpec 'CLAUDE:.claude.json'),
+      (Resolve-IdeUserConfigPath -PathSpec 'USER:.cursor/hooks.json'),
+      (Resolve-IdeUserConfigPath -PathSpec 'USER:.cursor/mcp.json'),
+      (Resolve-IdeUserConfigPath -PathSpec 'CODEX:hooks.json'),
+      (Resolve-IdeUserConfigPath -PathSpec 'CODEX:config.toml'),
+      (Resolve-IdeUserConfigPath -PathSpec 'USER:.gemini/config/hooks.json'),
+      (Resolve-IdeUserConfigPath -PathSpec 'USER:.gemini/config/mcp_config.json'),
+      (Resolve-IdeUserConfigPath -PathSpec 'XDG:opencode/plugins/ai-memory.ts')
+    )
+  }
+  foreach ($path in $Paths) {
+    $dir = Split-Path -Parent $path
+    if (-not (Test-Path -LiteralPath $dir)) { continue }
+    $pattern = '^' + [regex]::Escape((Split-Path -Leaf $path)) + '\.bak-\d{10}$'
+    $stale = @(Get-ChildItem -LiteralPath $dir -File -Force -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -match $pattern } | Sort-Object LastWriteTime -Descending | Select-Object -Skip 1)
+    if ($stale.Count -eq 0) { continue }
+    $stale | Remove-Item -Force -ErrorAction SilentlyContinue
+    Write-Host "  ai-memory: pruned $($stale.Count) old backup(s) of $path (kept newest)"
+  }
 }
 
 function Repair-AiMemoryHookQuoting {
@@ -2102,10 +2177,10 @@ function Repair-AiMemoryClaudeHooksForCursor {
             [string]$commandProperty.Value -notmatch 'ai-memory\.exe') { continue }
 
         $command = ([string]$commandProperty.Value).Trim().Trim('"')
-        $args = @($argsProperty.Value | ForEach-Object { [string]$_ })
-        if ($args.Count -eq 0) { continue }
+        $argList = @($argsProperty.Value | ForEach-Object { [string]$_ })
+        if ($argList.Count -eq 0) { continue }
         $parts = @($command)
-        foreach ($arg in $args) {
+        foreach ($arg in $argList) {
           if ($arg -match '[\s"&|<>^()]') { $parts += ('"' + $arg.Replace('"', '""') + '"') }
           else { $parts += $arg }
         }
@@ -2117,11 +2192,37 @@ function Repair-AiMemoryClaudeHooksForCursor {
   }
 
   if (-not $changed) { return }
-  $backup = "$file.bak.ai-memory-cursor-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-  Copy-Item -LiteralPath $file -Destination $backup
+  # No backup of our own: the input is exactly what `ai-memory install-hooks`
+  # just wrote (regenerable), and the CLI already left `<file>.bak-<epoch>`
+  # with the state before it. Drop copies left by earlier versions of this repair.
+  Get-ChildItem -LiteralPath (Split-Path -Parent $file) -Filter "$(Split-Path -Leaf $file).bak.ai-memory-cursor*" -File -ErrorAction SilentlyContinue |
+    Remove-Item -Force -ErrorAction SilentlyContinue
   $json = ConvertTo-Json -InputObject $settings -Depth 100
   [IO.File]::WriteAllText($file, $json, [Text.UTF8Encoding]::new($false))
-  Write-Host "  ai-memory: preserved Claude hook arguments for Cursor in $file (backup: $backup)"
+  Write-Host "  ai-memory: preserved Claude hook arguments for Cursor in $file"
+}
+
+function Get-PwshProfilePath {
+  # pwsh 7 CurrentUserCurrentHost profile, independent of which host runs us.
+  Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell\Microsoft.PowerShell_profile.ps1'
+}
+
+function Test-PowerShellProfileGuard {
+  # Hooks launched by Orca/Cursor start pwsh with stdin redirected and in
+  # parallel; Terminal-Icons rewrites its XML cache on every load and the
+  # concurrent writes corrupt it. The profile must bail out before importing it
+  # when non-interactive. We only check and advise: the profile is the user's.
+  param([string]$ProfilePath = (Get-PwshProfilePath))
+  if (-not (Test-Path -LiteralPath $ProfilePath -PathType Leaf)) { return $true }
+  $text = Get-Content -LiteralPath $ProfilePath -Raw
+  $iconsIndex = $text.IndexOf('Import-Module -Name Terminal-Icons', [StringComparison]::OrdinalIgnoreCase)
+  if ($iconsIndex -lt 0) { return $true }
+  $guardIndex = $text.IndexOf('[Console]::IsInputRedirected', [StringComparison]::OrdinalIgnoreCase)
+  if ($guardIndex -ge 0 -and $guardIndex -lt $iconsIndex) { return $true }
+  Write-Warning ("PowerShell profile imports Terminal-Icons without a non-interactive guard: $ProfilePath`n" +
+    "  Agent hooks under Orca/Cursor can corrupt its cache. Add before the Import-Module line:`n" +
+    "    if ([Console]::IsInputRedirected -or -not [Environment]::UserInteractive -or `$env:CODEX_CI -eq '1') { return }")
+  return $false
 }
 
 function Test-AiMemoryCursorPreToolUse {

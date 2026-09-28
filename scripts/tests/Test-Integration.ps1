@@ -142,6 +142,18 @@ $globalRoots=Get-IdeGlobalSkillRoots -Ides $allIdes
   Write-GlobalMcpConfigs -HubPath $HubPath -Ides @('Codex') -Vars $globalVars -ServerNames @('context7')
   $pluginConfig=Get-Content -LiteralPath (Join-Path $codexPluginHome 'config.toml') -Raw
   Assert ($pluginConfig -notmatch '\[mcp_servers\."context7"\]') 'Codex Context7 plugin was duplicated as an MCP server'
+
+  # Claude: enabling the official plugin prunes the hub-written context7 entry
+  # but keeps a manual server in the same file.
+  $claudeTarget=@((Get-IdeGlobalMcpTargets -Ides @('Claude')).Keys)[0]
+  $claudeJson=Get-Content -LiteralPath $claudeTarget -Raw | ConvertFrom-Json
+  $claudeJson.mcpServers | Add-Member -NotePropertyName manual -NotePropertyValue ([pscustomobject]@{command='keep-me'}) -Force
+  Set-Content -LiteralPath $claudeTarget -Value ($claudeJson | ConvertTo-Json -Depth 10)
+  Set-Content -LiteralPath (Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json') '{"enabledPlugins":{"context7@claude-plugins-official":true}}'
+  Write-GlobalMcpConfigs -HubPath $HubPath -Ides @('Claude') -Vars $globalVars -ServerNames @('context7')
+  $claudeAfter=Get-Content -LiteralPath $claudeTarget -Raw | ConvertFrom-Json
+  Assert (-not $claudeAfter.mcpServers.PSObject.Properties['context7']) 'Claude Context7 plugin was duplicated as an MCP server'
+  Assert ($claudeAfter.mcpServers.manual.command -eq 'keep-me') 'Claude Context7 prune removed a manual server'
 } finally {
   $env:USERPROFILE=$oldProfile; $env:APPDATA=$oldAppData; $env:XDG_CONFIG_HOME=$oldXdg
   $env:CODEX_HOME=$oldCodexHome; $env:CLAUDE_CONFIG_DIR=$oldClaudeConfig
@@ -178,7 +190,22 @@ $claudeSettingsFixture=@{
   otherSetting='preserve-me'
 } | ConvertTo-Json -Depth 12
 Set-Content -LiteralPath $claudeHooksFixture -Value $claudeSettingsFixture -Encoding UTF8
+Set-Content -LiteralPath "$claudeHooksFixture.bak.ai-memory-cursor-20000101-000000" -Value '{}'
 Repair-AiMemoryClaudeHooksForCursor -SettingsPath $claudeHooksFixture
+$pileupDir=Join-Path $testRoot 'ai-memory-pileup'
+New-Item -ItemType Directory -Path $pileupDir -Force | Out-Null
+$pileupFile=Join-Path $pileupDir 'hooks.json'
+Set-Content -LiteralPath $pileupFile -Value '{}'
+$i=0
+foreach ($name in @('hooks.json.bak-1700000001','hooks.json.bak-1700000002','hooks.json.bak-1700000003','hooks.json.bak','hooks.json.bak-20260927','hooks.json.bak-crg-removal')) {
+  $item=New-Item -ItemType File -Path (Join-Path $pileupDir $name) -Force
+  $item.LastWriteTime=(Get-Date).AddMinutes($i++)
+}
+Remove-AiMemoryBackupPileup -Paths @($pileupFile)
+$left=@(Get-ChildItem -LiteralPath $pileupDir -File | ForEach-Object Name | Sort-Object)
+Assert (($left -join ',') -eq 'hooks.json,hooks.json.bak,hooks.json.bak-1700000003,hooks.json.bak-20260927,hooks.json.bak-crg-removal') "ai-memory backup prune kept the wrong files: $($left -join ',')"
+$claudeBackups=@(Get-ChildItem -LiteralPath $testRoot -Filter 'claude-settings.json.bak.ai-memory-cursor*')
+Assert ($claudeBackups.Count -eq 0) 'Claude hook repair must not leave backups of its own'
 $repairedClaude=Get-Content -LiteralPath $claudeHooksFixture -Raw | ConvertFrom-Json
 $claudeAiHook=$repairedClaude.hooks.PreToolUse[0].hooks[0]
 Assert ($claudeAiHook.command -match '^cmd /d /s /c C:\\Users\\test\\AppData\\Local\\ai-memory\\ai-memory\.exe .*--event pre-tool-use.*--agent claude-code') 'Claude ai-memory hook args were not folded into its command for Cursor'

@@ -42,6 +42,10 @@ foreach ($path in (Get-IdeGlobalMcpTargets -Ides $Ides).Keys) {
     $mcpRows.Add([pscustomobject]@{ides=$target.Ides;path=$path;expected=$globalMcpNames;missing=@();status='provided by enabled Context7 Codex plugin'})
     continue
   }
+  if (($target.Ides -contains 'Claude') -and (Test-ClaudeContext7PluginEnabled)) {
+    $mcpRows.Add([pscustomobject]@{ides=$target.Ides;path=$path;expected=$globalMcpNames;missing=@();status='provided by enabled Context7 Claude plugin'})
+    continue
+  }
   $configured = @()
   $syntax = 'missing'
   if (Test-Path -LiteralPath $path) {

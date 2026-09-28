@@ -31,7 +31,7 @@ Assert ((Get-FileHash (Join-Path $repo '.cursor/mcp.json')).Hash -eq $before.Has
 $refreshed=Get-Content (Join-Path $repo '.cursor/mcp.json') -Raw | ConvertFrom-Json
 Assert (@($refreshed.mcpServers.PSObject.Properties).Count -eq 5) 'Targeted refresh removed other MCPs'
 Assert ($refreshed.mcpServers.codegraph.env.DO_NOT_TRACK -eq '1') 'CodeGraph telemetry not disabled'
-Assert (@($cat.families.delphi.skills) -contains 'codegraph') 'Delphi initialization not enabled'
+Assert (@($cat.globalSkillExtras) -contains 'codegraph') 'Global CodeGraph skill was not enabled'
 Assert (@($cat.excludeProjectNames) -notcontains 'erpclass-erp') 'Delphi ERP is still excluded from installation'
 # Shared skills survive excluding Antigravity while Codex remains active.
 $skill=Join-Path $HubPath 'skills/test';New-Item -ItemType Directory -Path $skill -Force | Out-Null
@@ -78,6 +78,117 @@ $sharedRoots=Get-IdeSkillRoots -Ides @('Codex','Antigravity')
 Assert (@($sharedRoots.Keys).Count -eq 1) 'Shared .agents/skills root was not de-duplicated'
 Assert ((Get-IdeSkillRoots -Ides @('Kiro'))['.kiro/skills']) 'Kiro root lost its copy flag'
 
+# --- Cross-project skills and Context7 install at user scope for every IDE
+$globalSkills=@(Get-GlobalSkillNames -Catalog $cat)
+Assert ($globalSkills -contains 'git-workflow-and-versioning') 'Git workflow skill is not global'
+Assert ($globalSkills -contains 'browser-testing-with-devtools') 'Browser testing skill is not global'
+Assert ($globalSkills -contains 'e2e-testing') 'Playwright E2E skill is not global'
+Assert (@(Get-JsonProperty $cat.mcp 'global') -contains 'context7') 'Context7 is not declared global'
+Assert (@(Get-CatalogMcpCommon -Catalog $cat) -notcontains 'context7') 'Context7 remains in project-common MCPs'
+foreach ($skillName in $globalSkills) {
+  $skillDir=Join-Path $HubPath "skills/$skillName"
+  New-Item -ItemType Directory -Path $skillDir -Force | Out-Null
+  Set-Content (Join-Path $skillDir 'SKILL.md') "---`nname: $skillName`ndescription: Integration fixture.`n---`nBody."
+}
+$oldProfile=$env:USERPROFILE; $oldAppData=$env:APPDATA; $oldXdg=$env:XDG_CONFIG_HOME
+$oldCodexHome=$env:CODEX_HOME; $oldClaudeConfig=$env:CLAUDE_CONFIG_DIR
+try {
+  $env:USERPROFILE=Join-Path $testRoot 'user-profile'
+  $env:APPDATA=Join-Path $testRoot 'app-data'
+  $env:XDG_CONFIG_HOME=Join-Path $testRoot 'xdg-config'
+  $env:CODEX_HOME=Join-Path $testRoot 'codex-home'
+  $env:CLAUDE_CONFIG_DIR=Join-Path $testRoot 'claude-config'
+  $allIdes=@($registry.Keys)
+$globalRoots=Get-IdeGlobalSkillRoots -Ides $allIdes
+  foreach ($ide in $allIdes) {
+    Assert (@((Get-IdeGlobalSkillRoots -Ides @($ide)).Keys).Count -gt 0) "$ide has no global skill root"
+  }
+  Link-GlobalSkills -HubPath $HubPath -Catalog $cat -Ides $allIdes
+  foreach ($root in $globalRoots.Keys) {
+    foreach ($skillName in $globalSkills) {
+      Assert (Test-Path (Join-Path $root "$skillName/SKILL.md")) "$skillName missing from global root $root"
+    }
+  }
+  $kiroRoot=Join-Path $env:USERPROFILE '.kiro/skills'
+  Assert (Test-Path (Join-Path $kiroRoot 'git-workflow-and-versioning/.agenthub-managed')) 'Kiro global skill was not copied'
+
+  $globalTargets=Get-IdeGlobalMcpTargets -Ides $allIdes
+  foreach ($ide in $allIdes) {
+    Assert (@((Get-IdeGlobalMcpTargets -Ides @($ide)).Keys).Count -gt 0) "$ide has no global MCP target"
+  }
+  $globalVars=@{HUB=$HubPath;REPO=$repo;CONTEXT7_API_KEY=''}
+  $openCodeTarget=@((Get-IdeGlobalMcpTargets -Ides @('OpenCode')).Keys)[0]
+  New-Item -ItemType Directory -Path (Split-Path $openCodeTarget) -Force | Out-Null
+  Set-Content -LiteralPath $openCodeTarget '{"mcp":{"manual":{"type":"local","command":["keep-me"]}}}'
+  Write-GlobalMcpConfigs -HubPath $HubPath -Ides $allIdes -Vars $globalVars -ServerNames @($cat.mcp.global)
+  foreach ($path in $globalTargets.Keys) {
+    $target=$globalTargets[$path]
+    if ($target.Format -eq 'toml') {
+      $request=@{action='inspect-toml';path=$path} | ConvertTo-Json -Compress
+      $reply=$request | & (Get-HubPython) (Join-Path (Split-Path -Parent $PSScriptRoot) 'agenthub_config.py') | ConvertFrom-Json
+      Assert (@($reply.servers) -contains 'context7') 'Global Context7 missing from Codex config'
+    } else {
+      $obj=Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+      Assert ($obj.($target.Property).PSObject.Properties.Name -contains 'context7') "Global Context7 missing from $path"
+    }
+  }
+  $openCodeConfig=Get-Content -LiteralPath $openCodeTarget -Raw | ConvertFrom-Json
+  Assert ($openCodeConfig.mcp.manual.command[0] -eq 'keep-me') 'Global OpenCode MCP merge removed a manual server'
+
+  $codexPluginHome=Join-Path $testRoot 'codex-with-context7-plugin'
+  New-Item -ItemType Directory -Path $codexPluginHome -Force | Out-Null
+  Set-Content (Join-Path $codexPluginHome 'config.toml') "[plugins.`"context7@claude-plugins-official`"]`nenabled = true"
+  $env:CODEX_HOME=$codexPluginHome
+  Write-GlobalMcpConfigs -HubPath $HubPath -Ides @('Codex') -Vars $globalVars -ServerNames @('context7')
+  $pluginConfig=Get-Content -LiteralPath (Join-Path $codexPluginHome 'config.toml') -Raw
+  Assert ($pluginConfig -notmatch '\[mcp_servers\."context7"\]') 'Codex Context7 plugin was duplicated as an MCP server'
+} finally {
+  $env:USERPROFILE=$oldProfile; $env:APPDATA=$oldAppData; $env:XDG_CONFIG_HOME=$oldXdg
+  $env:CODEX_HOME=$oldCodexHome; $env:CLAUDE_CONFIG_DIR=$oldClaudeConfig
+}
+
+# --- Cursor's cmd.exe hook workaround wraps only ai-memory commands
+$cursorHookFixture=Join-Path $testRoot 'cursor-hooks.json'
+$quotedAiMemory='"C:\Users\test\AppData\Local\ai-memory\ai-memory.exe" --data-dir "C:\Users\test\AppData\Local\ai-memory" hook --event pre-tool-use --agent cursor --server-url http://127.0.0.1:49374'
+$manualHook='C:\tools\manual-hook.cmd --keep-quotes'
+$hookFixture=@{hooks=@{preToolUse=@(@{type='command';command=$quotedAiMemory},@{type='command';command=$manualHook})}} | ConvertTo-Json -Depth 8
+Set-Content -LiteralPath $cursorHookFixture -Value $hookFixture -Encoding UTF8
+Repair-AiMemoryHookQuoting -Slug cursor -HooksPath $cursorHookFixture
+$repairedHooks=Get-Content -LiteralPath $cursorHookFixture -Raw | ConvertFrom-Json
+$repairedAi=[string](@($repairedHooks.hooks.preToolUse | Where-Object { $_.command -match 'ai-memory' })[0].command)
+Assert ($repairedAi -notmatch '\\"C:') 'Cursor ai-memory executable quote was not repaired for cmd.exe'
+Assert ($repairedAi -match '^cmd /d /s /c C:\\Users\\test\\AppData\\Local\\ai-memory\\ai-memory\.exe ') 'Cursor ai-memory command was not explicitly wrapped in cmd.exe'
+Assert ((@($repairedHooks.hooks.preToolUse | Where-Object { $_.command -eq $manualHook }).Count) -eq 1) 'Repair changed an unrelated Cursor hook'
+$once=Get-FileHash -LiteralPath $cursorHookFixture
+Repair-AiMemoryHookQuoting -Slug cursor -HooksPath $cursorHookFixture
+Assert ((Get-FileHash -LiteralPath $cursorHookFixture).Hash -eq $once.Hash) 'Cursor hook quote repair is not idempotent'
+
+# --- Cursor imports Claude hooks but drops their separate args arrays
+$claudeHooksFixture=Join-Path $testRoot 'claude-settings.json'
+$claudeAiHookFixture=@{
+  type='command'
+  command='C:\Users\test\AppData\Local\ai-memory\ai-memory.exe'
+  args=@('--data-dir','C:\Users\test\AppData\Local\ai-memory','hook','--event','pre-tool-use','--agent','claude-code','--server-url','http://127.0.0.1:49374')
+}
+$claudeSettingsFixture=@{
+  hooks=@{
+    PreToolUse=@(@{matcher='';hooks=@($claudeAiHookFixture)})
+    SessionStart=@(@{hooks=@(@{type='command';command='C:\tools\manual-hook.cmd'})})
+  }
+  otherSetting='preserve-me'
+} | ConvertTo-Json -Depth 12
+Set-Content -LiteralPath $claudeHooksFixture -Value $claudeSettingsFixture -Encoding UTF8
+Repair-AiMemoryClaudeHooksForCursor -SettingsPath $claudeHooksFixture
+$repairedClaude=Get-Content -LiteralPath $claudeHooksFixture -Raw | ConvertFrom-Json
+$claudeAiHook=$repairedClaude.hooks.PreToolUse[0].hooks[0]
+Assert ($claudeAiHook.command -match '^cmd /d /s /c C:\\Users\\test\\AppData\\Local\\ai-memory\\ai-memory\.exe .*--event pre-tool-use.*--agent claude-code') 'Claude ai-memory hook args were not folded into its command for Cursor'
+Assert (-not $claudeAiHook.PSObject.Properties['args']) 'Claude ai-memory hook retained an args array that Cursor drops'
+Assert ($repairedClaude.hooks.SessionStart[0].hooks[0].command -eq 'C:\tools\manual-hook.cmd') 'Claude repair changed an unrelated hook'
+Assert ($repairedClaude.otherSetting -eq 'preserve-me') 'Claude repair changed an unrelated setting'
+$claudeOnce=Get-FileHash -LiteralPath $claudeHooksFixture
+Repair-AiMemoryClaudeHooksForCursor -SettingsPath $claudeHooksFixture
+Assert ((Get-FileHash -LiteralPath $claudeHooksFixture).Hash -eq $claudeOnce.Hash) 'Claude hook argument repair is not idempotent'
+
 # --- Family resolution comes from the catalog, and a catch-all is always last
 $ordered=[ordered]@{
   fallback=[pscustomobject]@{ match=@('*') }
@@ -119,16 +230,19 @@ Assert $collided 'A name claimed by two catalog lists was accepted'
 Assert ($clashMessage -match 'shared' -and $clashMessage -match 'catalog\.b') 'Collision error does not name the skill and the winning list'
 Assert-NoSkillNameCollisions -Lists ([ordered]@{ 'catalog.a'=@('dup','dup') })
 
-# --- Every project gets the universal lists plus its family and ECC adapters
+# --- Project roots keep only stack/contract-specific skills
 $angularSkills=@(Get-ProjectSkillNames -Catalog $cat -FamilyCfg $cat.families.angular -Family 'angular' -ProjectName 'sample-admin')
-foreach ($expected in @('using-agent-skills','unlazy','tdd','systematic-debugging','angular-coreui','contract-first')) {
+foreach ($expected in @('angular-coreui','coreui-styling','contract-first')) {
   Assert ($angularSkills -contains $expected) "Angular project lost $expected"
+}
+foreach ($globalName in @('using-agent-skills','unlazy','tdd','systematic-debugging','codegraph','browser-testing-with-devtools','e2e-testing')) {
+  Assert ($angularSkills -notcontains $globalName) "$globalName should be user-global, not project-linked"
 }
 Assert (@($angularSkills).Count -eq @($angularSkills | Select-Object -Unique).Count) 'Resolved skill list has duplicates'
 $optedOut=[pscustomobject]@{ skills=@('codegraph'); disabledCommonSkills=@('tdd','unlazy') }
 $reduced=@(Get-ProjectSkillNames -Catalog $cat -FamilyCfg $optedOut -Family 'minimal' -ProjectName 'sample')
-Assert ($reduced -notcontains 'tdd' -and $reduced -notcontains 'unlazy') 'disabledCommonSkills no longer covers every universal list'
-Assert ($reduced -contains 'codegraph') 'Family skill dropped by the opt-out filter'
+Assert ($reduced -notcontains 'tdd' -and $reduced -notcontains 'unlazy') 'Global workflows leaked back into the project skill set'
+Assert ($reduced -notcontains 'codegraph') 'Global codegraph skill leaked back into the project skill set'
 
 # --- A name that moved between vendor packages is reported, not swapped quietly
 $vendorA=Join-Path $HubPath 'vendor/pkg-a/skills/moved'

@@ -10,8 +10,10 @@
   "mcp": {
     "common": [
       "codegraph",
-      "context7",
       "filesystem"
+    ],
+    "global": [
+      "context7"
     ],
     "skipIdes": {
       "chrome-devtools": ["Codex"]
@@ -40,12 +42,7 @@
         "*-kb"
       ],
       "skills": [
-        "nestjs-clean-architecture",
-        "codegraph",
-        "debug-issue",
-        "explore-codebase",
-        "refactor-safely",
-        "review-changes"
+        "nestjs-clean-architecture"
       ],
       "mcp": [
         "mongodb",
@@ -70,15 +67,7 @@
       ],
       "skills": [
         "angular-coreui",
-        "coreui-styling",
-        "browser-harness",
-        "frontend-ui-engineering",
-        "browser-testing-with-devtools",
-        "codegraph",
-        "debug-issue",
-        "explore-codebase",
-        "refactor-safely",
-        "review-changes"
+        "coreui-styling"
       ],
       "mcp": [
         "playwright",
@@ -94,12 +83,7 @@
         "*-erp"
       ],
       "skills": [
-        "delphi-erpclass",
-        "codegraph",
-        "debug-issue",
-        "explore-codebase",
-        "refactor-safely",
-        "review-changes"
+        "delphi-erpclass"
       ],
       "mcp": [],
       "agentsTemplate": "delphi.md",
@@ -111,12 +95,7 @@
         "mobiclass-apk"
       ],
       "skills": [
-        "claude-android-ninja",
-        "codegraph",
-        "debug-issue",
-        "explore-codebase",
-        "refactor-safely",
-        "review-changes"
+        "claude-android-ninja"
       ],
       "mcp": [],
       "agentsTemplate": "android.md",
@@ -127,21 +106,24 @@
       "match": [
         "*"
       ],
-      "skills": [
-        "browser-harness",
-        "frontend-ui-engineering",
-        "codegraph",
-        "debug-issue",
-        "explore-codebase",
-        "refactor-safely",
-        "review-changes"
-      ],
+      "skills": [],
       "mcp": [],
       "agentsTemplate": "minimal.md",
       "cursorRule": null,
       "extraRules": []
     }
   },
+  "globalSkillExtras": [
+    "codegraph",
+    "debug-issue",
+    "explore-codebase",
+    "refactor-safely",
+    "review-changes",
+    "browser-harness",
+    "frontend-ui-engineering",
+    "browser-testing-with-devtools",
+    "e2e-testing"
+  ],
   "commonSkills": [
     "unlazy"
   ],

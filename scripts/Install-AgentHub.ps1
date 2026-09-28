@@ -11,18 +11,19 @@
     catalog.addyosmaniSkills, catalog.mattPocockSkills,
     catalog.superpowersSkills. catalog.commonSkills holds the cross-cutting
     skills that are not part of a multi-skill vendor package (standalone
-    vendors and native hub skills). All four lists apply to every project.
+    vendors and native hub skills). These and globalSkillExtras are linked to
+    each detected IDE's user-level skill roots, so they are available outside
+    the catalog project roots.
     Warns when the same skill name is claimed by more than one of those lists
     (hub skills/<name> is a flat namespace: one of the mirrors would win
     silently).
-  - Creates junctions from hub skills into each project (and prunes stale
-    hub-managed skill junctions no longer assigned to the project)
+  - Links only family/contract skills into each project and prunes stale,
+    hub-managed links from project and user skill roots; manual skills survive.
   - Writes slim AGENTS.md (preserves ## Local section)
-  - Generates MCP configs only for detected IDEs (common trio everywhere;
-    mongodb + openapi on NestJS APIs that already have Swagger
-    (mongodb is node + global mongodb-mcp-server@2, never npx on Windows);
-    playwright on Angular/www/ajuda frontends;
-    Android family uses the common MCPs only)
+  - Installs Context7 globally and repository-bound MCPs per project: CodeGraph
+    + filesystem everywhere; MongoDB + OpenAPI on NestJS APIs with Swagger;
+    Playwright/CoreUI/Chrome DevTools on web families. MongoDB launches through
+    node + global mongodb-mcp-server@2 (never npx on Windows).
   - Optionally removes unused IDE folders (.qoder, .codebuddy)
   - Runs "codegraph init <path>" for projects using the codegraph skill
     that don't have a ".codegraph" folder yet (skip with -SkipCodegraphInit).
@@ -515,19 +516,21 @@ function Get-IdeRegistry {
   # adding an agent or fixing a path is one edit here instead of eight copies
   # that silently drift apart.
   #   Skills     - directory the agent discovers project skills in
+  #   GlobalSkills - user-level directories discovered outside any repository
+  #   GlobalMcpPath/Format/Property - user-level MCP config location/shape
   #   Mcp        - project MCP config file
   #   Property   - JSON property holding the server map, or 'toml'
   #   CopySkills - agent does not follow directory junctions (Kiro), so copy
   return [ordered]@{
-    Cursor      = @{ Skills = '.cursor/skills';   Mcp = '.cursor/mcp.json';        Property = 'mcpServers'; CopySkills = $false }
-    VSCode      = @{ Skills = '.github/skills';   Mcp = '.vscode/mcp.json';        Property = 'servers';    CopySkills = $false }
-    Kiro        = @{ Skills = '.kiro/skills';     Mcp = '.kiro/settings/mcp.json'; Property = 'mcpServers'; CopySkills = $true  }
-    Claude      = @{ Skills = '.claude/skills';   Mcp = '.mcp.json';               Property = 'mcpServers'; CopySkills = $false }
-    Codex       = @{ Skills = '.agents/skills';   Mcp = '.codex/config.toml';      Property = 'toml';       CopySkills = $false }
-    Antigravity = @{ Skills = '.agents/skills';   Mcp = '.agents/mcp_config.json'; Property = 'mcpServers'; CopySkills = $false }
-    OpenCode    = @{ Skills = '.opencode/skills'; Mcp = 'opencode.json';           Property = 'mcp';        CopySkills = $false }
-    Devin       = @{ Skills = '.devin/skills';    Mcp = '.devin/mcp_config.json';  Property = 'mcpServers'; CopySkills = $false }
-    Qoder       = @{ Skills = '.qoder/skills';    Mcp = '.qoder/mcp.json';         Property = 'mcpServers'; CopySkills = $false }
+    Cursor      = @{ Skills = '.cursor/skills';   GlobalSkills = @('.agents/skills'); GlobalMcpPath = 'USER:.cursor/mcp.json'; GlobalMcpFormat = 'json';    GlobalMcpProperty = 'mcpServers'; Mcp = '.cursor/mcp.json';        Property = 'mcpServers'; CopySkills = $false }
+    VSCode      = @{ Skills = '.github/skills';   GlobalSkills = @('.agents/skills'); GlobalMcpPath = 'USER:.copilot/mcp-config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.vscode/mcp.json'; Property = 'servers'; CopySkills = $false }
+    Kiro        = @{ Skills = '.kiro/skills';     GlobalSkills = @('.kiro/skills');    GlobalMcpPath = 'USER:.kiro/settings/mcp.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.kiro/settings/mcp.json'; Property = 'mcpServers'; CopySkills = $true  }
+    Claude      = @{ Skills = '.claude/skills';   GlobalSkills = @('.claude/skills');  GlobalMcpPath = 'CLAUDE:.claude.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.mcp.json'; Property = 'mcpServers'; CopySkills = $false }
+    Codex       = @{ Skills = '.agents/skills';   GlobalSkills = @('.agents/skills');  GlobalMcpPath = 'CODEX:config.toml'; GlobalMcpFormat = 'toml'; GlobalMcpProperty = ''; Mcp = '.codex/config.toml'; Property = 'toml'; CopySkills = $false }
+    Antigravity = @{ Skills = '.agents/skills';   GlobalSkills = @('.gemini/config/skills', '.gemini/antigravity-cli/skills'); GlobalMcpPath = 'USER:.gemini/config/mcp_config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.agents/mcp_config.json'; Property = 'mcpServers'; CopySkills = $false }
+    OpenCode    = @{ Skills = '.opencode/skills'; GlobalSkills = @('XDG:opencode/skills'); GlobalMcpPath = 'XDG:opencode/opencode.json'; GlobalMcpFormat = 'opencode'; GlobalMcpProperty = 'mcp'; Mcp = 'opencode.json'; Property = 'mcp'; CopySkills = $false }
+    Devin       = @{ Skills = '.devin/skills';    GlobalSkills = @('APPDATA:devin/skills'); GlobalMcpPath = 'APPDATA:devin/mcp_config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.devin/mcp_config.json'; Property = 'mcpServers'; CopySkills = $false }
+    Qoder       = @{ Skills = '.qoder/skills';    GlobalSkills = @('.qoder/skills');    GlobalMcpPath = 'USER:.qoder/mcp.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.qoder/mcp.json'; Property = 'mcpServers'; CopySkills = $false }
   }
 }
 
@@ -548,6 +551,88 @@ function Get-IdeSkillRoots {
     $roots[$entry.Skills] = [bool]$entry.CopySkills
   }
   return $roots
+}
+
+function Get-IdeGlobalSkillRoots {
+  # Each host has its own user-level skill directory. Shared roots are
+  # de-duplicated (e.g. Cursor/Codex/VS Code use ~/.agents/skills).
+  param([string[]]$Ides)
+  $registry = Get-IdeRegistry
+  $roots = [ordered]@{}
+  foreach ($ide in $Ides) {
+    if (-not $registry.Contains($ide)) { continue }
+    $entry = $registry[$ide]
+    foreach ($relative in @($entry.GlobalSkills)) {
+      if (-not $relative) { continue }
+      if ($relative.StartsWith('APPDATA:', [StringComparison]::OrdinalIgnoreCase)) {
+        $base = $env:APPDATA
+        if (-not $base) { $base = Join-Path $env:USERPROFILE 'AppData/Roaming' }
+        $tail = $relative.Substring('APPDATA:'.Length)
+      } elseif ($relative.StartsWith('XDG:', [StringComparison]::OrdinalIgnoreCase)) {
+        $base = $env:XDG_CONFIG_HOME
+        if (-not $base) { $base = Join-Path $env:USERPROFILE '.config' }
+        $tail = $relative.Substring('XDG:'.Length)
+      } else {
+        $base = $env:USERPROFILE
+        $tail = $relative
+      }
+      $path = [IO.Path]::GetFullPath((Join-Path $base ($tail -replace '/', '\\')))
+      if ($roots.Contains($path)) {
+        if ($entry.CopySkills) { $roots[$path] = $true }
+        continue
+      }
+      $roots[$path] = [bool]$entry.CopySkills
+    }
+  }
+  return $roots
+}
+
+function Resolve-IdeUserConfigPath {
+  param([string]$PathSpec)
+  if ($PathSpec.StartsWith('APPDATA:', [StringComparison]::OrdinalIgnoreCase)) {
+    $base = $env:APPDATA
+    if (-not $base) { $base = Join-Path $env:USERPROFILE 'AppData/Roaming' }
+    $relative = $PathSpec.Substring('APPDATA:'.Length)
+  } elseif ($PathSpec.StartsWith('XDG:', [StringComparison]::OrdinalIgnoreCase)) {
+    $base = $env:XDG_CONFIG_HOME
+    if (-not $base) { $base = Join-Path $env:USERPROFILE '.config' }
+    $relative = $PathSpec.Substring('XDG:'.Length)
+  } elseif ($PathSpec.StartsWith('CODEX:', [StringComparison]::OrdinalIgnoreCase)) {
+    $base = Get-CodexHome
+    $relative = $PathSpec.Substring('CODEX:'.Length)
+  } elseif ($PathSpec.StartsWith('CLAUDE:', [StringComparison]::OrdinalIgnoreCase)) {
+    $base = $env:CLAUDE_CONFIG_DIR
+    if (-not $base) { $base = $env:USERPROFILE }
+    $relative = $PathSpec.Substring('CLAUDE:'.Length)
+  } elseif ($PathSpec.StartsWith('USER:', [StringComparison]::OrdinalIgnoreCase)) {
+    $base = $env:USERPROFILE
+    $relative = $PathSpec.Substring('USER:'.Length)
+  } else {
+    throw "Unsupported user-config path token: $PathSpec"
+  }
+  return [IO.Path]::GetFullPath((Join-Path $base ($relative -replace '/', '\\')))
+}
+
+function Get-IdeGlobalMcpTargets {
+  param([string[]]$Ides)
+  $registry = Get-IdeRegistry
+  $targets = [ordered]@{}
+  foreach ($ide in $Ides) {
+    if (-not $registry.Contains($ide)) { continue }
+    $entry = $registry[$ide]
+    if (-not $entry.GlobalMcpPath) { continue }
+    $path = Resolve-IdeUserConfigPath -PathSpec $entry.GlobalMcpPath
+    if (-not $targets.Contains($path)) {
+      $targets[$path] = [pscustomobject]@{
+        Ides = @($ide)
+        Format = [string]$entry.GlobalMcpFormat
+        Property = [string]$entry.GlobalMcpProperty
+      }
+    } else {
+      $targets[$path].Ides = @($targets[$path].Ides) + @($ide)
+    }
+  }
+  return $targets
 }
 
 function Test-ProjectDirectory {
@@ -574,7 +659,7 @@ function Get-CatalogFamilies {
 }
 
 function Get-UniversalSkillLists {
-  # The catalog lists that apply to every project, keyed by catalog property so
+  # The catalog lists that apply globally, keyed by catalog property so
   # the provenance of a skill is a lookup rather than a guess. One key per
   # upstream multi-skill package; commonSkills holds the cross-cutting skills
   # that do not belong to one (standalone vendors, native hub skills). Order is
@@ -587,27 +672,28 @@ function Get-UniversalSkillLists {
   return $lists
 }
 
-function Get-ProjectSkillNames {
-  # Single source of truth for "which skills does this project get": the
-  # universal lists minus the family opt-outs, plus the family's own skills and
-  # the ECC adapters that match. Install and Test-AgentHub used to assemble
-  # this expression separately, so adding a catalog list made the audit report
-  # skills as missing that were never meant to be there.
-  param([object]$Catalog, [object]$FamilyCfg, [string]$Family, [string]$ProjectName)
-  # disabledCommonSkills opts a family out of the universal lists - all of
-  # them, not just commonSkills. Before the vendor lists were split apart,
-  # "common" was simply where the Addy Osmani selection happened to live, so
-  # the filter silently covered more ground than its name suggests.
-  $disabled = @(Get-JsonProperty $FamilyCfg 'disabledCommonSkills')
+function Get-GlobalSkillNames {
+  param([object]$Catalog)
   $names = [System.Collections.Generic.List[string]]::new()
   foreach ($list in (Get-UniversalSkillLists -Catalog $Catalog).Values) {
-    foreach ($name in @($list)) {
-      if ($name -and $disabled -notcontains $name) { $names.Add($name) }
-    }
+    foreach ($name in @($list)) { if ($name) { $names.Add([string]$name) } }
   }
-  foreach ($name in @($FamilyCfg.skills)) { if ($name) { $names.Add($name) } }
+  foreach ($name in @(Get-JsonProperty $Catalog 'globalSkillExtras')) {
+    if ($name) { $names.Add([string]$name) }
+  }
+  return @($names | Select-Object -Unique)
+}
+
+function Get-ProjectSkillNames {
+  # Project folders contain only stack/contract skills. Cross-project workflows
+  # are linked into the user's global skill roots by Link-GlobalSkills.
+  param([object]$Catalog, [object]$FamilyCfg, [string]$Family, [string]$ProjectName)
+  $globalNames = @{}
+  foreach ($name in (Get-GlobalSkillNames -Catalog $Catalog)) { $globalNames[$name] = $true }
+  $names = [System.Collections.Generic.List[string]]::new()
+  foreach ($name in @($FamilyCfg.skills)) { if ($name -and -not $globalNames.ContainsKey($name)) { $names.Add($name) } }
   foreach ($name in @(Get-EccSkillNames -Catalog $Catalog -Family $Family -ProjectName $ProjectName)) {
-    $names.Add($name)
+    if ($name -and -not $globalNames.ContainsKey($name)) { $names.Add($name) }
   }
   return @($names | Select-Object -Unique)
 }
@@ -1461,6 +1547,72 @@ function Write-McpConfigs {
   }
 }
 
+function Write-GlobalMcpConfigs {
+  param(
+    [string]$HubPath,
+    [string[]]$Ides,
+    [hashtable]$Vars,
+    [string[]]$ServerNames,
+    [switch]$DryRun
+  )
+  if (-not $ServerNames -or $ServerNames.Count -eq 0) { return }
+  $allServers = Merge-McpJsonTemplates -HubPath $HubPath -Vars $Vars -ServerNames $ServerNames
+  if ([string]::IsNullOrWhiteSpace($Vars['CONTEXT7_API_KEY'])) {
+    $context7 = $allServers['context7']
+    if ($context7) {
+      $args = [System.Collections.Generic.List[string]]::new()
+      $args.AddRange([string[]]$context7.args)
+      $keyIndex = $args.IndexOf('--api-key')
+      if ($keyIndex -ge 0) {
+        $args.RemoveAt($keyIndex)
+        if ($keyIndex -lt $args.Count) { $args.RemoveAt($keyIndex) }
+        $context7.args = $args.ToArray()
+      }
+    }
+  }
+
+  $targets = Get-IdeGlobalMcpTargets -Ides $Ides
+  foreach ($path in $targets.Keys) {
+    $target = $targets[$path]
+    $names = @($ServerNames)
+    # The user already has the official Context7 Codex plugin enabled. Reuse
+    # it rather than registering the same provider a second time in config.toml.
+    if (($target.Ides -contains 'Codex') -and (Test-CodexContext7PluginEnabled)) {
+      Invoke-HubConfig @{path=$path; format='toml'; remove=$true; legacy_global=@('codegraph'); dry=[bool]$DryRun}
+      $names = @($names | Where-Object { $_ -ne 'context7' })
+      if ($ServerNames -contains 'context7') {
+        Write-Host '  Codex Context7 plugin is enabled; not adding a duplicate MCP server.'
+      }
+    }
+    if ($names.Count -eq 0) { continue }
+
+    $servers = [ordered]@{}
+    foreach ($name in $names) {
+      if ($allServers.Contains($name)) { $servers[$name] = $allServers[$name] }
+    }
+    if ($servers.Count -eq 0) { continue }
+    # PowerShell 5.1 serializes OrderedDictionary as Key/Value pairs; the
+    # config writer expects a JSON object, so flatten before crossing stdin.
+    $plain = @{}
+    foreach ($name in $servers.Keys) { $plain[$name] = $servers[$name] }
+    $managed = @($servers.Keys)
+    if ($target.Format -eq 'toml') {
+      $request = @{path=$path; format='toml'; servers=$plain; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun}
+      if ($target.Ides -contains 'Codex') { $request.legacy_global=@('codegraph') }
+      Invoke-HubConfig $request
+    } elseif ($target.Format -eq 'opencode') {
+      $ocServers = ConvertTo-OpenCodeMcpServers -Servers $plain
+      $request = @{path=$path; servers=$ocServers; property='mcp'; managed=$managed; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun}
+      if ($AdoptLegacyConfigs) { $request.legacy_adopt=@('context7') }
+      Invoke-HubConfig $request
+    } else {
+      $request = @{path=$path; servers=$plain; property=$target.Property; managed=$managed; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun}
+      if ($AdoptLegacyConfigs) { $request.legacy_adopt=@('context7') }
+      Invoke-HubConfig $request
+    }
+  }
+}
+
 function Write-TextFile {
   param([string]$Path, [string]$Content, [switch]$DryRun)
   $dir = Split-Path -Parent $Path
@@ -1685,6 +1837,43 @@ function Link-ProjectSkills {
   }
 }
 
+function Link-GlobalSkills {
+  param(
+    [string]$HubPath,
+    [object]$Catalog,
+    [string[]]$Ides,
+    [string[]]$SkillNames = @(),
+    [switch]$DryRun
+  )
+  $pruneStale = $SkillNames.Count -eq 0
+  $skills = if (-not $pruneStale) { @($SkillNames | Select-Object -Unique) } else { @(Get-GlobalSkillNames -Catalog $Catalog) }
+  if ($skills.Count -eq 0 -or $Ides.Count -eq 0) { return }
+  $roots = Get-IdeGlobalSkillRoots -Ides $Ides
+  foreach ($skill in $skills) {
+    $target = Join-Path $HubPath "skills\$skill"
+    if (-not (Test-HubSkill $target)) { throw "Invalid global SKILL.md: $target" }
+  }
+  foreach ($skill in $skills) {
+    $target = Join-Path $HubPath "skills\$skill"
+    foreach ($root in $roots.Keys) {
+      New-JunctionOrCopy -LinkPath (Join-Path $root $skill) -TargetPath $target -DryRun:$DryRun -ForceCopy:$roots[$root]
+    }
+  }
+  if ($pruneStale) {
+    foreach ($root in $roots.Keys) {
+      Remove-StaleProjectSkills -SkillRoot $root -HubPath $HubPath -KeepNames $skills -DryRun:$DryRun
+    }
+  }
+}
+
+function Test-CodexContext7PluginEnabled {
+  $path = Join-Path (Get-CodexHome) 'config.toml'
+  if (-not (Test-Path -LiteralPath $path)) { return $false }
+  $text = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+  $match = [regex]::Match($text, '(?ms)^\[plugins\."context7@[^\"]+"\]\r?\n(?<body>.*?)(?=^\[|\z)')
+  return ($match.Success -and $match.Groups['body'].Value -match '(?m)^\s*enabled\s*=\s*true\s*$')
+}
+
 function Remove-StaleProjectSkills {
   # Prunes skill junctions the hub linked in a previous run but that are no
   # longer assigned to this project (skill dropped from one of the universal
@@ -1735,14 +1924,17 @@ function Remove-StaleProjectSkills {
 }
 
 function Get-AiMemoryExe {
+  $configured = [Environment]::GetEnvironmentVariable('AI_MEMORY_CLI', 'Process')
+  if ($configured -and (Test-Path -LiteralPath $configured -PathType Leaf)) { return $configured }
+  $nativeInstall = Join-Path $env:LOCALAPPDATA 'ai-memory\ai-memory.exe'
+  if ($nativeInstall -and (Test-Path -LiteralPath $nativeInstall -PathType Leaf)) { return $nativeInstall }
   foreach ($name in @('ai-memory', 'ai-memory.exe')) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
   }
   # PATH isn't refreshed in an already-open shell right after install; also
-  # check the standard native-install locations (Scenario C zip / cargo / ~/bin).
+  # check alternate standard install locations (cargo / ~/bin).
   foreach ($p in @(
-      (Join-Path $env:LOCALAPPDATA 'ai-memory\ai-memory.exe'),
       (Join-Path $env:USERPROFILE '.cargo\bin\ai-memory.exe'),
       (Join-Path $env:USERPROFILE 'bin\ai-memory.cmd'),
       (Join-Path $env:USERPROFILE 'bin\ai-memory.ps1')
@@ -1807,29 +1999,48 @@ function Ensure-AiMemory {
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-mcp failed for $slug (exit $LASTEXITCODE)" }
     & $exe @hookArgs
     if ($LASTEXITCODE -ne 0) { Write-Warning "  ai-memory install-hooks failed for $slug (exit $LASTEXITCODE)" }
-    else { Repair-AiMemoryHookQuoting -Slug $slug }
+    else {
+      Repair-AiMemoryHookQuoting -Slug $slug
+      if ($slug -eq 'cursor') { Test-AiMemoryCursorPreToolUse -Exe $exe }
+    }
 
   }
+  if (-not $DryRun -and $targets -contains 'cursor') { Repair-AiMemoryClaudeHooksForCursor }
 }
 
 function Repair-AiMemoryHookQuoting {
-  # ai-memory writes hook commands as "\"C:\...\ai-memory.exe\" --data-dir \"...\" hook ...".
-  # Cursor and agy (at least under Orca) hand that to cmd.exe re-escaped as \"...\",
-  # which cmd reads as a literal program name ("'\"C:\...\"' is not recognized"),
-  # breaking every tool call via the fail-closed PreToolUse hook. When no quoted
-  # segment contains a space the quotes are unnecessary, so strip them.
-  param([string]$Slug)
-  $file = switch ($Slug) {
-    'cursor'          { Join-Path $HOME '.cursor\hooks.json' }
-    'antigravity-cli' { Join-Path $HOME '.gemini\config\hooks.json' }
-    default           { $null }
+  # ai-memory writes native hook commands with quoted paths. Under Orca, Cursor's
+  # hook launcher can start ai-memory.exe without forwarding those arguments; the
+  # agent then receives the CLI's top-level usage text instead of a hook response.
+  # Explicitly route Cursor through cmd.exe, and strip quotes only when the paths
+  # contain no spaces. Antigravity's existing cmd.exe quote repair remains below.
+  param([string]$Slug, [string]$HooksPath)
+  $file = $HooksPath
+  if (-not $file) {
+    $file = switch ($Slug) {
+      'cursor'          { Join-Path $HOME '.cursor\hooks.json' }
+      'antigravity-cli' { Join-Path $HOME '.gemini\config\hooks.json' }
+      default           { $null }
+    }
   }
   if (-not $file -or -not (Test-Path -LiteralPath $file)) { return }
 
   $text = [IO.File]::ReadAllText($file)
   $fixed = [regex]::Replace($text, '"command"\s*:\s*"((?:[^"\\]|\\.)*)"', {
       param($m)
-      $cmd = $m.Groups[1].Value
+      $original = $m.Groups[1].Value
+      $cmd = $original
+      if ($Slug -eq 'cursor' -and $cmd -match 'ai-memory') {
+        $escapedQuote = [string][char]92 + [char]34
+        if ($cmd.Contains($escapedQuote)) {
+          $pattern = [regex]::Escape($escapedQuote) + '(.*?)' + [regex]::Escape($escapedQuote)
+          $quoted = [regex]::Matches($cmd, $pattern) | ForEach-Object { $_.Groups[1].Value }
+          if ($quoted | Where-Object { $_ -match '\s' }) { return $m.Value }
+          $cmd = $cmd.Replace($escapedQuote, '')
+        }
+        if ($cmd -notmatch '^cmd(?:\.exe)?\s+/d\s+/s\s+/c\s') { $cmd = "cmd /d /s /c $cmd" }
+        return $m.Value.Replace($original, $cmd)
+      }
       if ($cmd -notmatch 'ai-memory' -or $cmd -notmatch '\\"') { return $m.Value }
       $quoted = [regex]::Matches($cmd, '\\"(.*?)\\"') | ForEach-Object { $_.Groups[1].Value }
       if ($quoted | Where-Object { $_ -match '\s' }) { return $m.Value }
@@ -1837,8 +2048,115 @@ function Repair-AiMemoryHookQuoting {
     })
   if ($fixed -ne $text) {
     [IO.File]::WriteAllText($file, $fixed)
-    Write-Host "  ai-memory: unquoted hook commands in $file (cmd.exe escaping workaround)"
+    Write-Host "  ai-memory: repaired hook commands in $file (cmd.exe launch workaround)"
   }
+}
+
+function Repair-AiMemoryClaudeHooksForCursor {
+  # Cursor imports Claude Code user hooks but currently drops Claude's separate
+  # `args` array. ai-memory's Claude hooks therefore arrive as a bare
+  # `ai-memory.exe` command and print top-level help, which makes Cursor's
+  # permission hooks reject the tool call. Fold the arguments into the command
+  # string so Claude keeps working and Cursor receives the complete invocation.
+  param([string]$SettingsPath)
+  $file = $SettingsPath
+  if (-not $file) { $file = Join-Path $HOME '.claude\settings.json' }
+  if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return }
+
+  $text = [IO.File]::ReadAllText($file)
+  $settings = $text | ConvertFrom-Json
+  if (-not $settings.hooks) { return }
+  $changed = $false
+
+  foreach ($eventProperty in $settings.hooks.PSObject.Properties) {
+    foreach ($group in @($eventProperty.Value)) {
+      $hooksProperty = $group.PSObject.Properties['hooks']
+      if (-not $hooksProperty) { continue }
+      foreach ($hook in @($hooksProperty.Value)) {
+        $commandProperty = $hook.PSObject.Properties['command']
+        $argsProperty = $hook.PSObject.Properties['args']
+        if (-not $commandProperty -or -not $argsProperty -or
+            [string]$commandProperty.Value -notmatch 'ai-memory\.exe') { continue }
+
+        $command = ([string]$commandProperty.Value).Trim().Trim('"')
+        $args = @($argsProperty.Value | ForEach-Object { [string]$_ })
+        if ($args.Count -eq 0) { continue }
+        $parts = @($command)
+        foreach ($arg in $args) {
+          if ($arg -match '[\s"&|<>^()]') { $parts += ('"' + $arg.Replace('"', '""') + '"') }
+          else { $parts += $arg }
+        }
+        $hook.command = 'cmd /d /s /c ' + ($parts -join ' ')
+        $hook.PSObject.Properties.Remove('args')
+        $changed = $true
+      }
+    }
+  }
+
+  if (-not $changed) { return }
+  $backup = "$file.bak.ai-memory-cursor-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+  Copy-Item -LiteralPath $file -Destination $backup
+  $json = ConvertTo-Json -InputObject $settings -Depth 100
+  [IO.File]::WriteAllText($file, $json, [Text.UTF8Encoding]::new($false))
+  Write-Host "  ai-memory: preserved Claude hook arguments for Cursor in $file (backup: $backup)"
+}
+
+function Test-AiMemoryCursorPreToolUse {
+  # Exercise the exact installed Cursor command through cmd.exe with capture
+  # inspection enabled. This validates Orca's Windows command parser without
+  # sending a synthetic event to the memory server or writing an observation.
+  param([string]$Exe)
+  $hooksPath = Join-Path $HOME '.cursor\hooks.json'
+  if (-not (Test-Path -LiteralPath $hooksPath)) {
+    Write-Warning "ai-memory Cursor hook check skipped: missing $hooksPath"
+    return $false
+  }
+  $config = Get-Content -LiteralPath $hooksPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $commands = @($config.hooks.preToolUse | Where-Object {
+    $commandProperty = $_.PSObject.Properties['command']
+    $commandProperty -and [string]$commandProperty.Value -match 'ai-memory'
+  })
+  if ($commands.Count -ne 1) {
+    Write-Warning "ai-memory Cursor hook check failed: expected one preToolUse command, found $($commands.Count)."
+    return $false
+  }
+  $command = [string]$commands[0].command
+  if ($command -match '\\"') {
+    Write-Warning 'ai-memory Cursor hook still contains escaped quotes that break cmd.exe parsing.'
+    return $false
+  }
+  if ($command -notmatch '^cmd(?:\.exe)?\s+/d\s+/s\s+/c\s') {
+    Write-Warning 'ai-memory Cursor hook is not explicitly launched through cmd.exe.'
+    return $false
+  }
+  if (-not (Test-Path -LiteralPath $Exe)) {
+    Write-Warning "ai-memory Cursor hook check failed: executable is missing: $Exe"
+    return $false
+  }
+  $probe = '{"hook_event_name":"preToolUse","tool_name":"agenthub-preflight","tool_input":{}}'
+  $payloadPath = [IO.Path]::GetTempFileName()
+  try {
+    [IO.File]::WriteAllText($payloadPath, $probe, [Text.UTF8Encoding]::new($false))
+    $cmdLine = $command + ' --check-capture < "' + $payloadPath + '"'
+    $reply = & $env:ComSpec /d /s /c $cmdLine 2>$null
+    $exitCode = $LASTEXITCODE
+  } finally {
+    Remove-Item -LiteralPath $payloadPath -Force -ErrorAction SilentlyContinue
+  }
+  if ($exitCode -ne 0) {
+    Write-Warning "ai-memory Cursor hook preflight failed under cmd.exe (exit $exitCode)."
+    return $false
+  }
+  try { $check = ($reply -join "`n") | ConvertFrom-Json } catch {
+    Write-Warning 'ai-memory Cursor hook preflight returned invalid JSON.'
+    return $false
+  }
+  if ($check.disposition -ne 'keep' -or -not $check.admits_capture) {
+    Write-Warning 'ai-memory Cursor hook preflight did not admit the harmless test event.'
+    return $false
+  }
+  Write-Host '  ai-memory Cursor preToolUse command passed cmd.exe capture preflight.'
+  return $true
 }
 
 function Get-CodexHome {
@@ -2021,6 +2339,7 @@ $commonSkills = @($universalSkillLists['catalog.commonSkills'])
 $addyosmaniSkills = @($universalSkillLists['catalog.addyosmaniSkills'])
 $mattPocockSkills = @($universalSkillLists['catalog.mattPocockSkills'])
 $superpowersSkills = @($universalSkillLists['catalog.superpowersSkills'])
+$globalSkillNames = @(Get-GlobalSkillNames -Catalog $catalog)
 
 # Guard: verify metadata and body for every native hub skill (not the
 # vendor-mirrored ones) has real content before linking anything into
@@ -2032,9 +2351,11 @@ $allSkillNamesInUse = [System.Collections.Generic.HashSet[string]]::new()
 foreach ($s in @($commonSkills + $addyosmaniSkills + $mattPocockSkills + $superpowersSkills)) {
   [void]$allSkillNamesInUse.Add($s)
 }
+foreach ($s in @(Get-JsonProperty $catalog 'globalSkillExtras')) { if ($s) { [void]$allSkillNamesInUse.Add($s) } }
 foreach ($prop in $catalog.families.PSObject.Properties) {
   foreach ($s in @($prop.Value.skills)) { [void]$allSkillNamesInUse.Add($s) }
 }
+foreach ($eccSkill in $catalog.ecc.skills.PSObject.Properties) { [void]$allSkillNamesInUse.Add($eccSkill.Name) }
 $emptySkills = @()
 foreach ($name in $allSkillNamesInUse) {
   $skillDir = Join-Path $hubSkillsRoot $name
@@ -2103,6 +2424,8 @@ $excludeIdes = @($idePolicy.Excluded)
 $qoderOptIn = [bool]$catalog.qoderOptIn
 $detected = Get-DetectedIdes -Override $Ides -Allowed $allowedIdes -Excluded $excludeIdes -IncludeQoder:($IncludeQoder -or $qoderOptIn) -AllowMissing:$AllowMissing
 if ($detected.Count -eq 0) { Write-Warning 'No allowed IDEs detected. Use -Ides, AGENTHUB_IDES in .env, or catalog.ides.' }
+Link-GlobalSkills -HubPath $HubPath -Catalog $catalog -Ides $detected -DryRun:$DryRun
+if ($GlobalSkills) { Write-Warning '-GlobalSkills is now redundant; cross-project skills are always linked globally for detected IDEs.' }
 if ($catalog.PSObject.Properties['ecc']) {
   foreach ($rel in @((Get-IdeSkillRoots -Ides $detected).Keys)) {
     Sync-EccSkillLinks -HubPath $HubPath -SkillRoot (Join-Path $HubPath $rel) -Catalog $catalog -Names @(Get-EccSkillNames -Catalog $catalog -Maintenance) -DryRun:$DryRun
@@ -2139,13 +2462,15 @@ if ($mongoLaunch) {
   $mcpBaseVars['NODE'] = $mongoLaunch.Node
   $mcpBaseVars['MDB_MCP_ENTRY'] = $mongoLaunch.Entry
 }
+Write-GlobalMcpConfigs -HubPath $HubPath -Ides $detected -Vars $mcpBaseVars -ServerNames @(Get-JsonProperty $catalog.mcp 'global') -DryRun:$DryRun
 $managedMcpServers = Get-ManagedMcpServerNames -Catalog $catalog -Families $families
 # Retired hub MCP servers: kept here so Write-McpJsonMerged prunes leftover
 # entries (written by older script versions) from every project's mcp.json
 # even though they're no longer in catalog/projects.json.
 #  - memorix: dead placeholder, superseded by ai-memory (global, not per-project)
 #  - coreui-docs: renamed to coreui (2026-09-05)
-$retiredMcpServers = @('memorix', 'coreui-docs')
+#  - context7: moved from per-project configs to per-user global configs
+$retiredMcpServers = @('memorix', 'coreui-docs', 'context7')
 $managedMcpServers = @($managedMcpServers) + @($retiredMcpServers | Where-Object { $managedMcpServers -notcontains $_ })
 $mcpSkipIdes = $null
 if ($catalog.mcp) { $mcpSkipIdes = $catalog.mcp.skipIdes }
@@ -2154,18 +2479,6 @@ Write-Host "Hub: $HubPath"
 Write-Host "IDEs: $($detected -join ', ')"
 if ($ProjectPath.Count -gt 0) { Write-Host "Targets: $($ProjectPath -join ', ') (catalog roots ignored)" }
 else { Write-Host "Roots: $($Roots -join ', ')" }
-if ($GlobalSkills -and $detected -contains 'Codex') {
-  & (Join-Path $PSScriptRoot 'Sync-Codegraph.ps1') -HubPath $HubPath -Global -AdoptLegacySkills:$AdoptLegacyConfigs -DryRun:$DryRun
-  $globalSkillNames = @()
-  foreach ($list in $universalSkillLists.Values) { $globalSkillNames += @($list) }
-  $globalSkillNames += @(Get-EccSkillNames -Catalog $catalog -Maintenance)
-  foreach ($name in @($globalSkillNames | Where-Object { $_ } | Select-Object -Unique)) {
-    $target = Join-Path $HubPath "skills/$name"
-    if (-not (Test-HubSkill $target)) { throw "Invalid global skill: $name" }
-    New-JunctionOrCopy -LinkPath (Join-Path $env:USERPROFILE ".agents/skills/$name") -TargetPath $target -DryRun:$DryRun
-  }
-}
-
 if ($DryRun) { Write-Host 'DRY RUN - no changes' }
 
 $exclude = @($catalog.excludeProjectNames)
@@ -2250,7 +2563,7 @@ foreach ($proj in $projectDirs) {
     Remove-FatAlwaysOnRules -RepoPath $proj.FullName -DryRun:$DryRun
 
     if (-not $SkipCodegraphInit) {
-      Ensure-CodegraphInit -RepoPath $proj.FullName -Skills @($cfg.skills) -DryRun:$DryRun
+      Ensure-CodegraphInit -RepoPath $proj.FullName -Skills @($skillNames + $globalSkillNames) -DryRun:$DryRun
     }
 
     if ($WriteAiMemoryToml) {

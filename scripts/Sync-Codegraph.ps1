@@ -1,5 +1,6 @@
 <# Targeted CodeGraph refresh. Preserves other MCPs and backs up legacy skills.
-   -Global adds a cwd-neutral Codex fallback and refreshes only graph skills.
+   -Global refreshes graph skills in user-level skill roots and removes the old
+   cwd-neutral Codex MCP fallback; CodeGraph MCP remains project-scoped.
    -Projects takes exact repository/worktree roots; never scans parent indexes.
    Indexing is explicit via -Initialize. No upstream `codegraph install` call. #>
 [CmdletBinding()]
@@ -14,44 +15,18 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'AgentHub.Common.ps1')
 Import-HubFunctions
+[void](Import-HubDotEnv -HubPath $HubPath)
 $graphSkills = @('codegraph','explore-codebase','debug-issue','refactor-safely','review-changes')
 $template = Get-Content (Join-Path $HubPath 'mcp/codegraph.template.json') -Raw
 if ($Global) {
-  $server = ($template | ConvertFrom-Json).mcpServers.codegraph
-  # No pinned cwd/path: project config overrides this fallback; explicit
-  # projectPath is required when the current directory has no index.
-  $server.args = @('/c','codegraph','serve','--mcp')
-  $server.PSObject.Properties.Remove('cwd')
-  Invoke-HubConfig @{path=(Join-Path (Get-CodexHome) 'config.toml'); format='toml'; servers=@{codegraph=$server}; partial=$true; dry=[bool]$DryRun}
-  foreach ($name in $graphSkills) {
-    $source = Join-Path $HubPath "skills/$name/SKILL.md"
-    if (-not (Test-HubSkill (Split-Path $source))) { throw "Invalid skill: $name" }
-    $destination = Join-Path $env:USERPROFILE ".agents/skills/$name/SKILL.md"
-    $skillDirectory = Split-Path $destination
-    if (Test-HubOwnedLink -Path $skillDirectory -HubPath $HubPath) { continue }
-    $item = Get-Item -LiteralPath $skillDirectory -Force -ErrorAction SilentlyContinue
-    if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-      Write-Warning "Preserved external skill link: $skillDirectory"
-      continue
-    }
-    if (Test-Path $destination) {
-      $identical = (Get-FileHash $source).Hash -eq (Get-FileHash $destination).Hash
-      $old = Get-Content $destination -Raw
-      if (-not $identical -and (-not $AdoptLegacySkills -or $old -notmatch 'get_minimal_context|code-review-graph')) {
-        Write-Warning "Preserved customized skill: $destination"
-        continue
-      }
-      if (-not $DryRun) {
-        $backup = Join-Path $HubPath ('.agenthub-state/skill-backups/' + [guid]::NewGuid().ToString('N'))
-        New-Item -ItemType Directory -Path $backup -Force | Out-Null
-        $expected = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.agents/skills')) + [IO.Path]::DirectorySeparatorChar
-        if (-not ([IO.Path]::GetFullPath($skillDirectory)).StartsWith($expected, [StringComparison]::OrdinalIgnoreCase)) { throw 'Skill path outside expected root' }
-        Move-Item -LiteralPath $skillDirectory -Destination (Join-Path $backup $name)
-      }
-    }
-    if ($DryRun) { Write-Host "[dry] sync $destination"; continue }
-    New-JunctionOrCopy -LinkPath $skillDirectory -TargetPath (Split-Path $source)
-    Write-Host "Synced graph skill: $name"
+  if ($AdoptLegacySkills) { Write-Warning '-AdoptLegacySkills is obsolete; manual global skills are preserved by the current installer.' }
+  $cat = Get-Content (Join-Path $HubPath 'catalog/projects.json') -Raw | ConvertFrom-Json
+  $policy = Resolve-IdePolicy -Catalog $cat
+  $ides = Get-DetectedIdes -Allowed @($policy.Allowed) -Excluded @($policy.Excluded)
+  Link-GlobalSkills -HubPath $HubPath -Catalog $cat -Ides $ides -SkillNames $graphSkills -DryRun:$DryRun
+  $codexConfig = Join-Path (Get-CodexHome) 'config.toml'
+  if (Test-Path $codexConfig) {
+    Invoke-HubConfig @{path=$codexConfig; format='toml'; legacy_global=@('codegraph'); remove=$true; dry=[bool]$DryRun}
   }
 }
 $configs = @{

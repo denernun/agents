@@ -28,8 +28,9 @@ function Check-Scope([string]$Root, [string[]]$Names) {
   }
 }
 $maintenance = @(Get-EccSkillNames $cat -Maintenance)
+$globalNames = @(Get-GlobalSkillNames -Catalog $cat)
 foreach ($rel in $relPaths) { Check-Scope (Join-Path $HubPath $rel) $maintenance }
-if ($GlobalSkills -and $ides -contains 'Codex') { Check-Scope (Join-Path $env:USERPROFILE '.agents/skills') $maintenance }
+if ($GlobalSkills) { Write-Warning '-GlobalSkills is obsolete; maintenance skills are scoped to the AgentHub workspace.' }
 $projects = 0
 foreach ($name in $cat.roots) {
   $root = Join-Path 'D:/SISTEMAS' $name
@@ -38,7 +39,8 @@ foreach ($name in $cat.roots) {
     if ($cat.excludeProjectNames -contains $project.Name) { continue }
     if (-not ((Test-Path (Join-Path $project.FullName '.git')) -or (Test-Path (Join-Path $project.FullName 'AGENTS.md')) -or (Test-Path (Join-Path $project.FullName 'package.json')))) { continue }
     $family = Get-ProjectFamily -Name $project.Name -Families $families -RepoPath $project.FullName -Overrides $cat.projectFamilies
-    $names = @(Get-EccSkillNames $cat -Family $family -ProjectName $project.Name)
+    $names = @(Get-EccSkillNames $cat -Family $family -ProjectName $project.Name |
+      Where-Object { $globalNames -notcontains $_ })
     foreach ($rel in $relPaths) { Check-Scope (Join-Path $project.FullName $rel) $names }
     $projects++
   }

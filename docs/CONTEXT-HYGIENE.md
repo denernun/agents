@@ -64,23 +64,23 @@ cd D:\AGENTS\scripts
 
 ## MCPs habilitados
 
-O install **não** joga mais todo `mcp/*.template.json` em todo repo. A lista vem de `catalog/projects.json` (`mcp.common` + `families.*.mcp` + `mcp.extra`).
+O install separa MCPs globais dos MCPs por projeto. `context7` fica no escopo global; a seleção de projeto vem de `catalog/projects.json` (`mcp.common` + `families.*.mcp` + `mcp.extra`).
 
-- `codegraph` — binário nativo (`codegraph serve --mcp --path <repo>`), sem dependência de runtime. **Todas** as famílias.
-- `context7` — `npx -y @upstash/context7-mcp`; rate limits maiores com chave de API. **Todas** as famílias.
+- `codegraph` — binário nativo (`codegraph serve --mcp --path <repo>`), sem dependência de runtime. MCP por projeto em todas as famílias.
+- `context7` — `npx -y @upstash/context7-mcp`; MCP global para as IDEs detectadas; rate limits maiores com chave de API.
 - `filesystem` — `npx -y @modelcontextprotocol/server-filesystem` restringido ao repo + hub. **Todas** as famílias.
 - `mongodb` — `node` + `mongodb-mcp-server@2` **global** (`npm i -g`), somente leitura. Só família **nestjs**. URI local padrão: `mongodb://root:password@127.0.0.1:27017/erpclass?authSource=admin` (igual ao Docker/dev). Override: `$env:MDB_MCP_CONNECTION_STRING` no install. **Não** usa `npx`/`cmd` no Windows (processos órfãos). URI só em `env`. Desative o MCP do plugin Cursor (skills ok) e não duplique `mongodb` em `~/.cursor/mcp.json`.
 - `openapi` — `npx -y @ivotoby/openapi-mcp-server --tools dynamic`. Só NestJS **com Swagger no `main.ts`**. Spec em `/swagger/json` (ou o `jsonDocumentUrl` do projeto). Omitido no **Codex**. A API local precisa estar rodando. Não grava JWT no `mcp.json`.
 - `playwright` — `npx -y @playwright/mcp --headless`. Família **angular** e projetos `*-www` / `*-ajuda`. Omitido no **Codex** (`mcp.skipIdes`) porque já interrompeu o startup.
 - `coreui` — `npx -y @coreui/docs-mcp --framework bootstrap`. Família **angular**. O MCP oficial ainda não tem framework Angular dedicado; use Bootstrap para componentes/classes CoreUI e complemente com https://coreui.io/angular/docs/ para sintaxe Angular.
 
-Não entram no hub: GitHub, Stripe, Figma, Pencil, Chrome DevTools.
+Não entram no catálogo de MCP do hub: GitHub, Stripe, Figma e Pencil. Chrome DevTools é por projeto/família Web/Angular.
 
-Para usar sua chave Context7, coloque `CONTEXT7_API_KEY` em `D:\AGENTS\.env` (ou exporte no processo) e rode o install. Sem a chave o servidor ainda funciona, mas com limites públicos.
+Para usar sua chave Context7 global, coloque `CONTEXT7_API_KEY` em `D:\AGENTS\.env` (ou exporte no processo) e rode o install. Sem a chave o servidor ainda funciona, mas com limites públicos.
 
 ## IDEs por máquina
 
-Allow/exclude **não** é um padrão único no git. Cada PC copia `.env.example` → `.env` e define `AGENTHUB_IDES` / `AGENTHUB_EXCLUDE_IDES`. Sem `.env`, o fallback é `catalog/projects.json`. Exclude apaga skills/MCP dessa IDE.
+Allow/exclude **não** é um padrão único no git. Cada PC copia `.env.example` → `.env` e define `AGENTHUB_IDES` / `AGENTHUB_EXCLUDE_IDES`. Sem `.env`, o fallback é `catalog/projects.json`. Exclude impede novas configurações para essa IDE; a limpeza dos links pessoais globais é explícita pelo uninstall.
 
 O install **só grava para IDEs realmente instaladas nesta máquina** (footprint em disco / PATH — ver `Get-PresentIdes`). Isso vale tanto para a auto-detecção quanto para uma lista explícita `-Ides` / `AGENTHUB_IDES`: uma IDE pedida mas ausente é ignorada com aviso. Assim, levar o hub para outra máquina nunca cria `.<ide>/skills` nem MCP de uma IDE que não existe lá. Para forçar mesmo assim, use `-AllowMissing` (ver Revisão 2026-09-18).
 

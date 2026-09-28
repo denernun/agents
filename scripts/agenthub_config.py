@@ -73,6 +73,24 @@ def legacy(name, value):
                 'playwright': '@playwright/mcp', 'coreui': '@coreui/docs-mcp'}
     if name == 'codegraph':
         return 'codegraph' in text and 'serve' in vector and '--mcp' in vector
+    if name == 'context7':
+        if value.get('type', 'stdio') not in ('stdio', 'local'):
+            return False
+        if isinstance(command, list):
+            vector = command + args
+        else:
+            vector = [command, *args]
+        cmd_prefix = ['cmd', '/c', 'npx', '-y', '@upstash/context7-mcp']
+        npx_prefix = ['npx', '-y', '@upstash/context7-mcp']
+        if vector[:len(cmd_prefix)] == cmd_prefix:
+            tail = vector[len(cmd_prefix):]
+        elif vector[:len(npx_prefix)] == npx_prefix:
+            tail = vector[len(npx_prefix):]
+        else:
+            return False
+        if any(key not in {'command', 'args', 'type', 'enabled'} for key in value):
+            return False
+        return not tail or (len(tail) == 2 and tail[0] == '--api-key')
     return name in packages and packages[name] in text
 
 
@@ -168,7 +186,13 @@ def update(request):
         # on a CRLF file, then append a second one.
         pattern = re.compile(r'(?ms)^# BEGIN AgentHub MCP\r?\n.*?^# END AgentHub MCP(?:\r?\n|$)')
         blocks = list(pattern.finditer(old))
-        if old.count(BEGIN) != len(blocks) or old.count(END) != len(blocks) or len(blocks) > 1:
+        unmatched_begin = old.count(BEGIN) - len(blocks)
+        unmatched_end = old.count(END) - len(blocks)
+        # Preserve a single orphan END comment from an older writer that
+        # appended to the Codex config without its BEGIN marker. It is not an
+        # owned block; keep it verbatim while permitting a new managed block.
+        orphan_end_only = unmatched_begin == 0 and unmatched_end == 1
+        if len(blocks) > 1 or unmatched_begin != 0 or (unmatched_end != 0 and not orphan_end_only):
             raise ValueError('Invalid AgentHub TOML markers')
         block = blocks[0].group() if blocks else ''
         # Compare on content, not on line-ending style, so a CRLF round-trip
@@ -185,11 +209,19 @@ def update(request):
                 'Preserved manually changed AgentHub TOML block: ' + str(path)
             ]}
         base = pattern.sub('', old)
-        if request.get('legacy_global'):
-            eligible = set()
-            for name in ('codegraph', 'context7'):
+        eligible = set()
+        legacy_global = request.get('legacy_global', False)
+        if legacy_global:
+            legacy_names = ({'codegraph', 'context7'} if legacy_global is True
+                            else set(legacy_global))
+            for name in legacy_names:
                 value = parsed.get('mcp_servers', {}).get(name, {})
-                if legacy(name, value) and set(value) <= {'command', 'args'} and value.get('command') == 'cmd':
+                allowed_keys = {'command', 'args'}
+                if name == 'codegraph':
+                    allowed_keys.add('env')
+                env_ok = not value.get('env') or (name == 'codegraph' and value.get('env') == {'DO_NOT_TRACK': '1'})
+                if (legacy(name, value) and set(value) <= allowed_keys and env_ok
+                        and value.get('command') == 'cmd'):
                     args = value.get('args', [])
                     if (name == 'codegraph' and args == ['/c', 'codegraph', 'serve', '--mcp']) or (
                         name == 'context7' and args[:4] == ['/c', 'npx', '-y', '@upstash/context7-mcp']
@@ -198,12 +230,14 @@ def update(request):
             sections = re.split(r'(?m)(?=^\[)', base)
             kept = []
             for section in sections:
-                header = re.match(r'^\[mcp_servers\.([a-z0-9_-]+)\]\s*\n', section)
+                header = re.match(r'^\[mcp_servers\.([a-z0-9_-]+)(?:\.[^\]]+)?\]\s*\n', section)
                 if header and header.group(1) in eligible:
                     continue
                 kept.append(section)
             base = ''.join(kept)
             tomllib.loads(base)
+        if remove and not block and not eligible:
+            return {'changed': False, 'messages': []}
         existing = tomllib.loads(base).get('mcp_servers', {})
         selected = {}
         if not remove:
@@ -213,7 +247,7 @@ def update(request):
                 else:
                     selected[name] = value
         new_block = BEGIN + '\n' + render_toml(selected) + END + '\n' if selected else ''
-        new = base.rstrip() + ('\n\n' if base.strip() and new_block else '') + new_block
+        new = base if not new_block else base.rstrip() + ('\n\n' if base.strip() else '') + new_block
         tomllib.loads(new)
         new_state = {'path': str(path), 'block': new_block, 'servers': selected}
     else:
@@ -226,9 +260,11 @@ def update(request):
             raise ValueError('MCP map must be an object')
         previous = state.get('servers', {})
         owned = dict(previous)
-        if adopt:
+        adopt_names = set(managed) if adopt else set()
+        adopt_names.update(request.get('legacy_adopt', []))
+        if adopt_names:
             for name, value in current.items():
-                if name in managed and name not in owned and legacy(name, value):
+                if name in adopt_names and name not in owned and legacy(name, value):
                     owned[name] = value
         # Reclaim entries that are already byte-identical to what we are about to
         # write. Ownership only records authorship, and losing it used to be
@@ -289,6 +325,17 @@ def main():
             servers = parsed.get('mcp_servers', {})
             result = {'valid': True, 'servers': list(servers),
                       'disabled': [name for name, value in servers.items() if value.get('enabled') is False]}
+        elif request.get('action') == 'inspect-json':
+            with open(request['path'], 'r', encoding='utf-8-sig') as stream:
+                parsed = json.load(stream)
+            if not isinstance(parsed, dict):
+                raise ValueError('Config must be an object')
+            servers = parsed.get(request.get('property', 'mcpServers'), {})
+            if not isinstance(servers, dict):
+                raise ValueError('MCP map must be an object')
+            result = {'valid': True, 'servers': list(servers),
+                      'disabled': [name for name, value in servers.items()
+                                   if isinstance(value, dict) and (value.get('disabled') is True or value.get('enabled') is False)]}
         else:
             result = update(request)
         print(json.dumps(result))

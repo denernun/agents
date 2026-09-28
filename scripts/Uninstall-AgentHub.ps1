@@ -33,6 +33,7 @@ param(
   [string[]]$ProjectPath = @(),
   [switch]$Full,
   [switch]$GlobalSkills,
+  [switch]$GlobalMcp,
   [switch]$RemoveLegacyCodexMcp,
   [switch]$GlobalOnly,
   # Drop the hub's ownership records for files it no longer manages. Use with
@@ -107,14 +108,35 @@ foreach ($project in $projects) {
   }
 }
 if ($GlobalSkills) {
-  foreach ($item in Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.agents/skills') -Directory -Force -ErrorAction SilentlyContinue) {
-    Remove-HubLink -Path $item.FullName -Root $env:USERPROFILE -HubPath $HubPath -DryRun:$DryRun
+  $globalRoots = Get-IdeGlobalSkillRoots -Ides @((Get-IdeRegistry).Keys)
+  foreach ($root in $globalRoots.Keys) {
+    foreach ($item in Get-ChildItem -LiteralPath $root -Directory -Force -ErrorAction SilentlyContinue) {
+      Remove-HubLink -Path $item.FullName -Root $root -HubPath $HubPath -DryRun:$DryRun
+    }
+  }
+}
+if ($GlobalMcp) {
+  $globalMcpNames = @(Get-JsonProperty $cat.mcp 'global')
+  $globalTargets = Get-IdeGlobalMcpTargets -Ides @((Get-IdeRegistry).Keys)
+  foreach ($path in $globalTargets.Keys) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+    $target = $globalTargets[$path]
+    if ($target.Format -eq 'toml') {
+      $legacyNames=@($globalMcpNames)
+      if ($target.Ides -contains 'Codex') { $legacyNames += 'codegraph' }
+      Invoke-HubConfig @{path=$path; format='toml'; remove=$true; dry=[bool]$DryRun; legacy_global=$legacyNames}
+    } else {
+      $request = @{path=$path; remove=$true; managed=$globalMcpNames; adopt=$false; legacy_adopt=$globalMcpNames; dry=[bool]$DryRun}
+      if ($target.Format -eq 'opencode') { $request.property='mcp' }
+      else { $request.property=$target.Property }
+      Invoke-HubConfig $request
+    }
   }
 }
 if ($RemoveLegacyCodexMcp) {
   $codexRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
   $path = Join-Path $codexRoot 'config.toml'
-  if (Test-Path $path) { Invoke-HubConfig @{path=$path; format='toml'; legacy_global=$true; remove=$true; dry=[bool]$DryRun} }
+  if (Test-Path $path) { Invoke-HubConfig @{path=$path; format='toml'; legacy_global=@('codegraph'); remove=$true; dry=[bool]$DryRun} }
 }
 
 if ($PruneState) {

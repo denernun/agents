@@ -9,8 +9,8 @@ em `skills/`, com licença MIT e atribuição em cada pasta.
 |---|---|
 | contract-first | Famílias Angular e NestJS |
 | api-design | Família NestJS |
-| e2e-testing | Angular e projetos `*-www` / `*-ajuda` |
-| skill-stocktake | Manutenção: skills locais do hub; pessoais do Codex com `-GlobalSkills` |
+| e2e-testing | Global: workflow reutilizável de browser/E2E em projetos web |
+| skill-stocktake | Manutenção: somente skills locais do workspace AgentHub |
 | eval-harness | Mesmo escopo de manutenção |
 | security-scan | Mesmo escopo de manutenção |
 
@@ -21,10 +21,10 @@ seus hooks, plugin, regras e instalador não são ativados.
 ## Instalar e verificar
 
 ```powershell
-# Apenas as seis skills; respeita .env, exclusões e detecção de IDEs do hub.
-./scripts/Sync-EccSkills.ps1 -GlobalSkills -DryRun
-./scripts/Sync-EccSkills.ps1 -GlobalSkills
-./scripts/Test-EccInstallation.ps1 -GlobalSkills
+# Apenas atribuições ECC de projeto; skills globais são instaladas pelo instalador principal.
+./scripts/Sync-EccSkills.ps1 -DryRun
+./scripts/Sync-EccSkills.ps1
+./scripts/Test-EccInstallation.ps1
 ./scripts/tests/Test-Ecc.ps1
 python -m unittest discover -s scripts/tests -v
 ```
@@ -68,7 +68,8 @@ Não copie novamente os SKILL.md originais sobre os adaptados.
 Para remover uma atribuição, esvazie sua família/padrão ou desative `maintenance`
 no catálogo e rode o sync. Ele remove somente os links ECC gerenciados daquele
 escopo. Mantenha a entrada no catálogo durante a limpeza. O uninstall geral
-também reconhece os links para `skills/`; skills pessoais exigem `-GlobalSkills`.
+reconhece links de projeto e globais gerenciados. Skills de manutenção não são
+instaladas no perfil pessoal.
 Links locais do próprio hub podem ser removidos colocando todas as seis entradas
 sem escopo e rodando o sync. Nenhuma rotina apaga o vendor ou os arquivos fonte.
 

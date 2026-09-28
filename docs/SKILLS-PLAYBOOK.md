@@ -284,18 +284,18 @@ O hook opcional do unlazy é uma instalação separada; não é ativado por simp
 
 O instalador usa exceções explícitas de projectFamilies, depois arquivos/dependências de Angular e NestJS, e então os padrões de nome. Uma pasta terminada em -www também pode ser reconhecida como Angular pelo conteúdo.
 
-| Família | Seleção específica | MCPs adicionais aos comuns |
+| Família | Skills locais | MCPs por projeto |
 |---|---|---|
-| NestJS | nestjs-clean-architecture, as 5 skills de grafo, contract-first e api-design | mongodb; openapi quando Swagger/configuração forem detectados. |
-| Angular | angular-coreui, coreui-styling, browser-harness, as 5 de grafo, contract-first e e2e-testing | playwright e coreui. |
-| Android | claude-android-ninja e as 5 de grafo | Nenhum adicional. |
-| minimal | browser-harness e as 5 de grafo | playwright para nomes *-www e *-ajuda; esses nomes também recebem e2e-testing. |
-| Delphi | Lista de stack vazia; as 9 comuns bloqueadas. **O instalador ainda soma as 15 Pocock e as 7 Superpowers.** | Nenhum adicional; o código ainda inclui os MCPs comuns. |
-| Manutenção do hub | skill-stocktake, eval-harness e security-scan | Não instala novos MCPs por causa dessas skills. |
+| NestJS | nestjs-clean-architecture, contract-first, api-design | mongodb; openapi quando Swagger/configuração forem detectados. |
+| Angular | angular-coreui, coreui-styling, contract-first | playwright e coreui; Chrome DevTools conforme configuração. |
+| Android | claude-android-ninja | Nenhum adicional. |
+| minimal | Nenhuma; frontend/browser/E2E ficam globais sob demanda. | Sites recebem playwright e chrome-devtools. |
+| Delphi | delphi-erpclass | Nenhum MCP adicional além de CodeGraph/filesystem por projeto. |
+| Manutenção do hub | skill-stocktake, eval-harness e security-scan no AgentHub | Não são distribuídas nos projetos de produto. |
 
-**Atenção ao Delphi:** o catálogo contém disabledSkillsUntilSelected, mas o instalador atual não consulta essa flag. Portanto “Delphi não recebe nenhuma skill” não descreve o código atual. Também existe skills/delphi-erpclass sem SKILL.md válido; não deve ser anunciada como skill utilizável. A documentação registra essa divergência, sem alterar a instalação.
+Skills cross-stack de Git, desenvolvimento, depuração, revisão, UI e browser são instaladas globalmente. As regras obrigatórias de stack permanecem locais para evitar aplicá-las a um projeto de tecnologia diferente.
 
-Os MCPs comuns são codegraph, context7 e filesystem. Ter o MCP codegraph configurado não significa que o índice do projeto já esteja disponível.
+Context7 e ai-memory são globais. CodeGraph e filesystem são MCPs comuns por projeto; Context7 já vem separado da configuração de projeto. Ter CodeGraph configurado não significa que o índice local já esteja disponível.
 
 <h2 id="ferramentas">6. Funcionalidades do hub além das skills</h2>
 
@@ -374,7 +374,7 @@ A opção -Ides restringe a seleção da execução, mas não ignora a política
 |---|---|
 | -DryRun | Mostra operações sem aplicar a instalação. |
 | -WriteAgents | Atualiza a orientação enxuta do projeto, preservando a seção Local conforme o escritor. |
-| -GlobalSkills | Também disponibiliza skills comuns/de processo e de manutenção ECC no escopo pessoal do Codex. Skills de stack continuam locais. |
+| -GlobalSkills | Legado compatível; skills transversais são sempre sincronizadas para as IDEs detectadas. ECC de manutenção permanece no AgentHub. |
 | -SkipCodegraphInit | Pula a inicialização dos índices de código. |
 | -SkipMattPocockSetup | Pula o preparo local dos arquivos do fluxo Pocock. |
 | -SkipAiMemory | Pula a configuração da integração opcional de memória nesta execução. |
@@ -399,16 +399,16 @@ git diff --submodule=log
 **Somente ECC:**
 
 ```powershell
-.\scripts\Sync-EccSkills.ps1 -GlobalSkills -DryRun
+.\scripts\Sync-EccSkills.ps1 -DryRun
 # Após revisar o preview:
-.\scripts\Sync-EccSkills.ps1 -GlobalSkills
-.\scripts\Test-EccInstallation.ps1 -GlobalSkills
+.\scripts\Sync-EccSkills.ps1
+.\scripts\Test-EccInstallation.ps1
 ```
 
 **Antes de remover:** o modo padrão remove links; -Full também trata MCPs e ponteiros gerenciados. Configurações manuais, AGENTS.md e ai-memory global são preservados. Veja o preview:
 
 ```powershell
-.\scripts\Uninstall-AgentHub.ps1 -Full -DryRun
+.\scripts\Uninstall-AgentHub.ps1 -Full -GlobalSkills -GlobalMcp -DryRun
 ```
 
 ### Onde procurar a instalação

@@ -1,19 +1,19 @@
 # CodeGraph no AgentHub
 
 O HUB mantém MCP por projeto, com caminho explícito e `DO_NOT_TRACK=1`.
-O fallback global do Codex é opcional (`Sync-Codegraph.ps1 -Global`) e não fixa
-um repositório: em sessões fora do projeto, informe `projectPath` na consulta.
+As skills de navegação do CodeGraph são globais; o antigo MCP global do Codex foi
+retirado. Em sessões fora do projeto, use a skill e informe `projectPath` na consulta.
 Reabra a sessão depois de mudar os MCPs ou skills; arquivo configurado não prova
 que um cliente já carregou a ferramenta.
 
 ## Atualização direcionada
 
-`scripts/Sync-Codegraph.ps1 -Projects <repo1>,<repo2> -Global -AdoptLegacySkills`
-atualiza somente CodeGraph nas configurações existentes, preserva outros MCPs
-e salva backup das skills globais antigas reconhecidas. Use `-DryRun` antes de
-aplicar. Skills personalizadas são preservadas. Para indexar, acrescente
-`-Initialize`; o instalador normal também inclui a família Delphi.
-As cinco skills globais ficam vinculadas à fonte do HUB, evitando cópias antigas.
+`scripts/Sync-Codegraph.ps1 -Projects <repo1>,<repo2>` atualiza somente CodeGraph
+nas configurações dos projetos indicados e preserva os demais MCPs. `-Global`
+refresca as skills de grafo nas raízes globais reconhecidas e remove apenas o MCP
+CodeGraph global legado identificado pelo hub; não cria um servidor sem caminho
+de projeto. Use `-DryRun` antes de aplicar. Para indexar, acrescente `-Initialize`;
+o instalador normal também inclui a família Delphi.
 
 ## Worktrees e qualidade
 

@@ -19,8 +19,8 @@ Seis skills de ECC complementam o hub: `contract-first`, `api-design`,
 Distribuição por família, adaptações Windows e dependências estão em
 [Integração ECC](docs/ecc-integration.md).
 
-Para distribuir somente essas skills: `./scripts/Sync-EccSkills.ps1 -GlobalSkills`
-(preview com `-DryRun`). O instalador completo também aplica os escopos do catálogo.
+Para sincronizar somente as atribuições ECC de projeto: `./scripts/Sync-EccSkills.ps1 -DryRun`.
+Skills ECC de manutenção ficam no workspace AgentHub; skills transversais e de navegador são globais.
 
 ## Por quê
 
@@ -166,29 +166,33 @@ Para remoção completa de tudo que o hub gerou:
 Migração de uma instalação anterior (execute na raiz do hub):
 
 ```powershell
-./scripts/Install-AgentHub.ps1 -AdoptLegacyConfigs -GlobalSkills -SkipAiMemory -SkipCodegraphInit -SkipMattPocockSetup
+./scripts/Install-AgentHub.ps1 -AdoptLegacyConfigs -SkipCodegraphInit -SkipMattPocockSetup
 ./scripts/Test-AgentHub.ps1
+./scripts/Test-AgentHubGlobal.ps1
 ```
 
 - `-AdoptLegacyConfigs` permite adotar entradas antigas de MCP reconhecidas pelo comando/pacote, além dos nomes do catálogo. Revise o dry-run antes de usar em outra máquina. Conflitos não reconhecidos são preservados.
-- `-GlobalSkills` disponibiliza skills comuns e de processo ao Codex em `~/.agents/skills`, inclusive ao trabalhar no próprio hub. As skills de stack continuam locais. Sobreposição de escopos pode produzir nomes repetidos no seletor.
-- Codex e Antigravity usam `.agents/skills`. Os antigos links gerenciados em `.codex/skills` são removidos após a criação dos links corretos.
-- Codex recebe `.codex/config.toml` por projeto; Claude recebe `.mcp.json` mesmo quando Cursor também está ativo. O projeto precisa ser confiável no Codex.
+- Skills transversais, de frontend e de navegador são instaladas globalmente nos diretórios de usuário das IDEs detectadas. Projetos recebem somente skills de stack/contrato (Angular/CoreUI, NestJS/API, Delphi e Android). ECC de manutenção fica no workspace AgentHub. `-GlobalSkills` é mantido por compatibilidade, mas não é mais necessário.
+- Codex e Antigravity usam `.agents/skills` no escopo de projeto; as skills globais ficam nas raízes de usuário reconhecidas por cada IDE.
+- MCP Context7 é global, com configuração nativa por IDE; `ai-memory` também é global. CodeGraph e os demais MCPs ligados ao projeto continuam no arquivo de cada repositório. O projeto precisa ser confiável no Codex para os MCPs locais.
 - A família é determinada por `projectFamilies` (exceções explícitas), depois por `angular.json` e dependências Angular/NestJS, depois pelos padrões de nome. Um erro de JSON interrompe a classificação.
 - Escritas de MCP são validadas antes da substituição, usam substituição atômica e criam backup. O manifesto e os backups ficam em `.agenthub-state/` (gitignored; podem conter credenciais). Não publique essa pasta. Preserve-a para que o uninstall reconheça a propriedade dos artefatos.
 - Uma configuração manual não é substituída só porque usa o mesmo nome. Alterações manuais posteriores em entradas gerenciadas também são preservadas. Um bloco TOML gerenciado modificado interrompe a atualização para revisão.
 - `-DryRun` não grava configurações nem exibe tokens de ai-memory ou context7.
 
-Para remover as duas entradas globais criadas pelo instalador antigo, **depois** de instalar os MCPs por projeto:
+Com `AI_MEMORY_ENABLED=1`, `./scripts/Test-AiMemoryCursor.ps1` valida o hook
+Cursor/Orca via `cmd.exe`, a integração global e o guard do profile PowerShell.
+
+Para remover somente o MCP CodeGraph global legado do Codex, **depois** de instalar CodeGraph nos projetos:
 
 ```powershell
 # Raiz vazia para executar somente a limpeza global:
 ./scripts/Uninstall-AgentHub.ps1 -Roots @() -RemoveLegacyCodexMcp -GlobalOnly
 ```
 
-A limpeza global reconhece apenas os vetores antigos exatos de codegraph/context7; entradas personalizadas e ai-memory permanecem. `-Full` remove entradas de MCP registradas (inclusive OpenCode e TOML), ponteiros inalterados e links do hub. `-GlobalSkills` no uninstall remove apenas links pessoais apontando para este hub. AGENTS.md e integrações globais ai-memory são preservados.
+A limpeza completa previewada com `-Full -GlobalSkills -GlobalMcp -DryRun` remove apenas artefatos gerenciados de projeto e globais; configurações manuais e o ai-memory global são preservados. `-GlobalMcp` limpa Context7 gerenciado/legado, `-GlobalSkills` remove links pessoais do hub; o MCP codegraph global antigo pode ser removido com `-RemoveLegacyCodexMcp`.
 
-`Test-AgentHub.ps1 -Json` produz diagnóstico sem credenciais, com skills ausentes/inválidas, sintaxe, MCPs esperados ausentes e flags explícitas de desativação. Descoberta na IDE, aprovação e conectividade são marcadas como **não observadas**, nunca inferidas da existência do arquivo. O inventário inclui todas as raízes do catálogo, inclusive CRMCLASS, e configurações TOML.
+`Test-AgentHub.ps1 -Json` audita skills/MCPs de projeto; `Test-AgentHubGlobal.ps1 -Json` audita raízes globais e Context7; `Test-AiMemoryCursor.ps1` verifica o hook via `cmd.exe`, MCP global e profile PowerShell. Esses testes confirmam arquivos/preflight; descoberta efetiva e aprovação ainda devem ser conferidas na IDE. O inventário inclui todas as raízes do catálogo e TOML.
 
 No Cursor, abra **Customize → MCPs**, aprove as conexões e compare abrir uma pasta isoladamente com abrir a workspace. O hub não altera aprovações internas. No Codex e Claude, use `/mcp`; reabra a sessão para atualizar a descoberta de skills. Se um servidor voltar a ficar disabled sem mudar o arquivo, examine os logs da IDE.
 
@@ -207,12 +211,15 @@ Definidos em `catalog/projects.json`:
 
 | Família | Projetos | MCPs |
 |---------|----------|------|
-| **Todos** | `*` | `codegraph`, `context7`, `filesystem` |
+| **Todos** | `*` | `codegraph`, `filesystem` |
 | **NestJS** | `*-api`, `*-auth`, `*-sync`, `*-hook`, `*-cob-api` | + `mongodb` (read-only), `openapi` (se Swagger detectado) |
 | **Angular** | `*-admin`, `*-dash`, `*-app`, `*-cob` | + `playwright`, `coreui` |
 | **Android** | `mobiclass-apk`, `mobiclass-leitor`, `mobiclass-comanda` | só os comuns |
 | **Sites** | `*-www`, `*-ajuda` | + `playwright` |
 | **Delphi** | `*-erp` | só os comuns |
+
+O MCP `context7` é instalado globalmente para as IDEs detectadas. No Codex, o
+instalador reutiliza o plugin Context7 oficial quando ele já está habilitado.
 
 ### OpenAPI
 
@@ -434,14 +441,16 @@ usado — só os `SKILL.md`, carregados sob demanda.
 
 ### MCP global vs projeto
 
-MCPs **universais** (como `ai-memory`, ver abaixo) ficam na config global do usuário.
-MCPs **per-project** (`codegraph`, `context7`, `filesystem`, `openapi`, `mongodb`, `playwright`) ficam na config do projeto e são gerados pelo install.
+MCPs **globais**: `ai-memory` e `context7`. MCPs por projeto/família:
+`filesystem`, `codegraph`, `openapi`, `mongodb`, `playwright`, `chrome-devtools`
+e `coreui`; vários recebem o caminho do repositório, dados da API/banco ou só se
+aplicam a projetos web.
 
-Se um MCP aparecer com erro na config global mas funcionar por projeto, **remova-o da config global** — a de projeto tem prioridade.
+Se um MCP por projeto também estiver configurado globalmente, confira a origem no painel antes de remover. Context7 e ai-memory são globais por política; CodeGraph e os MCPs ligados ao repositório ficam por projeto.
 
 #### Codex: configuração por projeto
 
-O hub gera `.codex/config.toml` com os servidores da família. Skills locais usam `.agents/skills`. O Codex carrega configurações locais somente em projetos confiáveis. A instalação global antiga de codegraph/context7 pode ser removida com `Uninstall-AgentHub.ps1 -GlobalOnly -RemoveLegacyCodexMcp`, após validar a migração.
+O hub gera `.codex/config.toml` com os servidores do projeto; Context7 fica no escopo do usuário em `~/.codex/config.toml` quando o plugin global equivalente não está habilitado. Skills de projeto usam `.agents/skills`; skills globais usam `~/.agents/skills`. O Codex carrega configurações locais somente em projetos confiáveis.
 
 ## Memória compartilhada (ai-memory)
 

@@ -358,18 +358,19 @@ As fontes são identificadas pelos arquivos locais .gitmodules e catalog/project
 
 ### Por família de projeto
 
-Além da base comum, Pocock e Superpowers, o instalador aplica a seleção específica:
+Skills transversais (Addy, Matt Pocock, Superpowers, CodeGraph, navegação, frontend
+e navegador) são globais. O instalador aplica localmente somente:
 
-| Família | Skills específicas / complementos | Ferramentas adicionais |
+| Família | Skills locais | Ferramentas por projeto |
 |---|---|---|
-| NestJS | nestjs-clean-architecture, as 5 de grafo, contract-first e api-design. | mongodb e openapi, conforme os pré-requisitos detectados. |
-| Angular | angular-coreui, coreui-styling, browser-harness, as 5 de grafo, contract-first e e2e-testing. | playwright e coreui. |
-| Android | claude-android-ninja e as 5 de grafo. | Nenhum MCP adicional. |
-| minimal | browser-harness e as 5 de grafo. | Nomes *-www / *-ajuda recebem playwright e também a skill e2e-testing. |
-| Delphi | Sem skills de stack; bloqueia as 9 comuns, mas o código ainda soma as 15 Pocock e as 7 Superpowers. | O código ainda inclui os MCPs comuns. |
-| Manutenção do hub | skill-stocktake, eval-harness e security-scan. | Sem novos MCPs por essas skills; escopo pessoal opcional com -GlobalSkills. |
+| NestJS | nestjs-clean-architecture, contract-first e api-design. | mongodb/openapi quando detectados no projeto. |
+| Angular | angular-coreui, coreui-styling e contract-first. | playwright/coreui/chrome-devtools conforme a família. |
+| Android | claude-android-ninja. | Nenhum MCP adicional. |
+| minimal | Nenhuma; workflows de UI/browser estão globais sob demanda. | `*-www` / `*-ajuda` recebem playwright e chrome-devtools por projeto. |
+| Delphi | delphi-erpclass. | MCPs por projeto; CodeGraph recebe o caminho do repositório. |
+| Manutenção do hub | skill-stocktake, eval-harness e security-scan somente no próprio AgentHub. | Não são instaladas no perfil global nem nos projetos de produto. |
 
-As cinco de grafo são codegraph, explore-codebase, debug-issue, refactor-safely e review-changes. Os MCPs comuns são codegraph, context7 e filesystem.
+As cinco skills de grafo são globais. Context7 e ai-memory são MCPs globais; filesystem, codegraph e os MCPs de stack continuam por projeto.
 
 A classificação usa projectFamilies para exceções, depois conteúdo Angular/NestJS e então padrões de nome. O sufixo da pasta sozinho não resolve todos os casos.
 
@@ -431,7 +432,8 @@ Depois confira a descoberta da skill e a conexão dos MCPs na IDE. O diagnóstic
 | -Ides Cursor,Codex | Define candidatos para esta execução; ainda respeita allowlist e exclusões. |
 | -WriteAgents | Solicita orientação enxuta conforme template; o modo normal preserva a seção Local na composição. |
 | -DryRun | Simula a instalação sem aplicar as mudanças. |
-| -GlobalSkills | Acrescenta skills comuns/de processo e manutenção ECC ao escopo pessoal do Codex; stack continua local. |
+| Instalação normal | Instala skills transversais, frontend e navegador globalmente nas IDEs detectadas; os projetos recebem somente skills de stack/contrato. |
+| -GlobalSkills | Legado compatível; a instalação normal já sincroniza as skills globais em todos os hosts detectados. ECC de manutenção continua no AgentHub. |
 | -SkipCodegraphInit | Pula a criação dos índices codegraph. |
 | -SkipMattPocockSetup | Pula o preparo local do tracker e documentos de domínio. |
 | -SkipAiMemory | Pula a integração opcional de memória nesta execução. |
@@ -463,10 +465,10 @@ ECC exige revisão das seis adaptações e da revisão fixada no catálogo. Não
 ### Sincronizar somente ECC ou codegraph
 
 ```powershell
-.\scripts\Sync-EccSkills.ps1 -GlobalSkills -DryRun
+.\scripts\Sync-EccSkills.ps1 -DryRun
 # Depois de revisar:
-.\scripts\Sync-EccSkills.ps1 -GlobalSkills
-.\scripts\Test-EccInstallation.ps1 -GlobalSkills
+.\scripts\Sync-EccSkills.ps1
+.\scripts\Test-EccInstallation.ps1
 ```
 
 Para codegraph, -Projects recebe **raízes exatas de repositórios**, diferente de -Roots do instalador geral:
@@ -479,10 +481,10 @@ Para codegraph, -Projects recebe **raízes exatas de repositórios**, diferente 
 
 ### Desinstalar com escopo claro
 
-Primeiro faça uma simulação. O exemplo limita a família ERPCLASS:
+Primeiro faça uma simulação. O exemplo limita a família ERPCLASS e inclui os MCPs e skills globais gerenciados:
 
 ```powershell
-.\scripts\Uninstall-AgentHub.ps1 -Roots D:\SISTEMAS\ERPCLASS -Full -DryRun
+.\scripts\Uninstall-AgentHub.ps1 -Roots D:\SISTEMAS\ERPCLASS -Full -GlobalSkills -GlobalMcp -DryRun
 ```
 
 Após revisar, retirar -DryRun aplica a remoção. Não execute desinstalação como tentativa inicial de corrigir um aviso de arquivo manual.
@@ -491,8 +493,9 @@ Após revisar, retirar -DryRun aplica a remoção. Não execute desinstalação 
 |---|---|
 | Sem -Full | Links de skills reconhecidos e a junction references. |
 | -Full | Também MCPs e ponteiros gerenciados inalterados, além de .ai-memory.toml gerenciado. |
-| -GlobalSkills | Links pessoais que apontam para este hub. |
-| -RemoveLegacyCodexMcp | Apenas entradas globais legadas reconhecidas de codegraph/context7. |
+| -GlobalSkills | Links globais pessoais que apontam para este hub. |
+| -GlobalMcp | MCPs globais gerenciados pelo hub e Context7 legado reconhecido; preserva ai-memory e plugins manuais. |
+| -RemoveLegacyCodexMcp | Apenas o CodeGraph global legado reconhecido no Codex. |
 | -GlobalOnly | Evita percorrer projetos; executa somente a limpeza global solicitada. |
 | -Roots / -HubPath | Limitam raízes percorridas e a fonte do hub. |
 | -DryRun | Mostra o que seria removido. |
@@ -503,18 +506,19 @@ AGENTS.md, conteúdo manual, backups e integração global ai-memory são preser
 
 ### Caminhos usados pelo hub
 
-| IDE | Skills por projeto | Configuração MCP |
-|---|---|---|
-| Cursor | .cursor/skills | .cursor/mcp.json |
-| Claude | .claude/skills | .mcp.json |
-| Codex | .agents/skills | .codex/config.toml |
-| Antigravity | .agents/skills | .agents/mcp_config.json |
-| OpenCode | .opencode/skills | opencode.json |
-| Kiro | .kiro/skills | .kiro/settings/mcp.json |
-| VS Code | .github/skills | .vscode/mcp.json |
-| Devin | .devin/skills | .devin/mcp_config.json |
+| IDE | Skills por projeto | Skills globais | MCP de projeto | Context7 global |
+|---|---|---|---|---|
+| Cursor | .cursor/skills | ~/.agents/skills | .cursor/mcp.json | ~/.cursor/mcp.json |
+| Claude | .claude/skills | ~/.claude/skills | .mcp.json | ~/.claude.json |
+| Codex | .agents/skills | ~/.agents/skills | .codex/config.toml | ~/.codex/config.toml (plugin global quando ativo) |
+| Antigravity | .agents/skills | ~/.gemini/config/skills e ~/.gemini/antigravity-cli/skills | .agents/mcp_config.json | ~/.gemini/config/mcp_config.json |
+| OpenCode | .opencode/skills | ~/.config/opencode/skills | opencode.json | ~/.config/opencode/opencode.json |
+| Kiro | .kiro/skills | ~/.kiro/skills | .kiro/settings/mcp.json | ~/.kiro/settings/mcp.json |
+| VS Code | .github/skills | ~/.agents/skills | .vscode/mcp.json | ~/.copilot/mcp-config.json |
+| Devin | .devin/skills | %APPDATA%/devin/skills | .devin/mcp_config.json | %APPDATA%/devin/mcp_config.json |
+| Qoder | .qoder/skills | ~/.qoder/skills | .qoder/mcp.json | ~/.qoder/mcp.json |
 
-Codex e Antigravity compartilham .agents/skills. Skills globais e locais podem aparecer repetidas; confira a fonte antes de remover qualquer uma.
+Skills globais carregam fora das raízes de projeto do AgentHub em sessões locais com o mesmo perfil. Sessões Cloud/SSH precisam da instalação no próprio host; arquivos em disco não comprovam descoberta pela IDE.
 
 ### Diagnóstico em ordem
 
@@ -537,7 +541,7 @@ Codex e Antigravity compartilham .agents/skills. Skills globais e locais podem a
 | Diagnóstico aponta skills ausentes no Delphi | Compare com a exceção documentada; o diagnóstico atual não filtra as comuns bloqueadas. |
 | Página ainda mostra texto antigo | Recarregue com Ctrl+F5; o navegador pode ter guardado a versão anterior. |
 
-Ferramentas de apoio: Test-AgentHub.ps1 verifica arquivos/configuração; Inventory-AgentFiles.ps1 ajuda a encontrar regras grandes; Test-EccInstallation.ps1 verifica ECC; Test-CodegraphMcp.py oferece diagnóstico específico do MCP, com opções em --help.
+Ferramentas de apoio: Test-AgentHub.ps1 verifica escopo de projeto; Test-AgentHubGlobal.ps1 verifica skills globais e Context7; Test-AiMemoryCursor.ps1 confere hook/profile do Cursor no Windows; Inventory-AgentFiles.ps1 encontra regras grandes; Test-EccInstallation.ps1 verifica ECC; Test-CodegraphMcp.py diagnostica CodeGraph.
 
 Ao pedir ajuda, envie projeto, IDE, comando executado, uso ou não de -DryRun e mensagem de erro sem credenciais.
 

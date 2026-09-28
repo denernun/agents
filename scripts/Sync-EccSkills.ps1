@@ -31,19 +31,19 @@ foreach ($p in $cat.ecc.skills.PSObject.Properties) {
   if (-not (Test-HubSkill (Join-Path $HubPath "skills/$($p.Name)"))) { throw "Invalid ECC skill: $($p.Name)" }
 }
 $maintenance = @(Get-EccSkillNames -Catalog $cat -Maintenance)
+$globalNames = @(Get-GlobalSkillNames -Catalog $cat)
 foreach ($rel in @($Ides | ForEach-Object { $paths[$_] } | Select-Object -Unique)) {
   Sync-EccSkillLinks -HubPath $HubPath -SkillRoot (Join-Path $HubPath $rel) -Catalog $cat -Names $maintenance -DryRun:$DryRun
 }
-if ($GlobalSkills -and $Ides -contains 'Codex') {
-  Sync-EccSkillLinks -HubPath $HubPath -SkillRoot (Join-Path $env:USERPROFILE '.agents/skills') -Catalog $cat -Names $maintenance -DryRun:$DryRun
-}
+if ($GlobalSkills) { Write-Warning '-GlobalSkills is obsolete: ECC maintenance skills remain in the AgentHub workspace; cross-project skills are synced by Install-AgentHub.' }
 $count = 0
 foreach ($root in $rootsResolved) {
   foreach ($project in Get-ChildItem -LiteralPath $root -Directory) {
     if ($cat.excludeProjectNames -contains $project.Name) { continue }
     if (-not ((Test-Path (Join-Path $project.FullName '.git')) -or (Test-Path (Join-Path $project.FullName 'AGENTS.md')) -or (Test-Path (Join-Path $project.FullName 'package.json')))) { continue }
     $family = Get-ProjectFamily -Name $project.Name -Families $families -RepoPath $project.FullName -Overrides $cat.projectFamilies
-    $names = @(Get-EccSkillNames -Catalog $cat -Family $family -ProjectName $project.Name)
+    $names = @(Get-EccSkillNames -Catalog $cat -Family $family -ProjectName $project.Name |
+      Where-Object { $globalNames -notcontains $_ })
     foreach ($rel in @($Ides | ForEach-Object { $paths[$_] } | Select-Object -Unique)) {
       Sync-EccSkillLinks -HubPath $HubPath -SkillRoot (Join-Path $project.FullName $rel) -Catalog $cat -Names $names -DryRun:$DryRun
     }

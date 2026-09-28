@@ -113,9 +113,57 @@ class ConfigTests(unittest.TestCase):
 
     def test_legacy_global_cleanup_preserves_other_servers(self):
         self.path = self.path.with_suffix('.toml')
-        self.path.write_text('[mcp_servers.codegraph]\ncommand="cmd"\nargs=["/c","codegraph","serve","--mcp"]\n[mcp_servers.manual]\ncommand="keep"\n')
-        self.call(format='toml', legacy_global=True, remove=True)
+        self.path.write_text('[mcp_servers.codegraph]\ncommand="cmd"\nargs=["/c","codegraph","serve","--mcp"]\n[mcp_servers.codegraph.env]\nDO_NOT_TRACK="1"\n[mcp_servers.manual]\ncommand="keep"\n')
+        self.call(format='toml', legacy_global=['codegraph'], remove=True)
         self.assertEqual(list(tomllib.loads(self.path.read_text())['mcp_servers']), ['manual'])
+
+    def test_legacy_global_cleanup_can_remove_only_context7(self):
+        self.path = self.path.with_suffix('.toml')
+        self.path.write_text(
+            '[mcp_servers.codegraph]\ncommand="cmd"\nargs=["/c","codegraph","serve","--mcp"]\n'
+            '[mcp_servers.context7]\ncommand="cmd"\nargs=["/c","npx","-y","@upstash/context7-mcp"]\n'
+            '[mcp_servers.manual]\ncommand="keep"\n'
+        )
+        self.call(format='toml', legacy_global=['context7'], remove=True)
+        self.assertEqual(set(tomllib.loads(self.path.read_text())['mcp_servers']), {'codegraph', 'manual'})
+
+    def test_global_toml_uninstall_does_not_reformat_manual_file_without_hub_entries(self):
+        self.path = self.path.with_suffix('.toml')
+        original = 'model = "manual"\n[mcp_servers.manual]\ncommand="keep"\n'
+        self.path.write_text(original)
+        result = self.call(format='toml', legacy_global=['context7', 'codegraph'], remove=True)
+        self.assertFalse(result['changed'])
+        self.assertEqual(self.path.read_text(), original)
+        self.assertFalse((self.root / '.agenthub-state').exists())
+
+    def test_orphan_end_marker_is_preserved_while_managed_toml_block_is_added_and_removed(self):
+        self.path = self.path.with_suffix('.toml')
+        original = 'model = "manual"\n# END AgentHub MCP\n'
+        self.path.write_text(original)
+        context7 = {'command': 'cmd', 'args': ['/c', 'npx', '-y', '@upstash/context7-mcp']}
+        self.call(format='toml', servers={'context7': context7})
+        added = self.path.read_text()
+        self.assertIn('# END AgentHub MCP\n', added)
+        self.assertIn('# BEGIN AgentHub MCP', added)
+        self.assertEqual(tomllib.loads(added)['mcp_servers']['context7'], context7)
+        self.call(format='toml', servers={'context7': context7})
+        self.assertEqual(self.path.read_text(), added)
+        self.call(format='toml', remove=True)
+        removed = self.path.read_text()
+        self.assertTrue(removed.startswith(original.rstrip('\n')))
+        self.assertEqual(removed.count('# END AgentHub MCP'), 1)
+        self.assertNotIn('mcp_servers', tomllib.loads(removed))
+
+    def test_context7_legacy_adoption_requires_known_command_shape(self):
+        old = {'command': 'cmd', 'args': ['/c','npx','-y','@upstash/context7-mcp'], 'type': 'stdio'}
+        self.path.write_text(json.dumps({'mcpServers': {'context7': old, 'manual': {'command': 'keep'}}}))
+        self.call(remove=True, managed=['context7'], legacy_adopt=['context7'])
+        self.assertEqual(list(json.loads(self.path.read_text())['mcpServers']), ['manual'])
+
+        customized = {**old, 'env': {'LOCAL_SETTING': 'keep'}}
+        self.path.write_text(json.dumps({'mcpServers': {'context7': customized}}))
+        self.call(remove=True, managed=['context7'], legacy_adopt=['context7'])
+        self.assertEqual(json.loads(self.path.read_text())['mcpServers']['context7'], customized)
 
     def test_text_manual_edit_preserved(self):
         self.call(format='text', text='generated')

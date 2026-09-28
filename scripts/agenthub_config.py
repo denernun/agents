@@ -220,6 +220,12 @@ def update(request):
                 if name == 'codegraph':
                     allowed_keys.add('env')
                 env_ok = not value.get('env') or (name == 'codegraph' and value.get('env') == {'DO_NOT_TRACK': '1'})
+                # An older cleanup dropped [mcp_servers.codegraph] but left its
+                # [.env] subtable behind. Codex rejects a server with no
+                # transport ("invalid transport"), so the leftover must go too.
+                if name == 'codegraph' and value == {'env': {'DO_NOT_TRACK': '1'}}:
+                    eligible.add(name)
+                    continue
                 if (legacy(name, value) and set(value) <= allowed_keys and env_ok
                         and value.get('command') == 'cmd'):
                     args = value.get('args', [])

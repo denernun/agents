@@ -117,6 +117,12 @@ class ConfigTests(unittest.TestCase):
         self.call(format='toml', legacy_global=['codegraph'], remove=True)
         self.assertEqual(list(tomllib.loads(self.path.read_text())['mcp_servers']), ['manual'])
 
+    def test_legacy_global_cleanup_removes_orphan_codegraph_env(self):
+        self.path = self.path.with_suffix('.toml')
+        self.path.write_text('[mcp_servers.codegraph.env]\nDO_NOT_TRACK="1"\n[mcp_servers.manual]\ncommand="keep"\n')
+        self.call(format='toml', legacy_global=['codegraph'], remove=True)
+        self.assertEqual(list(tomllib.loads(self.path.read_text())['mcp_servers']), ['manual'])
+
     def test_legacy_global_cleanup_can_remove_only_context7(self):
         self.path = self.path.with_suffix('.toml')
         self.path.write_text(

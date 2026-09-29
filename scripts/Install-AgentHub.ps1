@@ -988,14 +988,24 @@ function Write-AgentsFile {
     return
   }
   $efficiency = [regex]::Match($content, '(?s)(## Eficiência de execução\r?\n.*?)(?=\r?\n## Skills\b)').Groups[1].Value.TrimEnd()
+  $projectDebug = [regex]::Match($content, '(?s)(## Seleção do projeto e debug local\r?\n.*?)(?=\r?\n## Skills\b)').Groups[1].Value.TrimEnd()
   $request = @{path=$dest; format='text'; text=$content; adopt=[bool]$AdoptLegacyConfigs; dry=[bool]$DryRun}
+  $patches = [System.Collections.Generic.List[object]]::new()
   if ($efficiency) {
-    $request.text_patch = @{
+    [void]$patches.Add(@{
       marker = '## Eficiência de execução'
       anchor = '^## Skills\b'
       content = $efficiency
-    }
+    })
   }
+  if ($projectDebug) {
+    [void]$patches.Add(@{
+      marker = '## Seleção do projeto e debug local'
+      anchor = '^## Skills\b'
+      content = $projectDebug
+    })
+  }
+  if ($patches.Count) { $request.text_patches = @($patches) }
   Invoke-HubConfig $request
   Write-Host "  wrote AGENTS.md"
 }

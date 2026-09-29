@@ -141,6 +141,9 @@ def update(request):
     if request.get('format') == 'text':
         previous = state.get('text')
         text_patch = request.get('text_patch')
+        text_patches = request.get('text_patches', [])
+        if text_patch:
+            text_patches = [text_patch, *text_patches]
         # Adoption is an explicit, user-invoked request (-AdoptLegacyConfigs) and
         # only ever targets paths the hub itself generates, so it must not depend
         # on finding a marker string in the body: templates such as
@@ -153,19 +156,25 @@ def update(request):
         # Only then may the hub replace the file wholesale; anything else is
         # either absent (write it) or user-modified (preserve it).
         owned = exists and previous is not None and old == previous
-        if text_patch and exists and not owned and not recognized:
+        if text_patches and exists and not owned and not recognized:
             # Untracked/legacy file: never clobber it. Inject the section once,
             # anchored, or leave it alone if it is already there.
-            if text_patch['marker'] in old:
+            new = old
+            changed = False
+            for patch_spec in text_patches:
+                if patch_spec['marker'] in new:
+                    continue
+                matches = list(re.finditer(patch_spec['anchor'], new, flags=re.MULTILINE))
+                if len(matches) != 1:
+                    return {'changed': False, 'messages': [
+                        'Preserved manual file; safe text patch anchor missing or ambiguous: ' + str(path)
+                    ]}
+                match = matches[0]
+                patch = patch_spec['content'].rstrip() + '\n\n'
+                new = new[:match.start()] + patch + new[match.start():]
+                changed = True
+            if not changed:
                 return {'changed': False, 'messages': []}
-            matches = list(re.finditer(text_patch['anchor'], old, flags=re.MULTILINE))
-            if len(matches) != 1:
-                return {'changed': False, 'messages': [
-                    'Preserved manual file; safe text patch anchor missing or ambiguous: ' + str(path)
-                ]}
-            match = matches[0]
-            patch = text_patch['content'].rstrip() + '\n\n'
-            new = old[:match.start()] + patch + old[match.start():]
             # Deliberately does NOT claim ownership: this file was not created
             # by the hub, so it must never become a candidate for wholesale
             # rewriting. The injected marker makes the next run a no-op.

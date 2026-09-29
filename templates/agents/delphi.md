@@ -15,6 +15,10 @@ Delphi VCL ERP — Domain / Providers / legado convivendo.
 - Docs do projeto: `source/docs/` (forms, relatórios, observer) e `docs/reforma/`.
 
 ## Eficiência de execução
+- A pasta aberta define o repositório-alvo. A família de produto é a pasta pai imediata sob `D:\SISTEMAS` (ERPCLASS, NFECLASS, MOBICLASS, SHOPCLASS, CRMCLASS ou CLOUDCLASS); confirme o caminho antes de escolher outro repositório.
+- “Verifique a API” significa procurar o repositório `*-api` irmão dentro dessa mesma pasta de família e confirmar o nome/caminho. Não atravesse para outra família sem pedido explícito.
+- Antes de iniciar uma API para debug, leia a porta configurada e verifique se já há listener. Identifique o processo e reutilize a API em execução quando servir ao pedido; não inicie outra instância na mesma porta.
+- Se iniciar um processo de debug, registre o PID raiz que você iniciou. Ao terminar, encerre a árvore desse PID sem matar o terminal pai e confirme que a porta foi liberada. Nunca encerre um listener preexistente ou de outro projeto.
 - Entregue o resultado primeiro; não repita o pedido nem narre passos rotineiros.
 - Use detalhes, alternativas ou tabelas apenas quando o pedido, o risco ou uma decisão exigir.
 - Pesquise símbolos antes de abrir arquivos e limite a saída na origem; preserve por completo resultados de Read/Edit/Write.

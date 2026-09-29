@@ -5,7 +5,7 @@
   SHOPCLASS / CRMCLASS).
 
 .DESCRIPTION
-  - Detects installed IDEs (Cursor, VS Code, Kiro, OpenCode, Antigravity, Claude Code, Codex, Devin)
+  - Detects installed IDEs (Cursor, VS Code, OpenCode, Antigravity, Claude Code, Codex, Devin)
   - Mirrors vendor skills into hub skills/, one catalog key per upstream
     package so the provenance of every skill is explicit:
     catalog.addyosmaniSkills, catalog.mattPocockSkills,
@@ -45,7 +45,7 @@
   .\Install-AgentHub.ps1 -RemoveUnusedIdeFolders -WriteAgents
 
 .EXAMPLE
-  .\Install-AgentHub.ps1 -Ides Cursor,VSCode,Kiro -DryRun
+  .\Install-AgentHub.ps1 -Ides Cursor,VSCode -DryRun
 
 .EXAMPLE
   # One-time cleanup of paths written by older script versions
@@ -149,7 +149,7 @@ function Resolve-IdePolicy {
   # Per-machine lists: process env / .env override catalog/projects.json.
   # AGENTHUB_IDES empty or "auto" = no allowlist (every detected IDE minus exclude).
   param([object]$Catalog)
-  $known = @('Cursor', 'VSCode', 'Kiro', 'OpenCode', 'Antigravity', 'Claude', 'Codex', 'Devin', 'Qoder')
+  $known = @('Cursor', 'VSCode', 'OpenCode', 'Antigravity', 'Claude', 'Codex', 'Devin', 'Qoder')
   $allowedSource = 'catalog.ides'
   $excludeSource = 'catalog.excludeIdes'
   $allowedIdes = @($Catalog.ides)
@@ -235,7 +235,6 @@ function Get-PresentIdes {
       (Get-Command code-insiders -ErrorAction SilentlyContinue)) {
     [void]$found.Add('VSCode')
   }
-  if (Test-Path (Join-Path $userHome '.kiro')) { [void]$found.Add('Kiro') }
   if ((Test-Path (Join-Path $userHome '.antigravity')) -or
       (Test-Path (Join-Path $env:APPDATA 'Antigravity')) -or
       (Test-Path (Join-Path $userHome '.gemini')) -or
@@ -520,35 +519,51 @@ function Get-IdeRegistry {
   #   GlobalMcpPath/Format/Property - user-level MCP config location/shape
   #   Mcp        - project MCP config file
   #   Property   - JSON property holding the server map, or 'toml'
-  #   CopySkills - agent does not follow directory junctions (Kiro), so copy
+  #   CopySkills - agent does not follow directory links at all, so copy
+  #   SymlinkSkills - agent skips junctions but follows directory symlinks
+  #                   (Antigravity: Go os.ReadDir reports a junction as a
+  #                   non-directory), so link with a symbolic link instead
   return [ordered]@{
     Cursor      = @{ Skills = '.cursor/skills';   GlobalSkills = @('.agents/skills'); GlobalMcpPath = 'USER:.cursor/mcp.json'; GlobalMcpFormat = 'json';    GlobalMcpProperty = 'mcpServers'; Mcp = '.cursor/mcp.json';        Property = 'mcpServers'; CopySkills = $false }
     VSCode      = @{ Skills = '.github/skills';   GlobalSkills = @('.agents/skills'); GlobalMcpPath = 'USER:.copilot/mcp-config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.vscode/mcp.json'; Property = 'servers'; CopySkills = $false }
-    Kiro        = @{ Skills = '.kiro/skills';     GlobalSkills = @('.kiro/skills');    GlobalMcpPath = 'USER:.kiro/settings/mcp.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.kiro/settings/mcp.json'; Property = 'mcpServers'; CopySkills = $true  }
     Claude      = @{ Skills = '.claude/skills';   GlobalSkills = @('.claude/skills');  GlobalMcpPath = 'CLAUDE:.claude.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.mcp.json'; Property = 'mcpServers'; CopySkills = $false }
     Codex       = @{ Skills = '.agents/skills';   GlobalSkills = @('.agents/skills');  GlobalMcpPath = 'CODEX:config.toml'; GlobalMcpFormat = 'toml'; GlobalMcpProperty = ''; Mcp = '.codex/config.toml'; Property = 'toml'; CopySkills = $false }
-    Antigravity = @{ Skills = '.agents/skills';   GlobalSkills = @('.gemini/config/skills', '.gemini/antigravity-cli/skills'); GlobalMcpPath = 'USER:.gemini/config/mcp_config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.agents/mcp_config.json'; Property = 'mcpServers'; CopySkills = $false }
+    Antigravity = @{ Skills = '.agents/skills';   GlobalSkills = @('.gemini/skills', '.gemini/antigravity-cli/skills'); GlobalMcpPath = 'USER:.gemini/config/mcp_config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.agents/mcp_config.json'; Property = 'mcpServers'; CopySkills = $false; SymlinkSkills = $true }
     OpenCode    = @{ Skills = '.opencode/skills'; GlobalSkills = @('XDG:opencode/skills'); GlobalMcpPath = 'XDG:opencode/opencode.json'; GlobalMcpFormat = 'opencode'; GlobalMcpProperty = 'mcp'; Mcp = 'opencode.json'; Property = 'mcp'; CopySkills = $false }
     Devin       = @{ Skills = '.devin/skills';    GlobalSkills = @('APPDATA:devin/skills'); GlobalMcpPath = 'APPDATA:devin/mcp_config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.devin/mcp_config.json'; Property = 'mcpServers'; CopySkills = $false }
     Qoder       = @{ Skills = '.qoder/skills';    GlobalSkills = @('.qoder/skills');    GlobalMcpPath = 'USER:.qoder/mcp.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.qoder/mcp.json'; Property = 'mcpServers'; CopySkills = $false }
   }
 }
 
+function Get-IdeSkillLinkMode {
+  # How a registry entry wants its skill folders materialised.
+  param([hashtable]$Entry)
+  if ($Entry.CopySkills) { return 'Copy' }
+  if ($Entry.ContainsKey('SymlinkSkills') -and $Entry.SymlinkSkills) { return 'SymbolicLink' }
+  return 'Junction'
+}
+
+function Merge-SkillLinkMode {
+  # A root shared by several IDEs must satisfy the strictest reader:
+  # a copy works for everyone, a symlink for anyone that follows symlinks.
+  param([string]$Current, [string]$Wanted)
+  $rank = @{ Junction = 0; SymbolicLink = 1; Copy = 2 }
+  if (-not $Current -or $rank[$Wanted] -gt $rank[$Current]) { return $Wanted }
+  return $Current
+}
+
 function Get-IdeSkillRoots {
-  # Distinct skill roots for the given IDEs, carrying whether each must be
-  # populated by copy. Codex and Antigravity deliberately share .agents/skills,
-  # so the result is de-duplicated by path.
+  # Distinct skill roots for the given IDEs, carrying the link mode each must
+  # be populated with ('Junction', 'SymbolicLink' or 'Copy'). Codex and
+  # Antigravity deliberately share .agents/skills, so the result is
+  # de-duplicated by path.
   param([string[]]$Ides)
   $registry = Get-IdeRegistry
   $roots = [ordered]@{}
   foreach ($ide in $Ides) {
     if (-not $registry.Contains($ide)) { continue }
     $entry = $registry[$ide]
-    if ($roots.Contains($entry.Skills)) {
-      if ($entry.CopySkills) { $roots[$entry.Skills] = $true }
-      continue
-    }
-    $roots[$entry.Skills] = [bool]$entry.CopySkills
+    $roots[$entry.Skills] = Merge-SkillLinkMode -Current $roots[$entry.Skills] -Wanted (Get-IdeSkillLinkMode $entry)
   }
   return $roots
 }
@@ -577,11 +592,7 @@ function Get-IdeGlobalSkillRoots {
         $tail = $relative
       }
       $path = [IO.Path]::GetFullPath((Join-Path $base ($tail -replace '/', '\\')))
-      if ($roots.Contains($path)) {
-        if ($entry.CopySkills) { $roots[$path] = $true }
-        continue
-      }
-      $roots[$path] = [bool]$entry.CopySkills
+      $roots[$path] = Merge-SkillLinkMode -Current $roots[$path] -Wanted (Get-IdeSkillLinkMode $entry)
     }
   }
   return $roots
@@ -783,7 +794,7 @@ function Test-SkillTargetHasContent {
 
 function Test-CopyUpToDate {
   # True when $LinkPath already holds a byte-identical copy of $TargetPath.
-  # Copy-based roots (Kiro) would otherwise delete and re-copy every skill on
+  # Copy-based roots would otherwise delete and re-copy every skill on
   # every run - the single biggest source of I/O and of churned mtimes.
   param([string]$LinkPath, [string]$TargetPath)
   if (-not (Test-Path -LiteralPath $LinkPath -PathType Container)) { return $false }
@@ -822,7 +833,10 @@ function Get-VendorPackageName {
 }
 
 function New-JunctionOrCopy {
-  param([string]$LinkPath, [string]$TargetPath, [switch]$DryRun, [switch]$ForceCopy)
+  # -Symlink creates a directory symbolic link instead of a junction, for
+  # agents that skip junctions during skill discovery (Antigravity).
+  param([string]$LinkPath, [string]$TargetPath, [switch]$DryRun, [switch]$ForceCopy, [switch]$Symlink)
+  $linkType = if ($Symlink) { 'SymbolicLink' } else { 'Junction' }
   if (-not (Test-Path $TargetPath)) {
     Write-Warning "Missing skill target: $TargetPath"
     return
@@ -848,7 +862,7 @@ function New-JunctionOrCopy {
         Remove-HubLink -Path $LinkPath -Root $parent -HubPath $HubPath
       }
       else {
-        if (@($item.Target) -contains $TargetPath) { return }
+        if ($item.LinkType -eq $linkType -and @($item.Target) -contains $TargetPath) { return }
         # Second line of defence behind Assert-NoSkillNameCollisions: that check
         # only sees the catalog, so it cannot catch a name that moved between
         # upstream packages. Repointing from one vendor package to another is
@@ -881,10 +895,10 @@ function New-JunctionOrCopy {
     }
   }
   if ($DryRun) {
-    Write-Host ('  [dry] {0} {1} -> {2}' -f $(if ($ForceCopy) {'copy'} else {'junction'}), $LinkPath, $TargetPath)
+    Write-Host ('  [dry] {0} {1} -> {2}' -f $(if ($ForceCopy) {'copy'} else {$linkType.ToLower()}), $LinkPath, $TargetPath)
     return
   }
-  # Kiro (and any agent that doesn't follow reparse points) can't read skills
+  # An agent that doesn't follow reparse points can't read skills
   # through a junction, so copy the folder instead of linking. The copy carries
   # a .agenthub-managed marker so future runs treat it as hub-owned.
   if ($ForceCopy) {
@@ -894,9 +908,10 @@ function New-JunctionOrCopy {
     return
   }
   $ok = $true
-  try { New-Item -ItemType Junction -Path $LinkPath -Target $TargetPath -ErrorAction Stop | Out-Null }
+  try { New-Item -ItemType $linkType -Path $LinkPath -Target $TargetPath -ErrorAction Stop | Out-Null }
   catch {
-    Write-Warning "Junction failed for $LinkPath - copying instead."
+    # Symbolic links need Developer Mode or elevation; a copy is still read.
+    Write-Warning "$linkType failed for $LinkPath - copying instead."
     Copy-Item $TargetPath $LinkPath -Recurse -Force
     # Write marker so future runs know this copy belongs to the hub
     Set-Content -Path (Join-Path $LinkPath '.agenthub-managed') -Value "Created by Install-AgentHub.ps1 on $(Get-Date -Format 'yyyy-MM-dd HH:mm'). Safe to delete this folder." -Encoding UTF8
@@ -1779,37 +1794,6 @@ function Write-AntigravityPointer {
   Write-Host "  wrote .agents/rules/stack-pointer.md"
 }
 
-function Write-KiroSteeringPointer {
-  # Kiro steering files live in .kiro\steering\*.md and are always-on by
-  # default (kiro.dev/docs/steering). Write a slim pointer so Kiro's native
-  # mechanism also carries the "load skills on demand" convention, instead
-  # of relying only on AGENTS.md.
-  param(
-    [string]$RepoPath,
-    [string]$ProjectName,
-    [string[]]$Ides,
-    [switch]$DryRun
-  )
-  if ($Ides -notcontains 'Kiro') { return }
-  $dir = Join-Path $RepoPath '.kiro\steering'
-  $dest = Join-Path $dir 'stack-pointer.md'
-  $content = @"
----
-inclusion: always
----
-
-# $ProjectName
-
-See **AGENTS.md** for stack, commands, and skills. Full stack guides live in
-``D:\AGENTS`` skills (junctions under ``.kiro/skills``); load them on demand
-instead of duplicating guides here.
-"@
-  if ($DryRun) { Write-Host "  [dry] .kiro/steering/stack-pointer.md"; return }
-  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-  Write-HubText -Path $dest -Content $content -DryRun:$DryRun
-  Write-Host "  wrote .kiro/steering/stack-pointer.md"
-}
-
 function Remove-FatAlwaysOnRules {
   param([string]$RepoPath, [switch]$DryRun)
   $fatRules = @(
@@ -1861,9 +1845,8 @@ function Link-ProjectSkills {
     [string[]]$Ides,
     [switch]$DryRun
   )
-  # Roots and the junction-vs-copy decision both come from Get-IdeRegistry, so
-  # a new agent needs no change here. Kiro is flagged CopySkills because it does
-  # not follow directory junctions when discovering skills.
+  # Roots and the link mode (junction, symlink or copy) both come from
+  # Get-IdeRegistry, so a new agent needs no change here.
   $skillRoots = Get-IdeSkillRoots -Ides $Ides
   # Validate each skill once, not once per IDE root: Test-HubSkill parses the
   # SKILL.md, and doing it per root repeated the same work up to 8 times.
@@ -1873,9 +1856,9 @@ function Link-ProjectSkills {
   }
   foreach ($relative in $skillRoots.Keys) {
     $root = Join-Path $RepoPath ($relative -replace '/', '\')
-    $forceCopy = [bool]$skillRoots[$relative]
+    $mode = $skillRoots[$relative]
     foreach ($skill in $SkillNames) {
-      New-JunctionOrCopy -LinkPath (Join-Path $root $skill) -TargetPath (Join-Path $HubPath "skills\$skill") -DryRun:$DryRun -ForceCopy:$forceCopy
+      New-JunctionOrCopy -LinkPath (Join-Path $root $skill) -TargetPath (Join-Path $HubPath "skills\$skill") -DryRun:$DryRun -ForceCopy:($mode -eq 'Copy') -Symlink:($mode -eq 'SymbolicLink')
     }
     Remove-StaleProjectSkills -SkillRoot $root -HubPath $HubPath -KeepNames $SkillNames -DryRun:$DryRun
   }
@@ -1900,7 +1883,7 @@ function Link-GlobalSkills {
   foreach ($skill in $skills) {
     $target = Join-Path $HubPath "skills\$skill"
     foreach ($root in $roots.Keys) {
-      New-JunctionOrCopy -LinkPath (Join-Path $root $skill) -TargetPath $target -DryRun:$DryRun -ForceCopy:$roots[$root]
+      New-JunctionOrCopy -LinkPath (Join-Path $root $skill) -TargetPath $target -DryRun:$DryRun -ForceCopy:($roots[$root] -eq 'Copy') -Symlink:($roots[$root] -eq 'SymbolicLink')
     }
   }
   if ($pruneStale) {
@@ -2693,7 +2676,6 @@ foreach ($proj in $projectDirs) {
     Write-PointerRules -RepoPath $proj.FullName -HubPath $HubPath -FamilyCfg $cfg -Ides $detected -DryRun:$DryRun
     Write-CopilotPointer -RepoPath $proj.FullName -HubPath $HubPath -Family $family -Ides $detected -DryRun:$DryRun
     Write-AntigravityPointer -RepoPath $proj.FullName -HubPath $HubPath -Ides $detected -DryRun:$DryRun
-    Write-KiroSteeringPointer -RepoPath $proj.FullName -ProjectName $proj.Name -Ides $detected -DryRun:$DryRun
     Remove-FatAlwaysOnRules -RepoPath $proj.FullName -DryRun:$DryRun
 
     if (-not $SkipCodegraphInit) {

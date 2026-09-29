@@ -70,13 +70,13 @@ Assert ([string][Environment]::GetEnvironmentVariable('DO_NOT_TRACK','Process') 
 
 # --- IDE registry: one source of truth for paths and the copy-vs-junction rule
 $registry=Get-IdeRegistry
-Assert ($registry.Contains('Kiro')) 'Registry lost Kiro'
-Assert ($registry['Kiro'].CopySkills) 'Kiro must be copy-based: it does not follow junctions'
+Assert (-not $registry.Contains('Kiro')) 'Kiro support was dropped; it must not return to the registry'
 Assert (-not $registry['Cursor'].CopySkills) 'Cursor should stay junction-based'
 # Codex and Antigravity deliberately share .agents/skills: the root must appear once.
 $sharedRoots=Get-IdeSkillRoots -Ides @('Codex','Antigravity')
 Assert (@($sharedRoots.Keys).Count -eq 1) 'Shared .agents/skills root was not de-duplicated'
-Assert ((Get-IdeSkillRoots -Ides @('Kiro'))['.kiro/skills']) 'Kiro root lost its copy flag'
+Assert ($sharedRoots['.agents/skills'] -eq 'SymbolicLink') 'Antigravity skips junctions: shared .agents/skills must use symlinks'
+Assert ((Get-IdeSkillRoots -Ides @('Cursor'))['.cursor/skills'] -eq 'Junction') 'Cursor root should stay junction-based'
 
 # --- Cross-project skills and Context7 install at user scope for every IDE
 $globalSkills=@(Get-GlobalSkillNames -Catalog $cat)
@@ -104,13 +104,13 @@ $globalRoots=Get-IdeGlobalSkillRoots -Ides $allIdes
     Assert (@((Get-IdeGlobalSkillRoots -Ides @($ide)).Keys).Count -gt 0) "$ide has no global skill root"
   }
   Link-GlobalSkills -HubPath $HubPath -Catalog $cat -Ides $allIdes
+  $agyLink=Get-Item (Join-Path $env:USERPROFILE ".gemini/antigravity-cli/skills/$($globalSkills[0])") -Force
+  Assert ($agyLink.LinkType -eq 'SymbolicLink' -or (Test-Path (Join-Path $agyLink.FullName '.agenthub-managed'))) 'Antigravity global skill is a junction: agy skips junctions'
   foreach ($root in $globalRoots.Keys) {
     foreach ($skillName in $globalSkills) {
       Assert (Test-Path (Join-Path $root "$skillName/SKILL.md")) "$skillName missing from global root $root"
     }
   }
-  $kiroRoot=Join-Path $env:USERPROFILE '.kiro/skills'
-  Assert (Test-Path (Join-Path $kiroRoot 'git-workflow-and-versioning/.agenthub-managed')) 'Kiro global skill was not copied'
 
   $globalTargets=Get-IdeGlobalMcpTargets -Ides $allIdes
   foreach ($ide in $allIdes) {

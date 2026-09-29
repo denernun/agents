@@ -420,7 +420,6 @@ git diff --submodule=log
 | Codex | .agents/skills | .codex/config.toml |
 | Antigravity | .agents/skills | .agents/mcp_config.json |
 | OpenCode | .opencode/skills | opencode.json |
-| Kiro | .kiro/skills | .kiro/settings/mcp.json |
 | VS Code | .github/skills | .vscode/mcp.json |
 | Devin | .devin/skills | .devin/mcp_config.json |
 

@@ -33,7 +33,7 @@ $configs = @{
   '.cursor/mcp.json'='mcpServers'; '.mcp.json'='mcpServers';
   '.codex/config.toml'='toml'; 'opencode.json'='mcp';
   '.agents/mcp_config.json'='mcpServers'; '.vscode/mcp.json'='servers';
-  '.kiro/settings/mcp.json'='mcpServers'; '.devin/mcp_config.json'='mcpServers'
+  '.devin/mcp_config.json'='mcpServers'
 }
 foreach ($project in $Projects) {
   $repo = (Resolve-Path -LiteralPath $project).Path
@@ -50,12 +50,11 @@ foreach ($project in $Projects) {
     Invoke-HubConfig $request
   }
   # Add the graph skill wherever the hub already installed navigation skills.
-  # Kiro does not follow junctions in .kiro/skills, so copy there instead.
   $graphRoots = Get-IdeSkillRoots -Ides @((Get-IdeRegistry).Keys)
   foreach ($relative in $graphRoots.Keys) {
     if (Test-Path (Join-Path $repo "$relative/explore-codebase")) {
-      $forceCopy = [bool]$graphRoots[$relative]
-      New-JunctionOrCopy -LinkPath (Join-Path $repo "$relative/codegraph") -TargetPath (Join-Path $HubPath 'skills/codegraph') -DryRun:$DryRun -ForceCopy:$forceCopy
+      $mode = $graphRoots[$relative]
+      New-JunctionOrCopy -LinkPath (Join-Path $repo "$relative/codegraph") -TargetPath (Join-Path $HubPath 'skills/codegraph') -DryRun:$DryRun -ForceCopy:($mode -eq 'Copy') -Symlink:($mode -eq 'SymbolicLink')
     }
   }
   if ($Initialize) { Ensure-CodegraphInit -RepoPath $repo -Skills @('codegraph') -DryRun:$DryRun }

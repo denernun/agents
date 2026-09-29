@@ -513,7 +513,6 @@ AGENTS.md, conteúdo manual, backups e integração global ai-memory são preser
 | Codex | .agents/skills | ~/.agents/skills | .codex/config.toml | ~/.codex/config.toml (plugin global quando ativo) |
 | Antigravity | .agents/skills | ~/.gemini/config/skills e ~/.gemini/antigravity-cli/skills | .agents/mcp_config.json | ~/.gemini/config/mcp_config.json |
 | OpenCode | .opencode/skills | ~/.config/opencode/skills | opencode.json | ~/.config/opencode/opencode.json |
-| Kiro | .kiro/skills | ~/.kiro/skills | .kiro/settings/mcp.json | ~/.kiro/settings/mcp.json |
 | VS Code | .github/skills | ~/.agents/skills | .vscode/mcp.json | ~/.copilot/mcp-config.json |
 | Devin | .devin/skills | %APPDATA%/devin/skills | .devin/mcp_config.json | %APPDATA%/devin/mcp_config.json |
 | Qoder | .qoder/skills | ~/.qoder/skills | .qoder/mcp.json | ~/.qoder/mcp.json |

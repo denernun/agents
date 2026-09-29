@@ -190,7 +190,6 @@
     "VSCode"
   ],
   "excludeIdes": [
-    "Kiro",
     "Devin"
   ],
   "excludeProjectNames": [

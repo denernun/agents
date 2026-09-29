@@ -115,9 +115,8 @@ Cópia inicial: `copy .env.example .env`
 | IDE | Detecção | Skills em | MCP config em |
 |-----|----------|-----------|---------------|
 | **Cursor** | `~\.cursor` | `.cursor\skills\` | `.cursor\mcp.json` |
-| **Kiro** | `~\.kiro` | `.kiro\skills\` | `.kiro\settings\mcp.json` |
 | **OpenCode** | `opencode` no PATH | `.opencode\skills\` | `opencode.json` |
-| **Antigravity** | `~\.gemini` | `.agents\skills\` | `.agents\mcp_config.json` |
+| **Antigravity** | `~\.gemini` | workspace `.agents\skills\`; user `~\.gemini\skills\` and `~\.gemini\antigravity-cli\skills\` | `.agents\mcp_config.json` |
 | **VS Code** | `~\.vscode` | `.github\skills\` | `.vscode\mcp.json` |
 | **Claude** | `~\.claude` | `.claude\skills\` | `.mcp.json` |
 | **Codex** | `~\.codex` | `.agents\skills\` | `.codex\config.toml` |
@@ -131,14 +130,14 @@ Quem estiver em `AGENTHUB_EXCLUDE_IDES` (ou `excludeIdes` do catálogo) **não**
 
 ```powershell
 # Ignorar detecção automática:
-.\Install-AgentHub.ps1 -Ides Cursor,VSCode,Kiro -WriteAgents
+.\Install-AgentHub.ps1 -Ides Cursor,VSCode -WriteAgents
 ```
 
 ### Remover IDEs que não uso
 
 ```powershell
 # 1. Rode o install apenas com as IDEs desejadas:
-.\Install-AgentHub.ps1 -Ides Cursor,Kiro -WriteAgents
+.\Install-AgentHub.ps1 -Ides Cursor,Claude -WriteAgents
 
 # 2. Remova as pastas das IDEs não utilizadas:
 .\Install-AgentHub.ps1 -RemoveUnusedIdeFolders
@@ -173,7 +172,7 @@ Migração de uma instalação anterior (execute na raiz do hub):
 
 - `-AdoptLegacyConfigs` permite adotar entradas antigas de MCP reconhecidas pelo comando/pacote, além dos nomes do catálogo. Revise o dry-run antes de usar em outra máquina. Conflitos não reconhecidos são preservados.
 - Skills transversais, de frontend e de navegador são instaladas globalmente nos diretórios de usuário das IDEs detectadas. Projetos recebem somente skills de stack/contrato (Angular/CoreUI, NestJS/API, Delphi e Android). ECC de manutenção fica no workspace AgentHub. `-GlobalSkills` é mantido por compatibilidade, mas não é mais necessário.
-- Codex e Antigravity usam `.agents/skills` no escopo de projeto; as skills globais ficam nas raízes de usuário reconhecidas por cada IDE.
+- Codex e Antigravity usam `.agents/skills` no escopo de projeto; para o Antigravity, o hub publica as skills globais em `~/.gemini/skills` (compartilhado) e `~/.gemini/antigravity-cli/skills` (CLI/IDE). O Antigravity **ignora junctions** na descoberta de skills, então essas raízes (e o `.agents/skills` compartilhado) usam **symlinks de diretório** (exige Modo de Desenvolvedor; sem ele, o hub cai para cópia).
 - MCP Context7 é global, com configuração nativa por IDE; `ai-memory` também é global. CodeGraph e os demais MCPs ligados ao projeto continuam no arquivo de cada repositório. O projeto precisa ser confiável no Codex para os MCPs locais.
 - A família é determinada por `projectFamilies` (exceções explícitas), depois por `angular.json` e dependências Angular/NestJS, depois pelos padrões de nome. Um erro de JSON interrompe a classificação.
 - Escritas de MCP são validadas antes da substituição, usam substituição atômica e criam backup. O manifesto e os backups ficam em `.agenthub-state/` (gitignored; podem conter credenciais). Não publique essa pasta. Preserve-a para que o uninstall reconheça a propriedade dos artefatos.
@@ -294,7 +293,7 @@ Qualquer arquivo always-on > 2 KB é uma regressão.
 
 ```powershell
 # Ver o MCP de um projeto específico:
-Get-Content "D:\SISTEMAS\ERPCLASS\erpclass-api\.kiro\settings\mcp.json" | ConvertFrom-Json | ConvertTo-Json -Depth 5
+Get-Content "D:\SISTEMAS\ERPCLASS\erpclass-api\.cursor\mcp.json" | ConvertFrom-Json | ConvertTo-Json -Depth 5
 ```
 
 ### Diagnosticar MCP com falha
@@ -328,7 +327,7 @@ codegraph status "D:\SISTEMAS\ERPCLASS\erpclass-api" --json
 | Flag | Efeito |
 |------|--------|
 | `-DryRun` | Só mostra o que faria, não altera nada |
-| `-Ides Cursor,VSCode,Kiro` | Força lista de IDEs (senão detecta automaticamente) |
+| `-Ides Cursor,VSCode` | Força lista de IDEs (senão detecta automaticamente) |
 | `-WriteAgents` | Reescreve `AGENTS.md` enxuto (preserva seção `## Local`) |
 | `-RemoveUnusedIdeFolders` | Remove `.qoder`, `.codebuddy` e rules gordas duplicadas |
 | `-HubPath` | Caminho do hub se o script não achar `skills/` ao lado |
@@ -430,7 +429,7 @@ usado — só os `SKILL.md`, carregados sob demanda.
 
 ## Troubleshooting
 
-### MCP "Connection Failed" no Kiro/Cursor
+### MCP "Connection Failed" no Cursor
 
 | MCP | Causa comum | Solução |
 |-----|-------------|---------|

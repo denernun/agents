@@ -5,16 +5,16 @@
 > Contexto **always-on gordo** = tokens desperdiçados em **toda** conversa.
 > Guias NestJS / Angular completos vivem **somente** em `skills/` (on-demand).
 > **Nunca** recolocar esses guias em `AGENTS.md`, `.cursorrules`, rules com `alwaysApply: true`,
-> `.agents/rules/*.md`, `.kiro/steering/*.md` ou `copilot-instructions.md`.
+> `.agents/rules/*.md` ou `copilot-instructions.md`.
 > Edite no hub → `Install-AgentHub.ps1` → commit só o que for texto versionado (AGENTS enxutos).
 
 ## O que entra no contexto (e quando)
 
 | Camada | Arquivos típicos | Quando carrega | Tamanho alvo |
 |--------|------------------|----------------|--------------|
-| **Always-on** | `AGENTS.md`, `.cursorrules`, ponteiros `.mdc`, Copilot slim, `.agents/rules/stack-pointer.md` (Antigravity), `.kiro/steering/stack-pointer.md` (Kiro) | Toda conversa no repo | **&lt; 2 KB** cada |
-| **On-demand** | Skills em `.cursor/skills/*`, `.agents/skills/*`, `.kiro/skills/*`, `.opencode/skills/*`, `.claude/skills/*`, `.codex/skills/*`, `.devin/skills/*` (junction → hub; **Kiro = cópia**, ver Revisão 2026-09-18) | Só quando o agente abre a skill | OK 1–25 KB |
-| **MCP** | `.cursor/mcp.json`, `.vscode/mcp.json`, `.kiro/settings/mcp.json`, `opencode.json` (raiz), `.agents/mcp_config.json`, `.mcp.json` (Claude Code), `.codex/config.toml`, `.devin/mcp_config.json` | Ferramentas MCP, não texto de guia | trio comum; mongodb+openapi nas APIs; playwright nos frontends (exceto Codex) |
+| **Always-on** | `AGENTS.md`, `.cursorrules`, ponteiros `.mdc`, Copilot slim, `.agents/rules/stack-pointer.md` (Antigravity) | Toda conversa no repo | **&lt; 2 KB** cada |
+| **On-demand** | Skills em `.cursor/skills/*`, `.agents/skills/*`, `.opencode/skills/*`, `.claude/skills/*`, `.codex/skills/*`, `.devin/skills/*` (junction → hub; **Antigravity = symlink**, pois ignora junctions) | Só quando o agente abre a skill | OK 1–25 KB |
+| **MCP** | `.cursor/mcp.json`, `.vscode/mcp.json`, `opencode.json` (raiz), `.agents/mcp_config.json`, `.mcp.json` (Claude Code), `.codex/config.toml`, `.devin/mcp_config.json` | Ferramentas MCP, não texto de guia | trio comum; mongodb+openapi nas APIs; playwright nos frontends (exceto Codex) |
 | **Local only** | seção `## Local` do `AGENTS.md` | Always-on, mas só notas do repo | Curto |
 
 ## Skills no hub (on-demand — ok serem maiores)
@@ -45,7 +45,7 @@
 ## Proibido (sempre-on)
 
 - Guias NestJS/Angular completos em `AGENTS.md`, `.cursorrules`, `*.mdc` com `alwaysApply: true`
-- Duplicar o mesmo guia em `.agents/rules/*.md`, `.kiro/steering/*.md`, `copilot-instructions.md`, `source/AGENTS.md`, etc.
+- Duplicar o mesmo guia em `.agents/rules/*.md`, `copilot-instructions.md`, `source/AGENTS.md`, etc.
 - Criar skill nova **só** dentro de um repo (sem passar pelo hub)
 
 ## Checklist rápido (antes de commit de instruções)
@@ -115,7 +115,6 @@ algumas ferramentas. Corrigido em `Install-AgentHub.ps1`:
 | Antigravity skills | `.antigravity\skills\*` | `.agents\skills\*` | codelabs.developers.google.com (agents.md/skills.md pipeline) |
 | OpenCode MCP | `.opencode\opencode.json` com `{"mcp":{"servers":{...}}}` | `opencode.json` na raiz do repo com `{"mcp":{...}}` (mapa direto) | opencode.ai/docs/config, opencode.ai/docs/mcp-servers |
 | Devin MCP | `.devin\mcp.json` | `.devin\mcp_config.json` | docs.devin.ai/cli/extensibility/mcp/configuration |
-| Kiro | só `AGENTS.md` | `AGENTS.md` + `.kiro\steering\stack-pointer.md` (nativo, `inclusion: always`) | kiro.dev/docs/steering |
 
 `~\.gemini\GEMINI.md` é um arquivo **global por usuário** (todo o Gemini
 CLI/Antigravity), não um arquivo por projeto — por isso o script não cria
@@ -557,3 +556,13 @@ mudança no `Install-AgentHub.ps1`:
 
 Comportamento pode ser alterado por projeto com `/config` no Claude Code, caso
 algum repo precise voltar a exigir `CLAUDE.md` explícito.
+
+## Revisão 2026-09-29 — Kiro removido, Antigravity por symlink
+
+- **Kiro saiu do hub**: não é mais detectado nem recebe skills, MCP ou steering.
+  O `Uninstall-AgentHub.ps1` ainda limpa `.kiro/skills` antigos como raiz aposentada.
+  As notas de "Kiro por cópia" acima ficam só como histórico.
+- **Antigravity ignora junctions** na descoberta de skills (pasta real e symlink
+  de diretório funcionam; junction não). `~/.gemini/skills`,
+  `~/.gemini/antigravity-cli/skills` e o `.agents/skills` compartilhado usam
+  symlink de diretório (Modo de Desenvolvedor; sem ele, cópia).

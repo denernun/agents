@@ -1,6 +1,6 @@
 ---
 name: explore-codebase
-description: Navigate and understand codebase structure using the knowledge graph
+description: Navigate and understand codebase structure using the codegraph knowledge graph. Use when the project has a `.codegraph/` index and the codegraph MCP server is connected.
 ---
 
 ## Explore Codebase

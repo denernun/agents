@@ -108,7 +108,7 @@ Distribuídas como base, com exceções por família. No Delphi, as nove estão 
 | planning-and-task-breakdown | Com requisitos definidos; divide em etapas verificáveis. Produz tasks/plan.md e, por padrão, tasks/todo.md; pode usar o tracker definido pelo projeto. | Leia a spec e use planning-and-task-breakdown para planejar as etapas e dependências. |
 | incremental-implementation | Para executar o plano em partes pequenas que funcionem e possam ser verificadas. | Use incremental-implementation para concluir apenas a próxima tarefa do plano. |
 | git-workflow-and-versioning | Ao trabalhar com branches, commits, conflitos e versões; mantém mudanças compreensíveis e separadas. | Use git-workflow-and-versioning para revisar o diff e preparar um commit só desta correção. |
-| code-review-and-quality | Antes de integrar uma mudança; avalia correção, clareza, arquitetura, segurança e desempenho. | Use code-review-and-quality para revisar estas alterações e explicar os riscos. |
+| code-review | Antes de integrar uma mudança; compara o diff com os padrões do repositório e com a spec. | Use code-review para revisar estas alterações e explicar os riscos. |
 | security-and-hardening | Em login, permissões, dados e integrações; verifica proteção das entradas, segredos e acesso. | Use security-and-hardening para revisar a autorização deste endpoint por empresa. |
 | observability-and-instrumentation | Quando precisa entender o sistema em execução; orienta logs, métricas, rastreamento e alertas úteis. | Use observability-and-instrumentation para diagnosticar falhas de sincronização sem registrar dados sensíveis. |
 | unlazy | Em trabalho longo ou incompleto; registra critérios em GATES.md e exige evidências de conclusão. **Não é uma skill de lazy loading.** | Use unlazy nesta migração: registre critérios verificáveis e só considere concluído o que tiver evidência. |
@@ -188,7 +188,7 @@ A integração ECC não ativa o restante das skills, hooks ou plugin do vendor. 
 1. spec-driven-development esclarece o que construir.
 2. planning-and-task-breakdown organiza o plano e as tarefas.
 3. incremental-implementation executa uma parte de cada vez, com a skill da stack e tdd quando o trabalho pede teste primeiro.
-4. code-review-and-quality revisa; verification-before-completion confere a entrega.
+4. code-review revisa; verification-before-completion confere a entrega.
 
 ```text
 Quero adicionar um filtro por status na lista de pedidos.

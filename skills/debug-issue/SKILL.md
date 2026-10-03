@@ -1,6 +1,6 @@
 ---
 name: debug-issue
-description: Systematically debug issues using graph-powered code navigation
+description: Systematically debug issues using graph-powered code navigation. Use when the project has a `.codegraph/` index and the codegraph MCP server is connected; otherwise use systematic-debugging.
 ---
 
 ## Debug Issue

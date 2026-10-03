@@ -36,7 +36,7 @@ Regra mental: **skill de contexto entra sozinha** quando você mexe no stack del
 | incremental-implementation | Entregar mudança em fatias finas verificáveis |
 | implement | Executar uma spec/conjunto de tickets |
 | dispatching-parallel-agents | 2+ tarefas independentes em paralelo |
-| code-review / code-review-and-quality | Revisar mudança antes de mergear |
+| code-review | Revisar mudança antes de mergear (diff contra padrões e spec) |
 | receiving-code-review | Recebeu review e vai aplicar sugestões |
 | codebase-design | Desenhar módulo com interface enxuta (deep modules) |
 | improve-codebase-architecture | Achar oportunidades de refatoração e priorizar |
@@ -136,7 +136,7 @@ Ex.: `escreve a spec antes de começar` · `quebra essa spec em tarefas`
 Gatilho: 2+ tarefas sem dependência entre si.
 Ex.: `esses 3 bugs são independentes, resolve em paralelo`
 
-**code-review / code-review-and-quality / receiving-code-review** — revisão multi-eixo antes de mergear e como aplicar feedback recebido.
+**code-review / receiving-code-review** — revisão antes de mergear e como aplicar feedback recebido.
 Gatilho: revisar código (seu, de agente ou humano) / receber review.
 Ex.: `revisa essa mudança antes do merge`
 

@@ -150,7 +150,7 @@ A skill tdd trabalha com **um teste que falha → implementação mínima → te
 ### Etapa 4 — Revisar e demonstrar
 
 ```text
-Use code-review-and-quality para revisar esta entrega contra a spec.
+Use code-review para revisar esta entrega contra a spec.
 Depois use verification-before-completion.
 Mostre o que passou, o que falhou e o que não foi verificado.
 Explique como eu posso conferir o comportamento no ambiente local.
@@ -195,7 +195,7 @@ Confira a configuração gerada. A skill de setup permite adequá-la ao fluxo re
 | planning-and-task-breakdown × to-tickets | A primeira produz o plano e usa a lista oficial definida, local ou externa. A segunda produz tickets completos com bloqueios. |
 | incremental-implementation × implement | A primeira orienta execução em partes pequenas. A segunda executa uma spec/tickets do fluxo Pocock e prevê testes, revisão e commit. |
 | grill-me × grill-with-docs | Ambas entrevistam; a segunda também registra o modelo de domínio e decisões. |
-| code-review × code-review-and-quality | A primeira compara diff com padrões e spec; a segunda oferece critérios amplos de qualidade. |
+| code-review × review-changes | A primeira compara diff com padrões e spec; a segunda é a revisão rápida de risco via codegraph. |
 | handoff × ai-memory | A skill escreve um documento de continuidade; o serviço de memória integra sessões quando configurado. |
 
 Um plano pode apontar para tickets. Evite duplicar o estado de cada tarefa em dois lugares que podem divergir.
@@ -272,7 +272,7 @@ Esta é a seleção do hub, sem incluir plugins pessoais ou tudo que existe nos 
 | planning-and-task-breakdown | Dividir trabalho já compreendido. | Plano, tarefas, dependências e verificações. |
 | incremental-implementation | Implementar por partes funcionais. | Uma etapa verificável por vez. |
 | git-workflow-and-versioning | Organizar branches, commits e versões. | Histórico e mudanças compreensíveis. |
-| code-review-and-quality | Revisar antes da integração. | Análise de correção, clareza, arquitetura, segurança e desempenho. |
+| code-review | Revisar antes da integração. | Diff comparado com padrões do repositório e com a spec. |
 | security-and-hardening | Proteger entradas, dados e acesso. | Validações e riscos fundamentados no projeto. |
 | observability-and-instrumentation | Tornar falhas e comportamento visíveis. | Logs, métricas, rastreamento e alertas úteis. |
 | unlazy | Evitar entregas longas pela metade. | Critérios e evidências em GATES.md. |

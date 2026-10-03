@@ -1,6 +1,6 @@
 ---
 name: refactor-safely
-description: Plan and execute safe refactoring using dependency analysis
+description: Plan and execute safe refactoring using codegraph dependency analysis. Use when the project has a `.codegraph/` index and the codegraph MCP server is connected.
 ---
 
 ## Refactor Safely

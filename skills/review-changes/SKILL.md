@@ -1,11 +1,11 @@
 ---
 name: review-changes
-description: Fast risk-focused review of a local diff via codegraph — flags blast radius and untested impact. This is the default day-to-day review. For a deep multi-axis quality checklist (correctness/readability/architecture/security/performance) before merge, use code-review-and-quality; to review a branch/PR against its originating spec from a fixed point, use code-review.
+description: Fast risk-focused review of a local diff via codegraph — flags blast radius and untested impact. This is the default day-to-day review. For a deep multi-axis quality checklist (correctness/readability/architecture/security/performance) before merge, or to review a branch/PR against its originating spec from a fixed point, use code-review.
 ---
 
 ## Review Changes
 
-Perform a thorough, risk-aware code review using the codegraph MCP tools (see skill `codegraph`).
+Perform a fast, risk-focused review of the local diff using the codegraph MCP tools (see skill `codegraph`).
 
 ### Steps
 

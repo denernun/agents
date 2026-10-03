@@ -5,9 +5,9 @@ description: Use codegraph MCP before Grep/Glob/Read when the project has a know
 <!-- codegraph MCP tools -->
 ## MCP Tools: codegraph
 
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-`codegraph_explore` MCP tool BEFORE using Grep/Glob/Read to explore
-the codebase.** It's local, pre-indexed (`.codegraph/`, auto-synced on file
+When the project has a `.codegraph/` index and the codegraph MCP server is
+connected, use `codegraph_explore` before Grep/Glob/Read to explore the
+codebase. It's local, pre-indexed (`.codegraph/`, auto-synced on file
 changes), and answers most structural questions in one call — relevant
 symbols' verbatim source grouped by file, call paths between them, and a
 blast-radius summary — typically with zero file reads.

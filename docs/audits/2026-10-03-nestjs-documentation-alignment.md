@@ -59,7 +59,9 @@ Claude Code instalado: `2.1.288`. Os dois `CLAUDE.md` encontrados (`CLOUDCLASS/C
 - Template NestJS: placeholders renderizados e proteção de escopo conferida.
 - Inventário de skills do hub: execução concluída sem erros de inventário; não equivale a revisão de qualidade de todas as outras skills.
 - `git diff --check`: aprovado no hub e nos 19 repositórios.
-- Estados de checklists preservados; novos arquivos alterados nos projetos restritos aos documentos previstos.
+- Estados de checklists preservados; os commits desta tarefa contêm somente os documentos previstos, sem incluir alterações anteriores de AGENTS.md.
 - Suítes de aplicação não executadas: nenhum comportamento de aplicação foi alterado.
+
+Na conferência posterior aos commits, surgiram mudanças fora desta tarefa em `cloudclass-api/scripts/cadastros-gen/gen.js` e `wire.py` (novos agregados de compras/fiscal). Esses arquivos não foram escritos pelas ferramentas desta tarefa nem incluídos nos seus commits. Foram preservados, assim como as mudanças anteriores de AGENTS.md e os dois arquivos de código que já estavam modificados no erpclass-auth. A verificação registra alterações externas no working tree separadamente do escopo dos commits documentais.
 
 Evidências locais e cópias de segurança: `.audit-output/nestjs-doc-alignment-2026-10-03/`. `changes.json` lista os 35 documentos de projeto editados; `copy-changes.json` lista os 138 arquivos de cópia/ponte; `verification.json` registra os resultados. A ponte removida do workspace está preservada em `cloudclass-parent-CLAUDE-before.md`. O diretório de evidências é ignorado pelo Git.

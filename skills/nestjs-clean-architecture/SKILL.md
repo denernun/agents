@@ -11,6 +11,25 @@ Gere código, correções e refatorações que sigam **rigorosamente** as diretr
 - **Este skill é a autoridade de arquitetura, e vence o código vizinho.** Onde o código existente diverge do que está aqui, o **código** é o legado — não o skill. Nunca justifique uma escolha com "é assim que o módulo ao lado faz": valide contra este documento e contra o modelo obrigatório [estrutura-padrao.md](estrutura-padrao.md) **antes** de copiar qualquer coisa.
 - **Divergência nunca é silenciosa.** Precisou fugir do padrão? Reporte, explique o custo/benefício, **peça confirmação** e registre em `docs/adr/` do repo. Divergência não registrada é bug, não estilo.
 - Em conflito entre "boas práticas genéricas" de fora e o que está aqui, **este documento vence** — ele reflete a arquitetura acordada da família.
+- **`cloudclass-api` (cadastros app):** regras adicionais **obrigatórias** em [cloudclass-api-mandatory-rules.md](cloudclass-api-mandatory-rules.md) (paths `domain/app`, índices de busca, keyset em fichas, matriz de testes por campo). Este anexo vence legado neste repo.
+
+---
+
+## 0. Regras inegociáveis (decisão do autor, 2026-10-02)
+
+Valem para toda feature de toda API da família, nova ou antiga. Código que fuja delas é **dívida**, não estilo; a exceção exige ADR em `docs/adr/` e confirmação do autor.
+
+1. **Repository pattern é o padrão de acesso a dados.** O acesso ao banco passa sempre por duas classes por agregado:
+   - o **Repository** (`<name>.repository.ts`, singular) `extends RepositoryBase<Entity>`: só persistência (consulta, escrita, transação, trava, cache de consulta);
+   - o **Database** (`<feature>.database.ts`, plural) **sempre `extends DatabaseBase<Entity>` e `implements DatabaseBaseInterface<Entity>`** (mais a interface da própria feature), que é o que a Application enxerga, por token.
+   Uma classe `Database` que não estende `DatabaseBase` ou não implementa `DatabaseBaseInterface` está fora do padrão.
+2. **Toda feature tem Controller e Application, e a regra de negócio mora na Application.** Validar referência, decidir se o estado permite a operação, orquestrar vários agregados, escolher a exceção e a mensagem: tudo na Application. O Controller só traduz HTTP (rota, guard, DTO de entrada, DTO de saída) e chama a Application. O Repository e o Database não decidem regra: quando uma guarda precisa ser atômica (trava de linha, estado lido dentro da transação), a **Application diz qual é a regra** (por exemplo, quais estados permitem) e o Repository apenas a executa de forma atômica e devolve um resultado nomeado. Toda guarda de regra que hoje vive no Repository sem esse desenho é dívida (ver ADR-0015).
+3. **O Controller nunca acessa Repository, Database, `DataSource` nem entidade para ler ou gravar.** Só injeta o token da Application (`<FEATURE>_APPLICATION`) e serviços transversais (logger, config). A Application nunca importa Repository nem `typeorm`: fala com o Database por token e interface.
+4. **Todo endpoint tem Request e Response definidos no controller.** Corpo, query e filtros entram por uma classe `*Request` (ou `*Query`) com `class-validator`, num arquivo `<feature>.request.ts`; a saída é uma classe `*Response` com `@Expose()` em cada campo, num arquivo `<feature>.response.ts`, e o controller a monta com `plainToInstance(..., { excludeExtraneousValues: true })`. Nunca se devolve entidade, `any`, objeto literal ou tipo de domínio, e nunca se aceita `@Body()` sem classe. Rota que não devolve corpo declara `204`.
+5. **Swagger completo em toda rota, sem exceção.** `@ApiTags`, `@ApiBearerAuth`, `@ApiOperation` (resumo em português) e um `@ApiResponse` para o sucesso **com `type` do Response** (ou `204`) e para **cada código de erro que a rota pode devolver**: `400` (corpo, query ou chave inválidos, referência inexistente), `401`, `403`, `404` (rota com chave), `409` (conflito: código ou `guid` repetido, estado que não permite), mais `422`/`429` quando existirem. A lista de erros documentada tem de refletir as exceções que a Application realmente lança (as classes do `*.exceptions.ts`); `@ApiBody`, `@ApiQuery` e `@ApiParam` entram quando o plugin do CLI não os infere (`nest-cli.json` com `dtoFileNameSuffix` completo). Rota sem Swagger completo não está pronta.
+6. **Exceções de negócio estendem `BaseException`** (`*.exceptions.ts` da feature, mensagem em português, `HttpStatus` certo). Não se lança `BadRequestException`, `NotFoundException` e similares do framework na Application nem no Controller.
+
+Auditoria de 2026-10-02 (código novo gerado: limpo; desvios de legado: ver [cloudclass-api-mandatory-rules.md](cloudclass-api-mandatory-rules.md), seção "Dívida de arquitetura").
 
 ---
 
@@ -123,6 +142,17 @@ TypeORM / PostgreSQL
 | **Metrics**               | `src/metrics/`                    | Prometheus RED + health, Pyroscope, tracing — **obrigatório em todo serviço**  |
 | **Helper**                | `src/helper/`                     | Utilidades puras (`toDate`, `toInteger`, `ColumnIntTransformer`)               |
 | **Core**                  | `src/app.*.ts`                    | `AppModule`, `AppException` (global filter), `AppInterceptor`, `AppMiddleware` |
+
+#### 2.1.1 `cloudclass-api` — persona app e admin
+
+Dois bancos Postgres → prefixo de pasta por banco, não só por agregado:
+
+| Persona / banco | Controllers / Application | Domain |
+|-----------------|---------------------------|--------|
+| App (`cloudclass`) | `src/controllers/app/`, `src/application/app/` | `src/domain/app/{entities,repositories,database,migrations}/` |
+| Admin (`cloudclass_admin`) | `src/controllers/admin/`, `src/application/admin/` | `src/domain/admin/...` |
+
+Cadastros ERP operador: rotas `api/v1/app/<feature>`. Detalhes normativos: [cloudclass-api-mandatory-rules.md](cloudclass-api-mandatory-rules.md).
 
 ### 2.2 Camada de Apresentação — `src/controllers/<feature>/`
 
@@ -497,6 +527,25 @@ Ver `src/domain/shared/repositories/keyset-pagination.ts` em `cloudclass-api`
   `PaginationQueryDto` de cada `*.dto.ts` (não importe de outra persona).
 - **Resposta**: `{ items, nextCursor }`, nunca `total`.
 
+### 4.7 Índices de busca multitenant (`cloudclass-api` cadastros)
+
+Listagens por `company_id` com filtro em CPF/CNPJ, nome, descrição ou código de
+barras **exigem índice** alinhado à UX — não seq scan “por enquanto”. Política
+e nomes: [INDEX-POLICY.md](../../../specs/cadastros/INDEX-POLICY.md) no repo
+`cloudclass-api`. Regras:
+
+- Toda coluna de busca frequente → `@Index` na entity **e** migration (`up`/`down`).
+- Compostos começam com `company_id`.
+- Igualdade (CPF, CNPJ, barra): btree com `WHERE col IS NOT NULL` quando nullable.
+- Texto “contém” / autocomplete: `pg_trgm` + GIN; migration de extension antes dos GIN.
+- Novo agregado: spec do módulo lista campos de busca antes do DDL.
+
+### 4.8 Endpoints de busca (fichas)
+
+Busca operacional (PDV, grid) não reutiliza listagem cega paginada: filtros
+normalizados na Application, query index-friendly no Repository, resposta
+keyset. Contrato por spec (`SPEC-cliente`, `SPEC-produto`, …).
+
 ---
 
 ## 5. Testing
@@ -535,6 +584,15 @@ ao `lint`/`build` do checklist (§7), não um substituto:
   `src/domain/repositories/` ou `src/domain/migrations/`.
 - Rode a suíte (`npm test` / `npm run test:cov`) **antes** de dar a fase por entregue. Um `build`
   verde com teste quebrado, pulado ou não escrito não é uma fase concluída.
+
+### 5.3 Matriz por campo persistido (`cloudclass-api`)
+
+Além dos testes por método público: **cada campo writable** exposto em
+`POST`/`PATCH` tem (1) teste de rejeição na fronteira DTO e (2) teste de
+persistência ou normalização na Application. Campos usados em busca têm teste
+de integração no Repository. Registrar em
+`specs/cadastros/FIELD-TEST-MATRIX.md`. Iniciativa:
+[SPEC-platform-hardening.md](../../../specs/cadastros/SPEC-platform-hardening.md).
 
 ---
 
@@ -588,7 +646,7 @@ Produção usa **PgBouncer na porta 6432** (modo `transaction`). Regras obrigat�
 ### 6.3 Migrations
 
 - DataSource para CLI: `src/app.data.ts` (exporta default DataSource com `synchronize: false` e `logging: true`).
-- Migrations em: `src/domain/migrations/`.
+- Migrations em: `src/domain/migrations/` (ERPCLASS genérico). Em **`cloudclass-api`**: `src/domain/app/migrations/` e `src/domain/admin/migrations/` — ver §2.1.1.
 - Scripts no `package.json`:
   ```
   migration:generate  — gera migration a partir do diff entity vs banco
@@ -636,6 +694,7 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 
 ## 7. Checklist Antes de Entregar Código
 
+- [ ] **Regras do §0:** Database `extends DatabaseBase<>` e `implements DatabaseBaseInterface<>`; regra de negócio na Application (o Repository só executa a guarda atômica que a Application pede); Controller só com a Application; Request e Response definidos; Swagger com todos os Requests, Responses e códigos de erro.
 - [ ] Camadas respeitadas: Controller → Application → Database → Repository. Sem "atalhos".
 - [ ] Interfaces + tokens em uso; nenhuma classe concreta injetada onde deveria ser interface.
 - [ ] Nomes de arquivos seguem `<name>.<artifact>.ts` com o plural/singular correto, e o nome da
@@ -647,8 +706,10 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 - [ ] Nenhum `any`, nenhuma magic number, nenhum campo vazando via `Response` DTO.
 - [ ] Nenhuma relação eager em listas; `relations: [...]` só quando o dado é usado imediatamente.
 - [ ] Todo `GET` de lista que cresce com o dado do tenant pagina — offset (`findPaginated`) ou
-      keyset (`findKeyset`), nunca devolve a tabela inteira (§4.5). Catálogo fixo pequeno documenta
-      no JSDoc por que fica sem paginação.
+      keyset (`findKeyset`), nunca devolve a tabela inteira (§4.5). **Fichas produto/cliente/fornecedor
+      em `cloudclass-api`: keyset obrigatório** ([cloudclass-api-mandatory-rules.md](cloudclass-api-mandatory-rules.md)).
+      Catálogo fixo pequeno documenta no JSDoc por que fica sem paginação.
+- [ ] Cadastros `cloudclass-api`: índices de busca (§4.7) + FIELD-TEST-MATRIX (§5.3) para campos tocados.
 - [ ] Resposta keyset é `{ items, nextCursor }` — nunca `total`/`page` (§4.6).
 - [ ] Cache invalidado explicitamente após writes.
 - [ ] Exceções de negócio como classes derivadas de `BaseException`, mensagens em português.

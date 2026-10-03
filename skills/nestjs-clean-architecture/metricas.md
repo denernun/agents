@@ -5,11 +5,13 @@ description: Métricas, tracing, health e logs estruturados das APIs NestJS ERPC
 
 # Métricas — padrão ERPCLASS
 
-Fonte canônica humana: [`docs/metricas/README.md`](../../../docs/metricas/README.md) no hub `D:\AGENTS`.
+Fonte canônica humana: [`docs/metricas/README.md`](/D:/AGENTS/docs/metricas/README.md) no hub `D:\AGENTS` (inclusive ao ler uma cópia da skill em outra IDE).
 
 Kb e bot já implementam o pacote. **API nova copia `src/metrics/`** desses dois, não inventa stack.
 
 ## O que já existe (kb + bot)
+
+Referência registrada: confirme o estado atual do serviço antes de copiar configuração.
 
 | Sinal | Onde | Quando |
 |---|---|---|

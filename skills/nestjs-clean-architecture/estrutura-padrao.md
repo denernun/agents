@@ -2,7 +2,11 @@
 
 Status: **obrigatório para todos os projetos** da família (ERPCLASS / NFECLASS /
 MOBICLASS / CLOUDCLASS / SHOPCLASS / CRMCLASS). Vale para toda feature nova e
-todo agregado novo, sem exceção.
+todo agregado novo persistido com TypeORM. Mongo somente-leitura segue a variante
+do SKILL.md §2.6.1; features sem agregado persistido não criam camadas de dados artificiais.
+
+Este modelo orienta o escopo solicitado e preserva a cadeia de quatro componentes.
+Não autoriza reorganizar features existentes, trocar geradores ou revogar exceções aceitas em ADRs.
 
 Este documento existe para eliminar o retrabalho de "fazer de um jeito e depois
 refazer": ele é o **molde**, não uma sugestão. Copie os esqueletos daqui, troque
@@ -27,11 +31,11 @@ Regras que **nunca** se quebram:
 
 | # | Regra |
 |---|---|
-| 1 | Controller injeta **só** `<FEATURE>_APPLICATION`. Nunca Database, nunca Repository. |
-| 2 | Application injeta **só** `<FEATURE>_DATABASE`. **Nunca o Repository concreto.** |
+| 1 | Para acessar dados de negócio, Controller injeta `<FEATURE>_APPLICATION`. Nunca Database, nunca Repository. Serviços transversais são permitidos conforme SKILL.md §0.3. |
+| 2 | Application acessa persistência pelos tokens/interfaces de Database necessários ao caso de uso. **Nunca o Repository concreto.** Serviços transversais são permitidos conforme SKILL.md §2.3. |
 | 3 | Database injeta o **Repository concreto** (classe), e só ele. |
 | 4 | Repository injeta o `Repository<Entity>` do TypeORM via token `POSTGRES_<AGREGADO>`. |
-| 5 | Toda travessia de camada é **interface + token**, nunca classe concreta. |
+| 5 | Controller → Application e Application → Database usam **interface + token**. Database → Repository pode usar classe concreta: ambos são internos à camada de dados. Repository/providers podem depender diretamente do TypeORM. |
 | 6 | Controller não tem regra de negócio. Repository não tem regra de negócio. |
 
 ## 2. Nomes: plural × singular (a fonte de metade dos erros)
@@ -67,22 +71,27 @@ nomeando duas coisas diferentes no projeto — normalmente uma persona
   `domain/shared/` **nunca leva regra de negócio** — só classe base técnica
   sem dono de feature. Uma constante/função de negócio de UMA feature (ex.:
   duração de trial, cálculo de desconto) não vai para `shared` mesmo que outra
-  feature futura vá importá-la — fica junto da feature dona, do mesmo jeito
-  que `MembershipApplication` já lê `CompanyRepository` direto hoje.
+  feature futura vá importá-la — fica junto da feature dona. O acesso direto de
+  `MembershipApplication` a `CompanyRepository` foi apontado como dívida na auditoria,
+  não é exemplo aprovado de dependência entre features.
 - **Nunca reuse a mesma palavra para os dois eixos.** Se o projeto já chama
   a persona de "operator" e o banco de "admin" (ou qualquer par parecido),
-  escolha uma palavra e migre a outra — não deixe as duas convivendo.
+  documente claramente os dois eixos. Para estrutura nova, use nomes consistentes;
+  não renomeie pastas, tokens ou contratos existentes fora do escopo solicitado.
 - **Simetria de nomes nos dois bancos, sem exceção**: se o admin tem
   `connection.admin.ts`/`connectionAdmin`/`POSTGRES_SOURCE_ADMIN`, o lado app
   usa exatamente o mesmo padrão — `connection.app.ts`/`connectionApp`/
   `POSTGRES_SOURCE_APP`, nunca um nome histórico tipo `connection.source.ts`/
   `POSTGRES_SOURCE` sobrevivendo sozinho depois que o par ganhou nome novo.
 
-[ADR-0006]: (cloudclass-api) docs/adr/0006-admin-app-persona-e-database-split.md
+[ADR-0006]: /D:/SISTEMAS/CLOUDCLASS/cloudclass-api/docs/adr/0006-admin-app-persona-e-database-split.md
 
-## 3. Mapa de arquivos (13 arquivos por feature+agregado)
+## 3. Mapa de arquivos por feature+agregado (TypeORM)
 
-Exemplo: feature `accountings`, agregado `accounting`.
+Exemplo: feature `accountings`, agregado `accounting` (vocabulário de um domínio em inglês).
+Em domínio português, adapte os substantivos conforme §2; não traduza features existentes.
+O mapa contém 17 arquivos de implementação/contrato e 5 `index.ts`; não é uma meta de contagem.
+Request/Response são criados quando aplicáveis ao endpoint, conforme SKILL.md §0.4.
 
 ```
 src/domain/entities/accounting/
@@ -353,11 +362,11 @@ Um artefato criado e não registrado é código morto que só falha em runtime:
 
 ## 6. Checklist de conformidade (cole no PR)
 
-- [ ] 13 arquivos do §3 criados, com plural/singular do §2
-- [ ] Application **não** importa nada de `domain/repositories`
-- [ ] Nenhuma classe concreta atravessando camada (só interface + token)
-- [ ] Response DTO com `@Expose()` + `plainToInstance(..., { excludeExtraneousValues: true })`
-- [ ] `*.exceptions.ts` derivando `BaseException`, mensagem em **português**
+- [ ] Arquivos aplicáveis do §3 criados, com plural/singular do §2 (Mongo: SKILL.md §2.6.1)
+- [ ] Application não importa implementações de `domain/repositories`; tipos/erros puros compartilhados seguem SKILL.md §2.3
+- [ ] Controller → Application e Application → Database com interface + token; Database → Repository concreto permitido
+- [ ] Resposta de produto com corpo: Response DTO com `@Expose()` + `plainToInstance(..., { excludeExtraneousValues: true })`; `204` dispensa DTO
+- [ ] Exceções de negócio expostas por HTTP em `*.exceptions.ts` derivando `BaseException`, mensagem em **português**; erros internos seguem SKILL.md §0.6
 - [ ] Swagger completo por rota: `@ApiOperation` + `@ApiResponse` (2xx, 400, 401/403, 404/409 quando houver)
 - [ ] Sem `relations: [...]` em query de lista (§4.1)
 - [ ] Cache invalidado explicitamente após todo write (§4.2)
@@ -381,6 +390,9 @@ Um artefato criado e não registrado é código morto que só falha em runtime:
 ## 8. Divergência
 
 Precisou fugir deste modelo? Então:
+
+As variantes já previstas na skill e as exceções aceitas em ADRs não exigem nova
+aprovação da mesma decisão. Para uma nova divergência no escopo solicitado:
 
 1. **Não escreva o código ainda.**
 2. Reporte a divergência, com custo/benefício, e **peça confirmação**.

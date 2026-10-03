@@ -24,6 +24,10 @@ Plugin CLI (`nest-cli.json`): `classValidatorShim`, `introspectComments`, `dtoFi
 
 ## Auditoria atual
 
+As tabelas abaixo são snapshots de auditoria, não verificação atual dos serviços.
+Confirme cada gap no código antes de tratá-lo como tarefa; a consulta deste guia
+não autoriza corrigir rotas existentes fora do escopo solicitado.
+
 ### erpclass-dash-api
 
 | Escopo | Auth real | Swagger | Notas |
@@ -58,7 +62,8 @@ Helper compartilhado: `src/controllers/shared/swagger/dashboard-swagger.decorato
 | `POST /api/v1/tenants/deactivate` | `x-api-key` | 204/400/401 | OK |
 | `GET /health`, `GET /metrics`, `GET/POST /` | público | excluídos | Intencional |
 
-Ao criar endpoint **novo**, feche os gaps da tabela (status + scheme no builder). Não reescreva DTOs só para documentar.
+Ao criar endpoint **novo**, documente seus status e registre seu scheme no builder.
+Gaps de outros endpoints ficam como achados para trabalho específico. Não reescreva DTOs só para documentar.
 
 ## Checklist obrigatório (todo endpoint novo)
 

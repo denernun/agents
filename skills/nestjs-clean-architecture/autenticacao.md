@@ -5,6 +5,11 @@ description: Padrão de autenticação das APIs NestJS ERPCLASS (JWT, x-api-key,
 
 # Autenticação — padrão ERPCLASS
 
+As referências de implementação abaixo descrevem o estado registrado de KB/Bot;
+confira o código atual antes de reutilizá-las. Preserve mecanismos de autenticação,
+resolução de tenant e segredos aceitos nas rotas existentes. Este guia não ordena
+migrar Passport, JWT próprio ou webhooks durante outra tarefa.
+
 Três mecanismos. Não misture o header errado.
 
 | Scheme | Header | Quem usa | Onde vive |
@@ -58,7 +63,10 @@ O **erpclass-bot** valida o mesmo JWT **sem Passport** (`verifyHs256Jwt` + `Toke
 | Auth HTTP | `auth.apiUrl` | `auth.apiUrl` (profile para `AccountAccessGuard`) |
 | Bot HTTP | `bot.apiUrl`, `bot.webhookUrl` | `api.port` |
 
-JSON de config **entra no git** (sem `.example`). Não commitar valores de outro ambiente no arquivo errado.
+Preserve o formato JSON e o loader existente. Somente configuração não sensível
+pode ser versionada; não introduza segredos reais no Git. Novos segredos vêm do
+runtime pelo mecanismo aprovado do projeto, sem impor `.env` nem migrar deploys
+ou arquivos existentes nesta revisão. Ver SKILL.md §6.4.
 
 ## Throttling
 

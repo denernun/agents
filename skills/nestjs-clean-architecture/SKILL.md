@@ -1,13 +1,16 @@
 ---
 name: nestjs-clean-architecture
-description: NestJS Clean Architecture + DDD conventions for ERPCLASS/NFECLASS/MOBICLASS APIs. Use when editing NestJS/TypeScript backend code in *-api, *-auth, *-kb, *-bot, *-sync, *-hook, or when adding controllers, endpoints, DTOs, Swagger/OpenAPI, authentication guards, or Prometheus metrics.
+description: Established layered NestJS architecture for ERPCLASS/NFECLASS/MOBICLASS/CLOUDCLASS/SHOPCLASS/CRMCLASS APIs. Use when editing NestJS/TypeScript backend code in *-api, *-auth, *-kb, *-bot, *-sync, *-hook, or when adding controllers, endpoints, DTOs, Swagger/OpenAPI, authentication guards, or Prometheus metrics.
 ---
 Você é um(a) programador(a) sênior em TypeScript com experiência em NestJS, Clean Architecture e Domain-Driven Design (DDD), atuando em APIs NestJS desta família (ERPCLASS / NFECLASS / MOBICLASS).
+
+O padrão da família é uma **arquitetura em camadas NestJS**: Controller → Application → Database → Repository. Database e Repository são componentes da camada de dados; `domain/` é o nome histórico da pasta e também contém infraestrutura e entidades TypeORM. Não se trata de domínio isolado do ORM nem de Clean Architecture/DDD estritos. O nome da skill e a estrutura dos projetos são preservados.
 
 Gere código, correções e refatorações que sigam **rigorosamente** as diretrizes deste documento — elas refletem a arquitetura real do projeto, não um padrão genérico.
 
 - Interaja em **português** no chat.
-- Escreva **todo o código, identificadores, comentários e JSDoc em inglês**.
+- Escreva o vocabulário técnico, comentários e JSDoc em inglês; substantivos de negócio seguem o vocabulário estabelecido no projeto (§1.2). Mensagens ao usuário e summaries do Swagger ficam em português.
+- **Escopo e preservação:** esta skill orienta o trabalho solicitado. Não autoriza refatoração estrutural, renomeação, troca de ORM, de gerador, de tokens, de serialização ou de configuração de features existentes fora do escopo. Preserve decisões e exceções aceitas em ADRs do projeto. Achados históricos não são ordens de correção automática; reporte os desvios relevantes e trate-os somente no escopo autorizado.
 - **Este skill é a autoridade de arquitetura, e vence o código vizinho.** Onde o código existente diverge do que está aqui, o **código** é o legado — não o skill. Nunca justifique uma escolha com "é assim que o módulo ao lado faz": valide contra este documento e contra o modelo obrigatório [estrutura-padrao.md](estrutura-padrao.md) **antes** de copiar qualquer coisa.
 - **Divergência nunca é silenciosa.** Precisou fugir do padrão? Reporte, explique o custo/benefício, **peça confirmação** e registre em `docs/adr/` do repo. Divergência não registrada é bug, não estilo.
 - Em conflito entre "boas práticas genéricas" de fora e o que está aqui, **este documento vence** — ele reflete a arquitetura acordada da família.
@@ -17,19 +20,19 @@ Gere código, correções e refatorações que sigam **rigorosamente** as diretr
 
 ## 0. Regras inegociáveis (decisão do autor, 2026-10-02)
 
-Valem para toda feature de toda API da família, nova ou antiga. Código que fuja delas é **dívida**, não estilo; a exceção exige ADR em `docs/adr/` e confirmação do autor.
+Orientam implementações novas e alterações no escopo solicitado. Desvios existentes são avaliados como dívida ou exceção registrada, sem autorizar migração automática. Variantes previstas nesta skill (como Mongo somente-leitura, §2.6.1) não são divergências. Uma nova divergência exige ADR em `docs/adr/` e confirmação do autor; autorização já dada para a mesma decisão não precisa ser solicitada novamente.
 
-1. **Repository pattern é o padrão de acesso a dados.** O acesso ao banco passa sempre por duas classes por agregado:
+1. **O padrão de acesso a dados preserva Database + Repository.** Para agregados persistidos com TypeORM, o acesso ao banco passa por duas classes por agregado:
    - o **Repository** (`<name>.repository.ts`, singular) `extends RepositoryBase<Entity>`: só persistência (consulta, escrita, transação, trava, cache de consulta);
    - o **Database** (`<feature>.database.ts`, plural) **sempre `extends DatabaseBase<Entity>` e `implements DatabaseBaseInterface<Entity>`** (mais a interface da própria feature), que é o que a Application enxerga, por token.
-   Uma classe `Database` que não estende `DatabaseBase` ou não implementa `DatabaseBaseInterface` está fora do padrão.
+   Uma classe `Database` TypeORM que não estende `DatabaseBase` ou não implementa `DatabaseBaseInterface` está fora desse padrão. Mongo somente-leitura segue §2.6.1, sem bases TypeORM; features sem agregado persistido não criam camadas de persistência artificiais.
 2. **Toda feature tem Controller e Application, e a regra de negócio mora na Application.** Validar referência, decidir se o estado permite a operação, orquestrar vários agregados, escolher a exceção e a mensagem: tudo na Application. O Controller só traduz HTTP (rota, guard, DTO de entrada, DTO de saída) e chama a Application. O Repository e o Database não decidem regra: quando uma guarda precisa ser atômica (trava de linha, estado lido dentro da transação), a **Application diz qual é a regra** (por exemplo, quais estados permitem) e o Repository apenas a executa de forma atômica e devolve um resultado nomeado. Toda guarda de regra que hoje vive no Repository sem esse desenho é dívida (ver ADR-0015).
-3. **O Controller nunca acessa Repository, Database, `DataSource` nem entidade para ler ou gravar.** Só injeta o token da Application (`<FEATURE>_APPLICATION`) e serviços transversais (logger, config). A Application nunca importa Repository nem `typeorm`: fala com o Database por token e interface.
-4. **Todo endpoint tem Request e Response definidos no controller.** Corpo, query e filtros entram por uma classe `*Request` (ou `*Query`) com `class-validator`, num arquivo `<feature>.request.ts`; a saída é uma classe `*Response` com `@Expose()` em cada campo, num arquivo `<feature>.response.ts`, e o controller a monta com `plainToInstance(..., { excludeExtraneousValues: true })`. Nunca se devolve entidade, `any`, objeto literal ou tipo de domínio, e nunca se aceita `@Body()` sem classe. Rota que não devolve corpo declara `204`.
-5. **Swagger completo em toda rota, sem exceção.** `@ApiTags`, `@ApiBearerAuth`, `@ApiOperation` (resumo em português) e um `@ApiResponse` para o sucesso **com `type` do Response** (ou `204`) e para **cada código de erro que a rota pode devolver**: `400` (corpo, query ou chave inválidos, referência inexistente), `401`, `403`, `404` (rota com chave), `409` (conflito: código ou `guid` repetido, estado que não permite), mais `422`/`429` quando existirem. A lista de erros documentada tem de refletir as exceções que a Application realmente lança (as classes do `*.exceptions.ts`); `@ApiBody`, `@ApiQuery` e `@ApiParam` entram quando o plugin do CLI não os infere (`nest-cli.json` com `dtoFileNameSuffix` completo). Rota sem Swagger completo não está pronta.
-6. **Exceções de negócio estendem `BaseException`** (`*.exceptions.ts` da feature, mensagem em português, `HttpStatus` certo). Não se lança `BadRequestException`, `NotFoundException` e similares do framework na Application nem no Controller.
+3. **O Controller nunca acessa Repository, Database, `DataSource` nem entidade para ler ou gravar.** Só injeta o token da Application (`<FEATURE>_APPLICATION`) e serviços transversais (logger, config). A Application não importa implementações de Repository nem `typeorm`: fala com o Database por token e interface. Tipos e erros puros de contrato compartilhado, sem acesso a banco ou dependência de ORM, não são implementações de Repository; ver §2.3. Exceções aceitas em ADRs do projeto são preservadas.
+4. **Endpoints de produto têm contratos de entrada e saída definidos no controller quando aplicáveis.** Corpo, query e filtros entram por uma classe `*Request` (ou `*Query`) com `class-validator`, num arquivo `<feature>.request.ts`; a saída com corpo é uma classe `*Response` com `@Expose()` em cada campo, num arquivo `<feature>.response.ts`, e o controller a monta com `plainToInstance(..., { excludeExtraneousValues: true })`. Nunca se devolve entidade, `any`, objeto literal ou tipo de domínio, e nunca se aceita `@Body()` sem classe. Rota sem corpo declara `204` e dispensa Response DTO; rota sem body/query não cria Request artificial (parâmetros simples usam pipes). Saúde, métricas e status sem corpo de negócio são exceções de infraestrutura.
+5. **Swagger completo em toda rota de produto.** `@ApiTags`, `@ApiOperation` (resumo em português), `@ApiBearerAuth` somente para JWT ou `@ApiSecurity` para o scheme correspondente, e um `@ApiResponse` para o sucesso **com `type` do Response** (ou `204`) e para **cada código de erro que a rota pode devolver**: `400` (corpo, query ou chave inválidos, referência inexistente), `401`, `403`, `404` (rota com chave), `409` (conflito: código ou `guid` repetido, estado que não permite), mais `422`/`429` quando existirem. Não invente Bearer ou erros de autenticação para rotas públicas. A lista de erros documentada tem de refletir as exceções que a Application realmente lança (as classes do `*.exceptions.ts`); `@ApiBody`, `@ApiQuery` e `@ApiParam` entram quando o plugin do CLI não os infere (`nest-cli.json` com `dtoFileNameSuffix` completo). Health, metrics e raiz de status ficam fora da spec conforme [swagger.md](swagger.md).
+6. **Exceções de negócio expostas por HTTP estendem `BaseException`** (`*.exceptions.ts` da feature, mensagem em português, `HttpStatus` certo). Erros internos tratados como fallback/resultado e que não viram resposta HTTP podem estender `Error` com nome próprio, conforme a convenção aceita em `cloudclass-bot/docs/adr/0002-sales-agent-divergencias-da-skill.md`. Não se lança `BadRequestException`, `NotFoundException` e similares do framework na Application nem no Controller.
 
-Auditoria de 2026-10-02 (código novo gerado: limpo; desvios de legado: ver [cloudclass-api-mandatory-rules.md](cloudclass-api-mandatory-rules.md), seção "Dívida de arquitetura").
+Snapshot da auditoria de 2026-10-02: ver [cloudclass-api-mandatory-rules.md](cloudclass-api-mandatory-rules.md), seção "Dívida de arquitetura". Contagens e conclusões descrevem aquela data; confira o estado atual antes de usar um achado como tarefa.
 
 ---
 
@@ -40,7 +43,7 @@ Auditoria de 2026-10-02 (código novo gerado: limpo; desvios de legado: ver [clo
 - Declare o tipo de toda variável, parâmetro e retorno de função. **Nunca use `any`** — crie os tipos/interfaces necessários.
 - Um único artefato principal exportado por arquivo (a interface associada pode conviver no mesmo arquivo quando trivial).
 - Documente classes e métodos públicos com **JSDoc** explicando o _porquê_ (regra de negócio, decisão de cache, contrato com o ERP), não o _o quê_.
-- Não deixe linhas em branco dentro do corpo de uma função.
+- Use linhas em branco com parcimônia para separar blocos lógicos (validação, processamento, retorno ou Arrange-Act-Assert), respeitando o formatador do projeto.
 - Prefira **imutabilidade**: `readonly` para dados que não mudam, `as const` para literais.
 - **Decorators de propriedade sempre acima do campo** — nunca inline. O Prettier não corrige isso; o agente/IDE deve gerar assim:
   ```ts
@@ -59,8 +62,8 @@ Auditoria de 2026-10-02 (código novo gerado: limpo; desvios de legado: ver [clo
 - **Regra de plural/singular do projeto** (importante):
   - **Plural** (`accounts.*`): controllers, applications, databases, modules — nomeados pela _feature_.
   - **Singular** (`account.*`): entities, repositories, providers — nomeados pelo _agregado_.
-- **Nome da feature/agregado em português quando o domínio já é português.** "Escreva identificadores em
-  inglês" (topo deste documento) vale para o vocabulário técnico genérico (`Request`, `Response`,
+- **Nome da feature/agregado em português quando o domínio já é português.** A regra de inglês
+  no topo deste documento vale para o vocabulário técnico genérico (`Request`, `Response`,
   `Database`, `Repository`, `getById`, `create...`) — não para o substantivo de domínio em si. Se o
   projeto já fala `cliente`, `pedido`, `comissao`, `vendedor` (em `vendedorId`/`vendedorCodigo`, por
   exemplo) em todo o resto do código, a feature/agregado usa esse mesmo nome — nunca uma tradução
@@ -91,20 +94,20 @@ Auditoria de 2026-10-02 (código novo gerado: limpo; desvios de legado: ver [clo
 ### 1.5 Classes
 
 - Siga **SOLID**; prefira **composição sobre herança**.
-- Toda dependência entre camadas é feita via **interface + token de injeção**.
+- Controller → Application e Application → Database usam **interface + token de injeção**. Database → Repository pode injetar a classe concreta: ambos pertencem à camada de dados. Repositories e providers podem depender diretamente de TypeORM (`DataSource`, `Repository<Entity>`). Interfaces TypeScript exigem token em runtime, mesmo com uma única implementação.
 - Mantenha classes pequenas: idealmente < 200 linhas, < 10 métodos públicos, < 10 propriedades.
 
 ### 1.6 Exceções
 
 - Exceções para erros **inesperados** ou eventos de negócio nomeados.
-- **Cada feature tem seu `*.exceptions.ts`** com classes que estendem `BaseException` (`src/exceptions/base.exception.ts`), com mensagem em português e `HttpStatus` apropriado. Exemplo: `AccountNotFoundException extends BaseException`.
+- **Exceções expostas por HTTP ficam no `*.exceptions.ts` da feature** e estendem `BaseException` (`src/exceptions/base.exception.ts`), com mensagem em português e `HttpStatus` apropriado. Exemplo: `AccountNotFoundException extends BaseException`. Erros internos não HTTP podem estender `Error` com nome próprio (§0.6); não troque a base das exceções existentes por iniciativa própria.
 - Capture uma exceção apenas para **corrigir um caso esperado** ou **adicionar contexto**. Caso contrário, deixe o filtro global `AppException` tratar.
 
 ---
 
 ## 2. Arquitetura do Projeto (erpclass-api)
 
-O projeto segue uma arquitetura em camadas com **quatro camadas de dados**, orquestradas por módulos globais em `src/app.module.ts`.
+O projeto segue uma arquitetura em camadas com **quatro componentes na cadeia de acesso a dados**, orquestrados por módulos globais em `src/app.module.ts`.
 
 ```
 Controller (HTTP)
@@ -161,8 +164,8 @@ Arquivos por feature: `<feature>.controller.ts`, `<feature>.request.ts`, `<featu
 **Regras:**
 
 - **DEVE** injetar apenas serviços da Application via token (`@Inject(ACCOUNTS_APPLICATION) private accountsApplication: AccountsApplicationInterface`).
-- **NÃO DEVE** conter lógica de negócio nem acessar Database/Repository/Entity diretamente (exceto `Entity.factory()` para construir o objeto a partir do request).
-- **DEVE** usar `Guards` (`TokenGuard`), `Interceptors` (`ClassSerializerInterceptor`), `Pipes` (`ParseUUIDPipe`), `@Throttle`, `@HttpCode`.
+- **NÃO DEVE** conter lógica de negócio nem acessar Database/Repository/Entity diretamente. Passe os dados validados à Application; `Entity.factory()` fica na Application ou no Database, conforme o fluxo da feature. O contrato de entrada da Application não importa DTOs HTTP do Controller.
+- Use Guards, Interceptors, Pipes, throttling e status HTTP conforme o endpoint. Preserve `plainToInstance` como padrão de Response; não imponha um `ClassSerializerInterceptor` global nem uma troca de serialização em rotas existentes.
 - **DEVE** transformar a resposta com `plainToInstance(FeatureResponse, data, { excludeExtraneousValues: true })`.
 - Prefixo de rota padrão: `api/v1/<feature>`.
 - Cada método público tem JSDoc no formato: `<VERB> /rota — <descrição de negócio>. <Rota pública ou administrativa (requer TokenGuard)>`.
@@ -183,13 +186,15 @@ Arquivos por feature: `<feature>.application.ts`, `<feature>.interface.ts`, `<fe
   - `@Inject(ACCOUNTS_DATABASE) private accountsDatabase: AccountsDatabaseInterface` (nunca o repositório concreto).
   - `@Inject(CACHE_SERVICE) private cacheService: CacheServiceInterface` e outros serviços transversais quando necessário.
 - **DEVE** orquestrar o caso de uso: consultar cache Redis, decidir se o write no banco é necessário (padrão de _fingerprint_), lançar exceções de negócio (`AccountNotFoundException`).
-- **NÃO DEVE** conhecer HTTP (`req`/`res`) nem TypeORM.
-- **NÃO DEVE** importar de `src/domain/repositories` diretamente — sempre pela camada Database.
+- **NÃO DEVE** receber nem manipular objetos HTTP (`req`/`res`) nem depender de TypeORM. O padrão atual de exceções usa `BaseException` com `HttpStatus` (§1.6); esta revisão não introduz outro sistema de erros.
+- **NÃO DEVE** importar implementações de `src/domain/repositories` diretamente — o acesso ao banco passa pela camada Database. Tipos/erros puros de contrato compartilhado são permitidos quando não expõem ORM nem executam persistência (ex.: `InvalidKeysetCursorError`); não mova helpers existentes só por causa do nome da pasta.
 - Constantes de cache/TTL declaradas no topo do arquivo, com comentário explicando o motivo do valor.
-- Token de injeção no `*.consts.ts`: `export const ACCOUNTS_APPLICATION = 'ACCOUNTS_APPLICATION';`.
+- Token de injeção no `*.consts.ts`: `export const ACCOUNTS_APPLICATION = 'ACCOUNTS_APPLICATION';`. Database mantém `*.types.ts` e os tokens de persistência ficam no provider, conforme o projeto. São convenções existentes: não renomeie arquivos para uniformizá-las; reutilize constantes exportadas quando disponíveis.
 - Módulo registra o binding: `{ provide: ACCOUNTS_APPLICATION, useClass: AccountsApplication }` e exporta o token.
 
-### 2.4 Camada de Domínio — Entidades
+Convenções já aceitas (`cloudclass-bot/docs/adr/0002-sales-agent-divergencias-da-skill.md`): serviços de métricas podem ser injetados pela classe concreta; dependências Application → Application não são travessias de camada; o bot preserva o sufixo `*.service.ts` da sua orquestração. Não renomeie essas classes nem introduza tokens apenas para uniformizar o legado. As fronteiras Controller → Application e Application → Database continuam seguindo o padrão, ressalvadas ADRs específicas.
+
+### 2.4 Entidades persistidas — pasta histórica `domain/`
 
 Arquivos por agregado (singular): `src/domain/entities/<name>/<name>.entity.ts` + `<name>.interface.ts` + `index.ts`.
 
@@ -201,7 +206,7 @@ Arquivos por agregado (singular): `src/domain/entities/<name>/<name>.entity.ts` 
 - Relacionamentos declarados como **opcionais** (`user?: UserEntity`) — carregar sob demanda, ver §4.
 - `<name>.interface.ts` define o contrato de dados (`extends BaseInterface`), sem dependências de TypeORM. É o tipo usado nas fronteiras entre camadas.
 
-### 2.5 Camada de Domínio — Database
+### 2.5 Camada de dados — Database (TypeORM)
 
 Arquivos por feature: `src/domain/database/<feature>/<feature>.database.ts` + `.interface.ts` + `.types.ts` + `.module.ts` + `index.ts`.
 
@@ -214,7 +219,7 @@ Arquivos por feature: `src/domain/database/<feature>/<feature>.database.ts` + `.
 - Token no `*.types.ts`: `export const <FEATURE>_DATABASE = '<FEATURE>_DATABASE';`.
 - Módulo: `{ provide: <FEATURE>_DATABASE, useClass: FeatureDatabase }`.
 
-### 2.6 Camada de Domínio — Repository
+### 2.6 Camada de dados — Repository (TypeORM)
 
 Arquivos por agregado (singular): `src/domain/repositories/<name>/<name>.repository.ts` + `.provider.ts` + `.module.ts` + `index.ts`.
 
@@ -246,9 +251,7 @@ a separação do §2 mesmo sem TypeORM no meio). Em vez disso:
   Repository existe.
 - Essas features **não** ganham `findWithCache`/`upsertNative`: não há cache de query TypeORM nem
   upsert partindo da API para um Mongo somente-leitura.
-- Registre a decisão em um ADR curto (`docs/adr/000N-...md`) explicando por que a feature não
-  segue o par Postgres — evita que uma revisão futura leia isso como bug. Ver `mobiclass-api`
-  `docs/adr/0002-repository-mongo-por-agregado.md`.
+- Esta é uma variante prevista, sem `DatabaseBase`/`DatabaseBaseInterface`/`RepositoryBase` TypeORM; não exige um novo ADR apenas por ser Mongo somente-leitura. Preserve as decisões específicas já registradas, como `mobiclass-api/docs/adr/0002-repository-mongo-por-agregado.md`. Uma divergência além desta variante segue a regra de ADR do §0.
 
 ### 2.7 Camada de Infraestrutura Compartilhada
 
@@ -374,16 +377,16 @@ Ordem obrigatória dentro de `main.ts`:
 ## 3. Fluxo para Criar uma Nova Feature
 
 > 🧱 **Use o modelo: [estrutura-padrao.md](estrutura-padrao.md).** Ele é
-> **obrigatório em todos os projetos** e traz os 13 arquivos da feature com
+> **obrigatório para features TypeORM** e traz os arquivos da feature com
 > esqueleto pronto para copiar, o wiring nos módulos globais, o checklist de PR
 > e as armadilhas que já custaram retrabalho (entidade fora do `entities` do
 > DataSource, `cache` com o cliente errado, paginação sem desempate, artefato
 > não registrado). **Copie de lá, nunca do módulo vizinho** — o vizinho pode ser
-> legado. Os passos abaixo são o roteiro; o modelo é o molde.
+> legado. Os passos abaixo são o roteiro TypeORM; Mongo somente-leitura segue §2.6.1. Esse roteiro não autoriza reestruturar features existentes fora do escopo.
 
-> ⚠️ **Nenhuma feature está completa sem Swagger.** Mesmo que o pedido do usuário mencione só "cria o controller de X" ou "adiciona a rota Y", o passo 5 abaixo **inclui** `@ApiTags`/`@ApiOperation`/`@ApiResponse`/`@ApiBearerAuth` — não é um extra opcional a acrescentar depois. Antes de considerar a feature pronta, confira o checklist de [swagger.md](swagger.md).
+> ⚠️ **Nenhuma rota nova de produto está completa sem Swagger.** Mesmo que o pedido mencione só "cria o controller de X" ou "adiciona a rota Y", o passo 5 inclui `@ApiTags`/`@ApiOperation`/`@ApiResponse` e o scheme de autenticação quando aplicável. Health/metrics/status seguem as exceções de [swagger.md](swagger.md).
 
-Ordem **de dentro para fora** (domínio → infraestrutura → aplicação → apresentação):
+Ordem de criação dos componentes TypeORM (entidades → persistência → aplicação → apresentação):
 
 1. **Entidade** (`src/domain/entities/<name>/`)
    - `<name>.interface.ts` — contrato de dados estendendo `BaseInterface`.
@@ -417,7 +420,7 @@ Ordem **de dentro para fora** (domínio → infraestrutura → aplicação → a
 5. **Controller** (`src/controllers/<feature>/`)
    - `<feature>.request.ts` — DTOs de entrada com `class-validator`.
    - `<feature>.response.ts` — DTOs de saída com `@Expose()`.
-   - `<feature>.controller.ts` — rotas HTTP chamando a Application, **já com** `@ApiTags` / `@ApiOperation` / `@ApiResponse` / `@ApiBearerAuth` (§2.9).
+   - `<feature>.controller.ts` — rotas HTTP chamando a Application, **já com** `@ApiTags` / `@ApiOperation` / `@ApiResponse` e scheme de autenticação quando aplicável (§2.9).
    - `index.ts`.
    - Registre em `src/controllers/controllers.module.ts`.
 
@@ -480,7 +483,7 @@ Escolha entre as duas técnicas assim:
 | | Offset (`findPaginated`) | Keyset (`findKeyset`) |
 |---|---|---|
 | Quando usar | Lista com até ~dezenas de milhares de linhas, tela que **precisa de "página 7 de 40"** e salto direto de página | Lista que pode crescer sem teto por tenant (produtos, faturas, log de auditoria) — **navegação sequencial** (próxima/anterior), sem salto |
-| Contrato | `{ data, total, page, limit, totalPages, hasNext, hasPrev }` | `{ data, nextCursor }` — sem `total`/`page` |
+| Contrato | `{ data, total, page, limit, totalPages, hasNext, hasPrev }` | `{ items, nextCursor }` no padrão CloudClass — sem `total`/`page`; preserve contratos diferentes já existentes em outros serviços |
 | Custo por página | `O(offset + limit)` — pedir a página 5000 escaneia e descarta as 99 mil linhas antes dela | `O(limit)` sempre — o índice `(coluna, id)` pula direto para o cursor |
 | Onde vive | `RepositoryBase.findPaginated` / `DatabaseBase.findPaginated` (já existente) | `RepositoryBase.findKeyset` / helpers em `src/domain/shared/repositories/keyset-pagination.ts` (`cloudclass-api`, referência para portar) |
 
@@ -491,8 +494,8 @@ query (agregada, cacheada) — nunca parte da resposta paginada.
 
 ### 4.6 Keyset (seek) pagination — mecânica
 
-Ver `src/domain/shared/repositories/keyset-pagination.ts` em `cloudclass-api`
-(portar para um projeto novo). Peças:
+Ver `src/domain/shared/repositories/keyset-pagination.ts` em `cloudclass-api`.
+Para listas novas nesse repo, prevalecem o cursor tipado, os helpers e as restrições do ADR-0013 indicados em [cloudclass-api-mandatory-rules.md](cloudclass-api-mandatory-rules.md), inclusive a restrição de timestamp. O resumo abaixo é uma referência geral; não porte helpers nem altere contratos existentes automaticamente. Peças:
 
 - **Cursor opaco em base64** (`encodeKeysetCursor`/`decodeKeysetCursor`) —
   `{ value, id }` da última linha da página anterior. O cliente nunca lê nem
@@ -531,7 +534,7 @@ Ver `src/domain/shared/repositories/keyset-pagination.ts` em `cloudclass-api`
 
 Listagens por `company_id` com filtro em CPF/CNPJ, nome, descrição ou código de
 barras **exigem índice** alinhado à UX — não seq scan “por enquanto”. Política
-e nomes: [INDEX-POLICY.md](../../../specs/cadastros/INDEX-POLICY.md) no repo
+e nomes: `specs/cadastros/INDEX-POLICY.md` no repo
 `cloudclass-api`. Regras:
 
 - Toda coluna de busca frequente → `@Index` na entity **e** migration (`up`/`down`).
@@ -592,7 +595,7 @@ Além dos testes por método público: **cada campo writable** exposto em
 persistência ou normalização na Application. Campos usados em busca têm teste
 de integração no Repository. Registrar em
 `specs/cadastros/FIELD-TEST-MATRIX.md`. Iniciativa:
-[SPEC-platform-hardening.md](../../../specs/cadastros/SPEC-platform-hardening.md).
+`cloudclass-api/specs/cadastros/SPEC-platform-hardening.md`.
 
 ---
 
@@ -659,7 +662,7 @@ Produção usa **PgBouncer na porta 6432** (modo `transaction`). Regras obrigat�
 
 ### 6.4 Config JSON
 
-Os JSONs de config (`src/config/.development.json`, `.production.json`) **fazem parte do repositório** — não usar `.env`, não gitignorar, não usar fluxo `.example`.
+Preserve o formato JSON e o mecanismo de carregamento do projeto (`src/config/.development.json`, `.production.json`). Configuração não sensível pode ser versionada; **não introduza segredos reais no Git**. Novos segredos devem ser fornecidos no ambiente de execução pelo mecanismo aprovado do projeto (overlay, variáveis ou gestor de segredos); isso não exige `.env`. A revisão documental não autoriza alterar loaders, arquivos de configuração existentes ou deploys; uma migração operacional deve ter escopo próprio.
 
 Seção obrigatória para banco:
 ```json
@@ -669,7 +672,7 @@ Seção obrigatória para banco:
     "host": "127.0.0.1",       // dev: localhost, prod: 172.18.2.101
     "port": 5432,              // dev: 5432, prod: 6432 (PgBouncer)
     "username": "postgres",
-    "password": "postgres",    // dev: postgres, prod: ver credenciais
+    "password": "",            // fornecer no runtime; não versionar segredo real
     "schema": "public",
     "logging": false
   }
@@ -694,7 +697,7 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 
 ## 7. Checklist Antes de Entregar Código
 
-- [ ] **Regras do §0:** Database `extends DatabaseBase<>` e `implements DatabaseBaseInterface<>`; regra de negócio na Application (o Repository só executa a guarda atômica que a Application pede); Controller só com a Application; Request e Response definidos; Swagger com todos os Requests, Responses e códigos de erro.
+- [ ] **Regras do §0:** Database TypeORM `extends DatabaseBase<>` e `implements DatabaseBaseInterface<>` (Mongo: §2.6.1); regra de negócio na Application (o Repository só executa a guarda atômica que a Application pede); Controller só com a Application; Request e Response quando aplicáveis; Swagger nas rotas de produto com contratos e códigos de erro reais.
 - [ ] Camadas respeitadas: Controller → Application → Database → Repository. Sem "atalhos".
 - [ ] Interfaces + tokens em uso; nenhuma classe concreta injetada onde deveria ser interface.
 - [ ] Nomes de arquivos seguem `<name>.<artifact>.ts` com o plural/singular correto, e o nome da
@@ -712,7 +715,7 @@ SSH: `ssh ubuntu@vmXX`. Deploy via `deploy.bat` (build local → pscp → pm2 re
 - [ ] Cadastros `cloudclass-api`: índices de busca (§4.7) + FIELD-TEST-MATRIX (§5.3) para campos tocados.
 - [ ] Resposta keyset é `{ items, nextCursor }` — nunca `total`/`page` (§4.6).
 - [ ] Cache invalidado explicitamente após writes.
-- [ ] Exceções de negócio como classes derivadas de `BaseException`, mensagens em português.
+- [ ] Exceções de negócio expostas por HTTP derivam de `BaseException`, com mensagens em português; erros internos tratados sem resposta HTTP seguem §0.6 e ADRs aceitas.
 - [ ] Novo módulo registrado no módulo global correspondente (`ApplicationModule`, `ControllersModule`, `DatabaseModule`).
 - [ ] `src/main.ts` segue a estrutura padrão da família (§2.10): OTel antes dos imports do Nest, import lazy de `NestFactory`/`AppModule`, logger Winston + `app.useLogger`, CORS explícito (sem `cors: true`), Swagger só em `development`, `trust proxy`. Referência: `erpclass-dash-api/src/main.ts`.
 - [ ] `MetricsModule` (Prometheus RED + `GET /health`) presente no `AppModule` — obrigatório em todo serviço novo, mesmo sem TypeORM/RabbitMQ (§2.10). Checklist completo: [metricas.md](metricas.md).

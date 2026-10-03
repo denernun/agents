@@ -155,7 +155,7 @@ São skills individuais: o hub não instala automaticamente o plugin e os hooks 
 
 | Skill / distribuição | Quando usar e o que faz | Como pedir no chat |
 |---|---|---|
-| nestjs-clean-architecture — NestJS | Segue as camadas e convenções dos backends: controllers, aplicação, domínio, persistência, DTOs, Swagger e validação. | Use nestjs-clean-architecture para adicionar consulta de pedidos seguindo o módulo vizinho. |
+| nestjs-clean-architecture — NestJS | Segue as camadas e convenções dos backends: controllers, aplicação, dados, DTOs, Swagger e validação, preservando o escopo e ADRs aceitas. | Use nestjs-clean-architecture para adicionar consulta de pedidos; valide o modelo da skill antes de reutilizar o módulo vizinho. |
 | angular-coreui — Angular | Orienta TypeScript, arquitetura, reatividade e componentes Angular/CoreUI conforme o projeto. | Use angular-coreui para implementar o formulário de edição de cliente. |
 | coreui-styling — Angular | Aplica o design system compartilhado: shell CoreUI, ds-*, layout/shared, cards, grids, contraste e temas. | Use coreui-styling para ajustar esta tela ao padrão do sistema e verificar claro/escuro. |
 | claude-android-ninja — Android | Guia Kotlin, Compose, ViewModels, injeção, persistência, navegação e Gradle. Requer o ambiente Android. | Use claude-android-ninja para criar a tela de leitura offline respeitando as versões do app. |

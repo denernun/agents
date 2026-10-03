@@ -1,6 +1,6 @@
 # {{PROJECT}}
 
-NestJS API — Clean Architecture / DDD ({{FAMILY}} family).
+NestJS API — established layered architecture ({{FAMILY}} family).
 
 ## Stack
 - TypeScript + NestJS + TypeORM + PostgreSQL + Redis
@@ -17,9 +17,10 @@ npm test
 
 ## Agent instructions (keep this file small)
 > Do **not** paste stack guides here — they live in `D:\AGENTS` skills (on demand). Keep this file organized and short.
-- Chat in **Portuguese**; code/JSDoc/identifiers in **English**.
+- Chat in **Portuguese**; technical identifiers/comments/JSDoc in **English**; business nouns follow the project's established vocabulary.
 - Before exploring code with Grep/Glob/Read, use skill **codegraph** (`codegraph_explore`, MCP) when available.
 - For architecture, naming, cache, and feature checklist, load skill **nestjs-clean-architecture**.
+- Preserve existing features and accepted ADR exceptions. Apply the skill within the requested scope; historical findings do not authorize structural migrations or renames.
 - Property decorators always on their own line above the field.
 
 ## Eficiência de execução

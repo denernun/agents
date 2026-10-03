@@ -2,6 +2,10 @@
 
 Este anexo **complementa** [SKILL.md](SKILL.md) e **vence** código legado neste repositório. Divergência exige ADR em `docs/adr/`.
 
+Aplicação limitada ao trabalho solicitado: não migre features existentes ou revogue
+exceções aceitas automaticamente. As referências externas deste anexo pertencem ao
+repositório `D:/SISTEMAS/CLOUDCLASS/cloudclass-api`, não ao AgentHub.
+
 ## Paths reais (dois bancos)
 
 | Banco | Entities / Repositories / Migrations / Database |
@@ -12,17 +16,17 @@ Este anexo **complementa** [SKILL.md](SKILL.md) e **vence** código legado neste
 Controllers e applications da persona operador: `src/controllers/app/`, `src/application/app/`.  
 Rotas: `api/v1/app/<feature>`.
 
-Não use `src/domain/entities/` neste repo — isso é template genérico do skill (ver [ADR-0005](../../docs/adr/0005-skill-como-autoridade-de-arquitetura.md) divergência admin/app).
+Não use `src/domain/entities/` neste repo — isso é template genérico do skill (ver [ADR-0005](/D:/SISTEMAS/CLOUDCLASS/cloudclass-api/docs/adr/0005-skill-como-autoridade-de-arquitetura.md) divergência admin/app).
 
 ## Copiar modelo, não vizinho
 
-Feature nova: [estrutura-padrao.md](estrutura-padrao.md) com paths `domain/app/...`. Spec em `specs/cadastros/SPEC-<module-id>.md` antes do código ([CAPABILITY-MAP](../../specs/cadastros/CAPABILITY-MAP.md)).
+Feature nova: [estrutura-padrao.md](estrutura-padrao.md) com paths `domain/app/...`. Spec em `specs/cadastros/SPEC-<module-id>.md` antes do código ([CAPABILITY-MAP](/D:/SISTEMAS/CLOUDCLASS/cloudclass-api/specs/cadastros/CAPABILITY-MAP.md)).
 
 ## Índices de busca (não opcional)
 
 Antes de mergear agregado com busca UX:
 
-1. Listar campos em [INDEX-POLICY.md](../../specs/cadastros/INDEX-POLICY.md).
+1. Listar campos em [INDEX-POLICY.md](/D:/SISTEMAS/CLOUDCLASS/cloudclass-api/specs/cadastros/INDEX-POLICY.md).
 2. `@Index` na entity + migration (`up`/`down`).
 3. Teste migration assertando índice.
 4. Query no repository usando o índice; spec de integração.
@@ -39,13 +43,13 @@ Antes de mergear agregado com busca UX:
 
 Helpers: `src/domain/shared/repositories/keyset-pagination.ts`, `RepositoryBase.findKeyset`.
 
-**Toda lista keyset segue o [ADR-0013](../../../docs/adr/0013-keyset-cursor-tipado-e-contrato-de-teste.md):** `decodeKeysetCursor(cursor, spec)` (cursor tipado), `fetchKeysetPage` (lê `limit + 1`), e `expectKeysetContract` no spec de integração do repositório. O teste-portão `keyset-usage.spec.ts` derruba o build sem isso. Ordenar por coluna de timestamp não é suportado (o cursor perde microssegundos).
+**Toda lista keyset segue o [ADR-0013](/D:/SISTEMAS/CLOUDCLASS/cloudclass-api/docs/adr/0013-keyset-cursor-tipado-e-contrato-de-teste.md):** `decodeKeysetCursor(cursor, spec)` (cursor tipado), `fetchKeysetPage` (lê `limit + 1`), e `expectKeysetContract` no spec de integração do repositório. O teste-portão `keyset-usage.spec.ts` derruba o build sem isso. Ordenar por coluna de timestamp não é suportado (o cursor perde microssegundos).
 
 ## FK e integridade
 
 - Relações **transporte** e agregados novos: FK Postgres + validação application.
 - FK só na application sem DDL: **proibido** salvo ADR (catálogo legado / import).
-- **Relacionamento só por uuid ([ADR-0014](../../docs/adr/0014-relacionamento-so-por-uuid.md)):** toda relação é FK composta `(company_id, <tabela>_id)` sobre chave uuid. O inteiro `id` (o `ID_<TABELA>` do ERP) existe em toda tabela de empresa como código de exibição e de pesquisa direta nas telas (texto ou código), único por empresa e sem FK: nunca é chave, FK, filtro de relacionamento nem rota. Coluna do ERP cujo pai ainda não existe **não é gerada**; ela volta como FK uuid na task do pai. Coluna inteira `*_id` nova derruba o build (`integer-references.spec.ts`); o legado está em `SPEC-referencias-inteiras.md`.
+- **Relacionamento só por uuid ([ADR-0014](/D:/SISTEMAS/CLOUDCLASS/cloudclass-api/docs/adr/0014-relacionamento-so-por-uuid.md)):** toda relação é FK composta `(company_id, <tabela>_id)` sobre chave uuid. O inteiro `id` (o `ID_<TABELA>` do ERP) existe em toda tabela de empresa como código de exibição e de pesquisa direta nas telas (texto ou código), único por empresa e sem FK: nunca é chave, FK, filtro de relacionamento nem rota. Coluna do ERP cujo pai ainda não existe **não é gerada**; ela volta como FK uuid na task do pai. Coluna inteira `*_id` nova derruba o build (`integer-references.spec.ts`); o legado está em `SPEC-referencias-inteiras.md`.
 - Cidade e UF, e os cadastros fiscais nacionais (NCM, CFOP, alíquotas IBPT e demais tabelas da emissão), **não** têm `company_id`. A ficha guarda o `id` uuid dessas tabelas globais (`city`, `state` e as tabelas fiscais quando existirem).
 
 ## Testes por campo persistido
@@ -55,7 +59,7 @@ Todo campo writable no DTO:
 - Teste de **rejeição** (validation ou exceção de negócio).
 - Teste de **persistência válida** ou normalização.
 
-Registrar em [FIELD-TEST-MATRIX.md](../../specs/cadastros/FIELD-TEST-MATRIX.md). Gate: [SPEC-platform-hardening.md](../../specs/cadastros/SPEC-platform-hardening.md).
+Registrar em [FIELD-TEST-MATRIX.md](/D:/SISTEMAS/CLOUDCLASS/cloudclass-api/specs/cadastros/FIELD-TEST-MATRIX.md). Gate: [SPEC-platform-hardening.md](/D:/SISTEMAS/CLOUDCLASS/cloudclass-api/specs/cadastros/SPEC-platform-hardening.md).
 
 ## Migrations
 
@@ -65,7 +69,7 @@ Registrar em [FIELD-TEST-MATRIX.md](../../specs/cadastros/FIELD-TEST-MATRIX.md).
 
 ## HTTP validation (meta)
 
-Rotas app: DTOs completos; meta `forbidNonWhitelisted: true` ([ADR-0010](../../docs/adr/0010-cadastros-indices-busca-e-keyset.md)). Até lá, não depender de strip silencioso de campos extras.
+Rotas app: DTOs completos; meta `forbidNonWhitelisted: true` ([ADR-0010](/D:/SISTEMAS/CLOUDCLASS/cloudclass-api/docs/adr/0010-cadastros-indices-busca-e-keyset.md)). Até lá, não depender de strip silencioso de campos extras.
 
 ## Checklist extra (além do §7 do SKILL)
 
@@ -77,7 +81,7 @@ Rotas app: DTOs completos; meta `forbidNonWhitelisted: true` ([ADR-0010](../../d
 
 ## Dívida de arquitetura (auditoria de 2026-10-02)
 
-Medida em 143 controllers, 582 rotas, 140 applications e 140 databases. As regras são as do §0 do [SKILL.md](SKILL.md). **O código gerado por `scripts/cadastros-gen` cumpre todas, exceto a regra de negócio no Repository** (item 5 abaixo). O resto é do legado de `admin` e de poucas fichas antigas.
+Snapshot histórico de 2026-10-02, medido em 143 controllers, 582 rotas, 140 applications e 140 databases; não é uma verificação atual nem uma ordem de correção. A auditoria registrou conformidade do código gerado por `scripts/cadastros-gen`, exceto a regra de negócio no Repository (item 5 abaixo), e desvios no legado de `admin` e de poucas fichas antigas. Confira cada achado no código atual antes de propor trabalho. As regras são as do §0 do [SKILL.md](SKILL.md).
 
 | # | Desvio | Onde | Regra |
 |---|---|---|---|

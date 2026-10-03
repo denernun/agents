@@ -5,6 +5,10 @@ description: Visão do fluxo Connect + KB + Bot + Evolution. O passo a passo ope
 
 # Connect + Bot — mapa rápido
 
+Mapa operacional registrado para ERPCLASS: valide portas, bancos e configuração
+no projeto atual antes de executar. Não aplique estes valores a outras famílias
+nem trate o mapa como autorização para alterar configuração ou autenticação existentes.
+
 Passo a passo com riscos de omissão: **`erpclass-bot/docs/bot-connect-setup.md`**.
 
 ```
@@ -30,6 +34,6 @@ Bot
 7. OpenAI `apiKey` no KB — search sem chave não gera resposta útil.
 8. Redis db **12** no bot; prefixo `bot:{tenantId}:`.
 9. Certificados `certs/localhost.*` em dev HTTPS; em prod o nginx termina TLS.
-10. Config JSON versionada — não gitignorar.
+10. Preserve config JSON e loader; somente configuração não sensível é versionada. Novos segredos vêm do runtime (SKILL.md §6.4), sem migração automática de deploy.
 
 Ordem de subida: PostgreSQL/Redis → auth → Evolution → **kb** → **bot** → Connect.

@@ -33,7 +33,7 @@ $configs = @{
   '.cursor/mcp.json'='mcpServers'; '.mcp.json'='mcpServers';
   '.codex/config.toml'='toml'; 'opencode.json'='mcp';
   '.agents/mcp_config.json'='mcpServers'; '.vscode/mcp.json'='servers';
-  '.devin/mcp_config.json'='mcpServers'
+  '.kiro/settings/mcp.json'='mcpServers'; '.devin/mcp_config.json'='mcpServers'
 }
 foreach ($project in $Projects) {
   $repo = (Resolve-Path -LiteralPath $project).Path

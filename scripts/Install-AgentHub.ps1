@@ -149,7 +149,7 @@ function Resolve-IdePolicy {
   # Per-machine lists: process env / .env override catalog/projects.json.
   # AGENTHUB_IDES empty or "auto" = no allowlist (every detected IDE minus exclude).
   param([object]$Catalog)
-  $known = @('Cursor', 'VSCode', 'OpenCode', 'Antigravity', 'Claude', 'Codex', 'Devin', 'Qoder')
+  $known = @('Cursor', 'VSCode', 'Kiro', 'OpenCode', 'Antigravity', 'Claude', 'Codex', 'Devin', 'Qoder')
   $allowedSource = 'catalog.ides'
   $excludeSource = 'catalog.excludeIdes'
   $allowedIdes = @($Catalog.ides)
@@ -235,6 +235,7 @@ function Get-PresentIdes {
       (Get-Command code-insiders -ErrorAction SilentlyContinue)) {
     [void]$found.Add('VSCode')
   }
+  if (Test-Path (Join-Path $userHome '.kiro')) { [void]$found.Add('Kiro') }
   if ((Test-Path (Join-Path $userHome '.antigravity')) -or
       (Test-Path (Join-Path $env:APPDATA 'Antigravity')) -or
       (Test-Path (Join-Path $userHome '.gemini')) -or
@@ -526,6 +527,7 @@ function Get-IdeRegistry {
   return [ordered]@{
     Cursor      = @{ Skills = '.cursor/skills';   GlobalSkills = @('.agents/skills'); GlobalMcpPath = 'USER:.cursor/mcp.json'; GlobalMcpFormat = 'json';    GlobalMcpProperty = 'mcpServers'; Mcp = '.cursor/mcp.json';        Property = 'mcpServers'; CopySkills = $false }
     VSCode      = @{ Skills = '.github/skills';   GlobalSkills = @('.agents/skills'); GlobalMcpPath = 'USER:.copilot/mcp-config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.vscode/mcp.json'; Property = 'servers'; CopySkills = $false }
+    Kiro        = @{ Skills = '.kiro/skills';     GlobalSkills = @('.kiro/skills');    GlobalMcpPath = 'USER:.kiro/settings/mcp.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.kiro/settings/mcp.json'; Property = 'mcpServers'; CopySkills = $true  }
     Claude      = @{ Skills = '.claude/skills';   GlobalSkills = @('.claude/skills');  GlobalMcpPath = 'CLAUDE:.claude.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.mcp.json'; Property = 'mcpServers'; CopySkills = $false }
     Codex       = @{ Skills = '.agents/skills';   GlobalSkills = @('.agents/skills');  GlobalMcpPath = 'CODEX:config.toml'; GlobalMcpFormat = 'toml'; GlobalMcpProperty = ''; Mcp = '.codex/config.toml'; Property = 'toml'; CopySkills = $false }
     Antigravity = @{ Skills = '.agents/skills';   GlobalSkills = @('.gemini/skills', '.gemini/antigravity-cli/skills'); GlobalMcpPath = 'USER:.gemini/config/mcp_config.json'; GlobalMcpFormat = 'json'; GlobalMcpProperty = 'mcpServers'; Mcp = '.agents/mcp_config.json'; Property = 'mcpServers'; CopySkills = $false; SymlinkSkills = $true }
@@ -1772,6 +1774,37 @@ function Write-CopilotPointer {
   Write-Host "  wrote .github/copilot-instructions.md"
 }
 
+function Write-KiroSteeringPointer {
+  # Kiro steering files live in .kiro\steering\*.md and are always-on by
+  # default (kiro.dev/docs/steering). Write a slim pointer so Kiro's native
+  # mechanism also carries the "load skills on demand" convention, instead
+  # of relying only on AGENTS.md.
+  param(
+    [string]$RepoPath,
+    [string]$ProjectName,
+    [string[]]$Ides,
+    [switch]$DryRun
+  )
+  if ($Ides -notcontains 'Kiro') { return }
+  $dir = Join-Path $RepoPath '.kiro\steering'
+  $dest = Join-Path $dir 'stack-pointer.md'
+  $content = @"
+---
+inclusion: always
+---
+
+# $ProjectName
+
+See **AGENTS.md** for stack, commands, and skills. Full stack guides live in
+``D:\AGENTS`` skills (copies under ``.kiro/skills``); load them on demand
+instead of duplicating guides here.
+"@
+  if ($DryRun) { Write-Host "  [dry] .kiro/steering/stack-pointer.md"; return }
+  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+  Write-HubText -Path $dest -Content $content -DryRun:$DryRun
+  Write-Host "  wrote .kiro/steering/stack-pointer.md"
+}
+
 function Write-AntigravityPointer {
   # Antigravity (IDE/CLI) discovers workspace rules under .agents\rules\*.md
   # (see "Where does Antigravity look for Rules and Workflows?", prototypr.io).
@@ -2676,6 +2709,7 @@ foreach ($proj in $projectDirs) {
     Write-PointerRules -RepoPath $proj.FullName -HubPath $HubPath -FamilyCfg $cfg -Ides $detected -DryRun:$DryRun
     Write-CopilotPointer -RepoPath $proj.FullName -HubPath $HubPath -Family $family -Ides $detected -DryRun:$DryRun
     Write-AntigravityPointer -RepoPath $proj.FullName -HubPath $HubPath -Ides $detected -DryRun:$DryRun
+    Write-KiroSteeringPointer -RepoPath $proj.FullName -ProjectName $proj.Name -Ides $detected -DryRun:$DryRun
     Remove-FatAlwaysOnRules -RepoPath $proj.FullName -DryRun:$DryRun
 
     if (-not $SkipCodegraphInit) {

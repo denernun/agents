@@ -18,7 +18,7 @@ foreach ($root in $Roots) {
   Get-ChildItem $root -Directory | ForEach-Object {
     $p = $_.FullName
     $name = $_.Name
-    foreach ($f in @('AGENTS.md', '.cursorrules', 'GEMINI.md', '.github\copilot-instructions.md', '.agents\rules\stack-pointer.md')) {
+    foreach ($f in @('AGENTS.md', '.cursorrules', 'GEMINI.md', '.github\copilot-instructions.md', '.agents\rules\stack-pointer.md', '.kiro\steering\stack-pointer.md')) {
       $fp = Join-Path $p $f
       if (Test-Path $fp) {
         $len = (Get-Item $fp).Length
@@ -33,7 +33,7 @@ foreach ($root in $Roots) {
     }
     # MCP configs: project-root opencode.json / .mcp.json
     # plus mcp.json / mcp_config.json under any IDE folder
-    foreach ($rel in @('opencode.json','.mcp.json','.codex/config.toml','.cursor/mcp.json','.vscode/mcp.json','.agents/mcp_config.json','.devin/mcp_config.json')) {
+    foreach ($rel in @('opencode.json','.mcp.json','.codex/config.toml','.cursor/mcp.json','.vscode/mcp.json','.kiro/settings/mcp.json','.agents/mcp_config.json','.devin/mcp_config.json')) {
       $fp = Join-Path $p $rel
       if (Test-Path $fp) { $rows += [pscustomobject]@{Project=$name;File="mcp:$rel";KB=[math]::Round((Get-Item $fp).Length / 1KB,1)} }
     }

@@ -121,7 +121,7 @@ function Remove-HubIdeArtifacts {
   $pointers = @{
     Cursor = $cursorPointers
     Claude=@('CLAUDE.md'); VSCode=@('.github/copilot-instructions.md')
-    Antigravity=@('.agents/rules/stack-pointer.md')
+    Antigravity=@('.agents/rules/stack-pointer.md'); Kiro=@('.kiro/steering/stack-pointer.md')
   }
   if ($pointers.ContainsKey($Ide)) {
     foreach ($rel in $pointers[$Ide]) {

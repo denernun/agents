@@ -12,9 +12,9 @@
 
 | Camada | Arquivos típicos | Quando carrega | Tamanho alvo |
 |--------|------------------|----------------|--------------|
-| **Always-on** | `AGENTS.md`, `.cursorrules`, ponteiros `.mdc`, Copilot slim, `.agents/rules/stack-pointer.md` (Antigravity) | Toda conversa no repo | **&lt; 2 KB** cada |
-| **On-demand** | Skills em `.cursor/skills/*`, `.agents/skills/*`, `.opencode/skills/*`, `.claude/skills/*`, `.codex/skills/*`, `.devin/skills/*` (junction → hub; **Antigravity = symlink**, pois ignora junctions) | Só quando o agente abre a skill | OK 1–25 KB |
-| **MCP** | `.cursor/mcp.json`, `.vscode/mcp.json`, `opencode.json` (raiz), `.agents/mcp_config.json`, `.mcp.json` (Claude Code), `.codex/config.toml`, `.devin/mcp_config.json` | Ferramentas MCP, não texto de guia | trio comum; mongodb+openapi nas APIs; playwright nos frontends (exceto Codex) |
+| **Always-on** | `AGENTS.md`, `.cursorrules`, ponteiros `.mdc`, Copilot slim, `.agents/rules/stack-pointer.md` (Antigravity), `.kiro/steering/stack-pointer.md` (Kiro) | Toda conversa no repo | **&lt; 2 KB** cada |
+| **On-demand** | Skills em `.cursor/skills/*`, `.agents/skills/*`, `.kiro/skills/*` (**cópia**), `.opencode/skills/*`, `.claude/skills/*`, `.codex/skills/*`, `.devin/skills/*` (junction → hub; **Antigravity = symlink**, pois ignora junctions) | Só quando o agente abre a skill | OK 1–25 KB |
+| **MCP** | `.cursor/mcp.json`, `.vscode/mcp.json`, `.kiro/settings/mcp.json`, `opencode.json` (raiz), `.agents/mcp_config.json`, `.mcp.json` (Claude Code), `.codex/config.toml`, `.devin/mcp_config.json` | Ferramentas MCP, não texto de guia | trio comum; mongodb+openapi nas APIs; playwright nos frontends (exceto Codex) |
 | **Local only** | seção `## Local` do `AGENTS.md` | Always-on, mas só notas do repo | Curto |
 
 ## Skills no hub (on-demand — ok serem maiores)
@@ -245,7 +245,7 @@ Havia 3 skills de review competindo pelo mesmo gatilho. Nenhuma foi apagada
 (as duas do vendor são junctions, não editáveis). Solução: `code-review-and-quality`
 saiu de `catalog.commonSkills` (o install poda os junctions dela em todos os
 repos), e a `description` da `review-changes` (skill do hub) foi reescrita para
-declarar-se a revisão rápida/risco default e apontar as outras duas por nome.
+declarar-se a revisão rápida/risco default e apontar a `code-review` por nome (a `code-review-and-quality` não é instalada).
 
 ### 3. Kiro carrega skills por CÓPIA, não junction
 
@@ -566,3 +566,16 @@ algum repo precise voltar a exigir `CLAUDE.md` explícito.
   de diretório funcionam; junction não). `~/.gemini/skills`,
   `~/.gemini/antigravity-cli/skills` e o `.agents/skills` compartilhado usam
   symlink de diretório (Modo de Desenvolvedor; sem ele, cópia).
+
+## Revisão 2026-10-01 — Kiro volta ao hub
+
+- **Kiro reinstalado** (detecção `~\.kiro`, skills por cópia em `.kiro/skills`,
+  MCP em `.kiro/settings/mcp.json`, steering `.kiro/steering/stack-pointer.md`
+  com `inclusion: always`). Reverte a remoção de 2026-09-29.
+- Como o Kiro trabalha (kiro.dev/docs): lê `AGENTS.md` nativamente (raiz e
+  subpastas); steering em `.kiro/steering/` (workspace vence o global
+  `~/.kiro/steering/`); skills `SKILL.md` com `name` = nome da pasta, carregadas
+  por descrição (progressive disclosure) ou via `/`; MCP workspace + user com
+  merge, hot-reload e `${VAR}` só para variáveis aprovadas.
+- A doc de skills não cita symlink/junction; mantida a cópia (`.agenthub-managed`)
+  por já ter sido comprovado que junction não é lida.

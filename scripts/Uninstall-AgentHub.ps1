@@ -91,9 +91,9 @@ foreach ($project in $projects) {
       if (Test-Path $aiConfig) { Invoke-HubConfig @{path=$aiConfig; format='text'; remove=$true; dry=[bool]$DryRun} }
     } else {
       # All known skill roots from the registry, plus retired roots that older
-      # script versions created (.codex/skills; .kiro/skills from the dropped
-      # Kiro support). Remove-HubLink handles links and hub-managed copies.
-      $skillRoots = @((Get-IdeRegistry).Values | ForEach-Object { $_.Skills }) + @('.codex/skills', '.kiro/skills')
+      # script versions created (.codex/skills). Remove-HubLink handles links
+      # and hub-managed copies (Kiro).
+      $skillRoots = @((Get-IdeRegistry).Values | ForEach-Object { $_.Skills }) + @('.codex/skills')
       foreach ($rel in @($skillRoots | Select-Object -Unique)) {
         foreach ($item in Get-ChildItem -LiteralPath (Join-Path $project.FullName $rel) -Directory -Force -ErrorAction SilentlyContinue) {
           Remove-HubLink -Path $item.FullName -Root $project.FullName -HubPath $HubPath -DryRun:$DryRun

@@ -115,6 +115,7 @@ Cópia inicial: `copy .env.example .env`
 | IDE | Detecção | Skills em | MCP config em |
 |-----|----------|-----------|---------------|
 | **Cursor** | `~\.cursor` | `.cursor\skills\` | `.cursor\mcp.json` |
+| **Kiro** | `~\.kiro` | `.kiro\skills\` (cópia, não segue junction) | `.kiro\settings\mcp.json` |
 | **OpenCode** | `opencode` no PATH | `.opencode\skills\` | `opencode.json` |
 | **Antigravity** | `~\.gemini` | workspace `.agents\skills\`; user `~\.gemini\skills\` and `~\.gemini\antigravity-cli\skills\` | `.agents\mcp_config.json` |
 | **VS Code** | `~\.vscode` | `.github\skills\` | `.vscode\mcp.json` |
@@ -403,7 +404,7 @@ skills do Matt Pocock. Lista em `catalog/projects.json` → `superpowersSkills`:
 `test-driven-development` (usa-se `tdd` do Matt Pocock, mais enxuto),
 `writing-plans`/`executing-plans`/`subagent-driven-development`
 (usa-se `to-spec`/`to-tickets`/`implement` do Matt Pocock),
-`requesting-code-review` (usa-se `code-review-and-quality` + `code-review`).
+`requesting-code-review` (usa-se `code-review` + `review-changes`).
 
 > Regra (ver `vendor/addyosmani-agent-skills/docs/comparison.md`): **um só
 > roteador de metodologia ativo**. Skills individuais podem ser combinadas à

@@ -1,6 +1,6 @@
 ---
 name: delphi-erpclass
-description: Convenções do ERP Delphi/VCL da ERPCLASS (Delphi 12, Firebird, FireDAC/UniDAC, ACBr, Horse). Use ao editar .pas/.dfm/.dpr/.inc em projetos *-erp, ao criar unit nova em domain/providers/services, ao mexer em form legado, ou quando houver risco de encoding ANSI/UTF-8.
+description: Convenções do ERP Delphi/VCL da ERPCLASS (Delphi 12, Firebird, FireDAC/UniDAC, ACBr, Horse). Use ao editar .pas/.dfm/.dpr/.inc em projetos *-erp, ao criar unit nova em domain/providers/services, ao mexer em form legado, query FireDAC, TTask/threads, emissão ACBr (NFe/NFCe/NFSe/boleto), ao compilar e diagnosticar erro de build, ou quando houver risco de encoding ANSI/UTF-8.
 ---
 
 # ERPClass — Delphi / VCL
@@ -113,8 +113,35 @@ de recalcular posição; os exemplos exatos estão em `source/docs/Docs.txt`.
 `git update-index --assume-unchanged`. **Não** faça commit de alteração de
 versão sem pedido explícito — isso troca a versão publicada.
 
+## Banco, threads e ACBr — regras curtas
+
+Detalhe e exemplos em [`tecnico.md`](tecnico.md); leia a
+seção correspondente antes de mexer nesses pontos.
+
+- **SQL só parametrizado** (`ParamByName(...).AsInteger`, tipo certo, nunca
+  `AsString` em número). Não concatene valor em SQL, nem em código novo nem ao
+  tocar um trecho legado que já concatena.
+- **Query local vive no método**: `Create(nil)` + `try/finally Free`. Nunca
+  `Owner = Self` dentro de método (só libera quando o form fecha).
+- **Escrita múltipla em transação explícita** (commit/rollback no mesmo método).
+- **Nada de VCL fora da thread principal**: só via `TThread.Synchronize`
+  (precisa do resultado) ou `TThread.Queue` (notificação). Variável de laço
+  capturada em closure precisa de cópia local antes do `TTask.Run`.
+- **ACBr é fiscal**: não altere configuração de certificado/SSL/ambiente
+  (homologação × produção) sem pedido explícito; veja as armadilhas de NFe/NFCe
+  na referência.
+
+## Legado — ordem de modernização
+
+Só modernize quando o pedido for esse, e nesta ordem: (1) SQL seguro no trecho
+tocado → (2) extrair interface → (3) teste de caracterização travando o
+comportamento atual → (4) refatorar com o teste protegendo. Encoding **não**
+entra nessa lista (ver acima) e não saia removendo `with` em massa.
+
 ## Ao concluir
 
-- Compile antes de afirmar que está pronto (`compilar.bat` na raiz).
+- Compile antes de afirmar que está pronto: `compilar.bat --no-pause`
+  redirecionando a saída para um log (ver referência) e leia o **primeiro**
+  erro do log — os seguintes costumam ser cascata. Não confie só no exit code.
 - Se alterou `.dfm`, confirme os acentos em tela, não só a compilação.
 - Descreva o que foi verificado e o que não foi.

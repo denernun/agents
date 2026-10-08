@@ -2617,10 +2617,9 @@ $managedMcpServers = Get-ManagedMcpServerNames -Catalog $catalog -Families $fami
 # Retired hub MCP servers: kept here so Write-McpJsonMerged prunes leftover
 # entries (written by older script versions) from every project's mcp.json
 # even though they're no longer in catalog/projects.json.
-#  - memorix: dead placeholder, superseded by ai-memory (global, not per-project)
 #  - coreui-docs: renamed to coreui (2026-09-05)
 #  - context7: moved from per-project configs to per-user global configs
-$retiredMcpServers = @('memorix', 'coreui-docs', 'context7')
+$retiredMcpServers = @('coreui-docs', 'context7')
 $managedMcpServers = @($managedMcpServers) + @($retiredMcpServers | Where-Object { $managedMcpServers -notcontains $_ })
 $mcpSkipIdes = $null
 if ($catalog.mcp) { $mcpSkipIdes = $catalog.mcp.skipIdes }

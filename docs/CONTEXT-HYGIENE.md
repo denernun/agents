@@ -513,13 +513,6 @@ MCP context7), `browser-testing-with-devtools` em `minimal` (sem o MCP lá).
 (revisão seguinte). É a mais opinativa (grava `CONSTRAINTS.md` e vigia o diff
 contra afrouxamento), por isso ficou fora do conjunto inicial até haver decisão.
 
-### Limpeza: memorix.template.toml removido
-
-`mcp/memorix.template.toml` era órfão: o servidor `memorix` foi aposentado
-(substituído por `ai-memory`) e só permanece em `$retiredMcpServers` no install
-para *podar* entradas antigas de mcp.json. O pruning usa o nome, nunca o arquivo
-— e não havia sequer um `.json` par. Removido.
-
 ### Validação
 
 `Run-Tests.ps1` verde (29 pytest + integrações, com o teste novo de skill de
